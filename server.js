@@ -49,7 +49,9 @@ async function getTokensFromDB() {
       refreshToken = tokens.refreshToken;
       console.log('MongoDB에서 토큰 로드 성공:', tokens);
     } else {
-      console.log('MongoDB에 저장된 토큰이 없습니다.');
+      console.log('MongoDB에 저장된 토큰이 없습니다. 초기 토큰을 저장합니다.');
+      // 환경변수에 설정된 토큰을 DB에 저장
+      await saveTokensToDB(accessToken, refreshToken);
     }
   } catch (error) {
     console.error('토큰 로드 중 오류:', error);
@@ -57,6 +59,7 @@ async function getTokensFromDB() {
     await client.close();
   }
 }
+
 
 /**
  * MongoDB에 토큰을 저장하는 함수

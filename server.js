@@ -10,15 +10,16 @@ const levenshtein = require("fast-levenshtein");
 require("dotenv").config();
 
 // .env 변수 사용
-let accessToken = process.env.ACCESS_TOKEN || null;
-let refreshToken = process.env.REFRESH_TOKEN || null;
+let accessToken = process.env.ACCESS_TOKEN || 'pPhbiZ29IZ9kuJmZ3jr15C';
+let refreshToken = process.env.REFRESH_TOKEN || 'CMLScZx0Bh3sIxlFTHDeMD';
 const CAFE24_CLIENT_ID = process.env.CAFE24_CLIENT_ID;
 const CAFE24_CLIENT_SECRET = process.env.CAFE24_CLIENT_SECRET;
 const DB_NAME = process.env.DB_NAME;
 const MONGODB_URI = process.env.MONGODB_URI;
 const CAFE24_MALLID = process.env.CAFE24_MALLID;
-const CAFE24_API_VERSION = process.env.CAFE24_API_VERSION || "2024-12-01";
 const OPEN_URL = process.env.OPEN_URL; // OpenAI API URL
+
+
 
 // MongoDB 컬렉션명 (토큰 저장용)
 const tokenCollectionName = "cafe24Tokens";
@@ -154,7 +155,7 @@ async function apiRequest(method, url, data = {}, params = {}) {
  * memberId를 기준으로 주문 내역을 조회합니다.
  */
 async function getOrderInfo(memberId) {
-  const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`;
+  const API_URL = `https://yogibo.cafe24api.com/api/v2/admin/orders`;
   // 날짜 범위는 필요에 따라 수정하세요.
   const params = {
     member_id: memberId,

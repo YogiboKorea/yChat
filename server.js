@@ -18,6 +18,8 @@ const DB_NAME = process.env.DB_NAME;
 const MONGODB_URI = process.env.MONGODB_URI;
 const CAFE24_MALLID = process.env.CAFE24_MALLID;
 const OPEN_URL = process.env.OPEN_URL; // OpenAI API URL
+// API 버전 (환경변수로 정의하거나 기본값 사용)
+const CAFE24_API_VERSION = process.env.CAFE24_API_VERSION || '2020-04-01';
 
 // Express 앱 초기화
 const app = express();
@@ -39,7 +41,9 @@ function containsOrderNumber(input) {
   return /\d{8}-\d{7}/.test(input);
 }
 
-// MongoDB에서 토큰을 불러오는 함수 (전체 문서를 가져옴)
+/**
+ * MongoDB에서 토큰을 불러오는 함수 (전체 문서를 가져옴)
+ */
 async function getTokensFromDB() {
   const client = new MongoClient(MONGODB_URI);
   try {
@@ -62,7 +66,9 @@ async function getTokensFromDB() {
   }
 }
 
-// MongoDB에 토큰을 저장하는 함수
+/**
+ * MongoDB에 토큰을 저장하는 함수
+ */
 async function saveTokensToDB(newAccessToken, newRefreshToken) {
   const client = new MongoClient(MONGODB_URI);
   try {
@@ -135,6 +141,7 @@ async function apiRequest(method, url, data = {}, params = {}) {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
+        'X-Cafe24-Api-Version': CAFE24_API_VERSION
       },
     });
     return response.data;
@@ -193,8 +200,9 @@ async function getShipmentDetail(orderId, shippingCode) {
  */
 async function getShippingCodeFromShipments(orderId) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders/${orderId}/shipments`;
+  const params = { shop_no: 1 };
   try {
-    const response = await apiRequest("GET", API_URL, {}, {});
+    const response = await apiRequest("GET", API_URL, {}, params);
     if (response.shipments && response.shipments.length > 0 && response.shipments[0].shipping_code) {
       return response.shipments[0].shipping_code;
     } else {

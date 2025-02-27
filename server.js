@@ -238,6 +238,45 @@ async function findAnswer(userInput, memberId) {
 }
 
 
+function processOrderShippingStatus(order) {
+  let message = "";
+
+  if (order.shipping_status === "N40") {
+    // 배송완료: 배송 시작일(shipbegin_date)과 배송 완료일(shipend_date)을 표시
+    const shipBegin = order.shipbegin_date || "정보 없음";
+    const shipEnd = order.shipend_date || "정보 없음";
+    message = `고객님이 주문하신 상품은 배송완료 처리되었습니다. 배송 시작일: ${shipBegin}, 배송 완료일: ${shipEnd}.`;
+  } else if (order.shipping_status === "N30") {
+    // 배송중: 송장번호(invoice_number)를 함께 표시
+    const invoiceNumber = order.invoice_number || "정보 없음";
+    message = `해당 상품은 배송중에 있습니다. 송장번호: ${invoiceNumber}.`;
+  } else {
+    message = "배송 상태를 확인할 수 없습니다.";
+  }
+
+  return message;
+}
+
+// API 응답 데이터 예시를 처리하는 코드
+function processOrdersResponse(apiResponse) {
+  if (apiResponse.orders && Array.isArray(apiResponse.orders)) {
+    return apiResponse.orders.map(order => {
+      // 각 주문에 대해 배송 상태 메시지 생성
+      const shippingMessage = processOrderShippingStatus(order);
+      return {
+        order_id: order.order_id,
+        shipping_status: order.shipping_status,
+        message: shippingMessage
+      };
+    });
+  } else {
+    return [];
+  }
+}
+
+
+
+
 // 회원 아이디 부분
 async function findAnswer(userInput, memberId) {
   const normalizedUserInput = normalizeSentence(userInput);

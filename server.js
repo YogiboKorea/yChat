@@ -263,7 +263,7 @@ async function findAnswer(userInput, memberId) {
       };
     } else {
       return {
-        text: "회원 정보가 확인되지 않습니다. 로그인 후 다시 시도해주세요.",
+        text: "안녕하세요 고객님 채팅창에 요기보에 대해 궁금하신 사항을 남겨주세요.",
         videoHtml: null,
         description: null,
         imageUrl: null,

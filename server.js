@@ -256,7 +256,7 @@ async function findAnswer(userInput, memberId) {
   ) {
     if (memberId && memberId !== "null") {
       return {
-        text: `회원님의 아이디는 ${memberId} 입니다.`,
+        text: `안녕하세요 ${memberId} 고객님 반갑습니다.`,
         videoHtml: null,
         description: null,
         imageUrl: null,

@@ -199,7 +199,7 @@ async function getOrderShipmentInfo(orderId) {
     tracking_no: 'dummy_tracking_no',
     shipping_company_code: 'dummy_company_code',
     order_item_code: 'dummy_order_item_code',
-    status: 'shipping', // 혹은 standby
+    status: 'shipping', // 또는 standby
     shipping_code: 'dummy_shipping_code',
     carrier_id: 'dummy_carrier_id'
   };
@@ -238,7 +238,7 @@ function summarizeHistory(text, maxLength = 300) {
 }
 
 /**
- * 주문 객체(order)의 배송 상태에 따라 메시지를 생성하는 함수 (기존)
+ * 기존 주문 객체(order)의 배송 상태에 따라 메시지를 생성하는 함수
  */
 function processOrderShippingStatus(order) {
   let message = "";
@@ -284,8 +284,8 @@ function containsOrderNumber(input) {
  * 1. 회원 아이디 조회
  * 2. 주문번호가 포함된 경우 → 해당 주문번호에 대한 배송 상태 안내 (신규 엔드포인트 사용)
  * 3. "주문정보 확인" → 주문번호 목록 제공
- * 4. "주문상태 확인"/"배송 상태 확인" (주문번호 미포함) →
- *    - 단일 주문이면 자동 안내, 다수이면 주문번호 목록 안내
+ * 4. "주문상태 확인"/"배송 상태 확인" (주문번호 미포함) → 
+ *    주문번호를 별도 안내하지 않고, 최신 주문(또는 첫 번째 주문)의 배송 상태를 바로 안내
  * 5. 그 외 → 기본 응답
  */
 async function findAnswer(userInput, memberId) {
@@ -387,29 +387,21 @@ async function findAnswer(userInput, memberId) {
   }
 
   // 4. "주문상태 확인" 또는 "배송 상태 확인" (주문번호 미포함)
+  // 주문번호 입력 없이 단순히 "주문상태"라고 하면, 최신 주문(첫 번째 주문)의 배송 상태를 바로 안내
   if ((normalizedUserInput.includes("주문상태 확인") || normalizedUserInput.includes("배송 상태 확인")) && !containsOrderNumber(normalizedUserInput)) {
     if (memberId && memberId !== "null") {
       try {
         const orderData = await getOrderShippingInfo(memberId);
         if (orderData.orders && orderData.orders.length > 0) {
-          if (orderData.orders.length === 1) {
-            const targetOrder = orderData.orders[0];
-            const shippingMessage = processOrderShippingStatus(targetOrder);
-            return {
-              text: `해당 주문번호 ${targetOrder.order_id}에 대한 주문상태를 말씀드리겠습니다: ${shippingMessage}`,
-              videoHtml: null,
-              description: null,
-              imageUrl: null,
-            };
-          } else {
-            const orderNumbers = orderData.orders.map(order => order.order_id);
-            return {
-              text: `주문상태를 확인하시려면 주문 번호나 관련 정보를 제공해주셔야 합니다. 고객님의 주문 번호는 ${orderNumbers.join(", ")} 입니다. 원하시는 주문 번호를 입력해주세요.`,
-              videoHtml: null,
-              description: null,
-              imageUrl: null,
-            };
-          }
+          // 최신 주문(혹은 첫 번째 주문)을 선택하여 배송 상태 안내
+          const targetOrder = orderData.orders[0];
+          const shippingMessage = processOrderShippingStatus(targetOrder);
+          return {
+            text: `해당 주문번호 ${targetOrder.order_id}에 대한 주문상태를 말씀드리겠습니다: ${shippingMessage}`,
+            videoHtml: null,
+            description: null,
+            imageUrl: null,
+          };
         } else {
           return {
             text: "고객님의 주문 정보가 없습니다.",

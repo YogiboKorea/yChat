@@ -19,7 +19,7 @@ const MONGODB_URI = process.env.MONGODB_URI;
 const CAFE24_MALLID = process.env.CAFE24_MALLID;
 const OPEN_URL = process.env.OPEN_URL; // OpenAI API URL
 // API 버전 (환경변수로 정의하거나 기본값 사용)
-const CAFE24_API_VERSION = process.env.CAFE24_API_VERSION || '2020-04-01';
+const CAFE24_API_VERSION = process.env.CAFE24_API_VERSION || '2024-06-01';
 
 // Express 앱 초기화
 const app = express();

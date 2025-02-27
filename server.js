@@ -21,8 +21,6 @@ const OPEN_URL = process.env.OPEN_URL; // OpenAI API URL
 
 
 
-// MongoDB 컬렉션명 (토큰 저장용)
-const tokenCollectionName = "cafe24Tokens";
 
 // Express 앱 초기화
 const app = express();
@@ -33,24 +31,24 @@ app.use(express.static(path.join(__dirname, "public")));
 
 // 예제용 JSON 데이터 (필요 시)
 const companyData = JSON.parse(fs.readFileSync("./json/companyData.json", "utf-8"));
+// 컬렉션명을 "tokens"로 변경
+const tokenCollectionName = "tokens";
 
-/**
- * MongoDB에서 토큰을 불러오는 함수
- */
+// MongoDB에서 토큰을 불러오는 함수 (전체 문서를 가져옴)
 async function getTokensFromDB() {
   const client = new MongoClient(MONGODB_URI);
   try {
     await client.connect();
     const db = client.db(DB_NAME);
     const collection = db.collection(tokenCollectionName);
-    const tokens = await collection.findOne({ name: 'cafe24Tokens' });
-    if (tokens) {
-      accessToken = tokens.accessToken;
-      refreshToken = tokens.refreshToken;
-      console.log('MongoDB에서 토큰 로드 성공:', tokens);
+    // 컬렉션 내 첫 번째 문서를 가져옵니다.
+    const tokensDoc = await collection.findOne({});
+    if (tokensDoc) {
+      accessToken = tokensDoc.accessToken;
+      refreshToken = tokensDoc.refreshToken;
+      console.log('MongoDB에서 토큰 로드 성공:', tokensDoc);
     } else {
       console.log('MongoDB에 저장된 토큰이 없습니다. 초기 토큰을 저장합니다.');
-      // 환경변수에 설정된 토큰을 DB에 저장
       await saveTokensToDB(accessToken, refreshToken);
     }
   } catch (error) {
@@ -60,21 +58,18 @@ async function getTokensFromDB() {
   }
 }
 
-
-/**
- * MongoDB에 토큰을 저장하는 함수
- */
+// MongoDB에 토큰을 저장하는 함수 (업데이트 시 필터를 {}로 사용)
 async function saveTokensToDB(newAccessToken, newRefreshToken) {
   const client = new MongoClient(MONGODB_URI);
   try {
     await client.connect();
     const db = client.db(DB_NAME);
     const collection = db.collection(tokenCollectionName);
+    // 빈 필터 {}로 문서를 업데이트(없으면 새 문서 생성)
     await collection.updateOne(
-      { name: 'cafe24Tokens' },
+      {},
       {
         $set: {
-          name: 'cafe24Tokens',
           accessToken: newAccessToken,
           refreshToken: newRefreshToken,
           updatedAt: new Date(),

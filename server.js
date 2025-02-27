@@ -157,8 +157,8 @@ async function getOrderInfo(memberId) {
   // 날짜 범위는 필요에 따라 수정하세요.
   const params = {
     member_id: memberId,
-    start_date: '2025-01-01',
-    end_date: '2025-01-31',
+    start_date: '2024-08-31',
+    end_date: '2025-02-27',
     limit: 10,
   };
   try {

@@ -191,33 +191,26 @@ async function getShipmentDetail(orderId, shippingCode) {
  * GET https://{mallid}.cafe24api.com/api/v2/admin/orders/{order_id}/receivers
  * 실제 응답 구조에 따라 수정 필요
  */
-function getShippingCode(orderId) {
-  return new Promise((resolve, reject) => {
-    var request = require("request");
-    var options = { 
-      method: 'GET',
-      url: `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders/${orderId}/receivers`,
+async function getShippingCode(orderId) {
+  const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders/${orderId}/receivers`;
+  try {
+    const response = await axios.get(API_URL, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': "application/json",
-        'X-Cafe24-Api-Version': "{version}" // 실제 API 버전 사용
-      }
-    };
-    request(options, function (error, response, body) {
-      if (error) return reject(error);
-      try {
-        const data = JSON.parse(body);
-        // 가정: 응답 구조가 { receivers: [ { shipping_code: "SHIPPING123" } ] } 형태
-        if (data.receivers && data.receivers.length > 0 && data.receivers[0].shipping_code) {
-          resolve(data.receivers[0].shipping_code);
-        } else {
-          reject(new Error("배송번호(shipping_code)를 찾을 수 없습니다."));
-        }
-      } catch (e) {
-        reject(e);
+        'Content-Type': 'application/json',
+        'X-Cafe24-Api-Version': '{version}' // 실제 API 버전 사용
       }
     });
-  });
+    const data = response.data;
+    // 가정: 응답 구조가 { receivers: [ { shipping_code: "SHIPPING123" } ] } 형태
+    if (data.receivers && data.receivers.length > 0 && data.receivers[0].shipping_code) {
+      return data.receivers[0].shipping_code;
+    } else {
+      throw new Error("배송번호(shipping_code)를 찾을 수 없습니다.");
+    }
+  } catch (error) {
+    throw error;
+  }
 }
 
 /**
@@ -290,8 +283,8 @@ async function findAnswer(userInput, memberId) {
       try {
         const match = normalizedUserInput.match(/\d{8}-\d{7}/);
         const targetOrderNumber = match ? match[0] : "";
-        // 주문번호와 배송번호가 동일하다고 가정(혹은 별도로 저장된 배송번호 사용)
-        const shippingCode = targetOrderNumber;
+        // 여기서는 주문번호와 배송번호가 동일하다고 가정하거나, 별도로 저장된 배송번호를 사용
+        const shippingCode = targetOrderNumber; 
         const shipmentDetail = await getShipmentDetail(targetOrderNumber, shippingCode);
         if (shipmentDetail) {
           let status = shipmentDetail.status || "정보 없음";
@@ -349,7 +342,9 @@ async function findAnswer(userInput, memberId) {
   }
 
   // 4. "주문상태 확인", "배송 상태 확인", 또는 "배송정보 확인" (주문번호 미포함)
-  // 단순히 해당 키워드만 입력하면, 최신 주문의 주문번호를 자동으로 사용
+  // 멤버 아이디에 따라 지정된 기간 내 최신 주문의 order_id를 가져와,
+  // 그 주문의 배송번호를 receivers 엔드포인트를 통해 얻은 후,
+  // 상세 배송 정보를 조회하여 status와 tracking_no 안내
   if (
     (normalizedUserInput.includes("주문상태 확인") ||
       normalizedUserInput.includes("배송 상태 확인") ||
@@ -389,7 +384,6 @@ async function findAnswer(userInput, memberId) {
           };
         }
       } catch (error) {
-        console.log(error)
         return {
           text: "배송 정보를 가져오는 데 오류가 발생했습니다.",
           videoHtml: null,
@@ -431,9 +425,9 @@ async function getGPT3TurboResponse(userInput) {
         ]
       },
       {
-        headers: { 
-          'Authorization': `Bearer ${process.env.API_KEY}`, 
-          'Content-Type': 'application/json' 
+        headers: {
+          'Authorization': `Bearer ${process.env.API_KEY}`,
+          'Content-Type': 'application/json'
         }
       }
     );
@@ -462,7 +456,7 @@ app.post("/chat", async (req, res) => {
         text: gptResponse,
         videoHtml: null,
         description: null,
-        imageUrl: null,
+        imageUrl: null
       });
     }
     return res.json(answer);
@@ -472,7 +466,7 @@ app.post("/chat", async (req, res) => {
       text: "질문을 이해하지 못했어요. 좀더 자세히 입력 해주시겠어요",
       videoHtml: null,
       description: null,
-      imageUrl: null,
+      imageUrl: null
     });
   }
 });

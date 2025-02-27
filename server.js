@@ -143,8 +143,8 @@ async function apiRequest(method, url, data = {}, params = {}) {
 }
 
 /**
- * Cafe24 주문 정보 조회 함수 (전체 주문 목록 조회)
- * 지정한 start_date와 end_date 범위 내 주문을 가져옵니다.
+ * Cafe24 주문 배송 정보 조회 함수 (전체 주문 목록 조회)
+ * 지정된 기간 내 회원의 주문 목록을 가져옵니다.
  */
 async function getOrderShippingInfo(memberId) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`;
@@ -156,7 +156,7 @@ async function getOrderShippingInfo(memberId) {
   };
   try {
     const response = await apiRequest("GET", API_URL, {}, params);
-    return response; // response.orders 배열 포함
+    return response; // 응답에 orders 배열 포함
   } catch (error) {
     console.error("Error fetching order shipping info:", error.message);
     throw error;
@@ -170,13 +170,46 @@ async function getOrderShippingInfo(memberId) {
 async function getShipmentDetail(orderId, shippingCode) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders/${orderId}/shipments/${shippingCode}`;
   try {
-    const response = await apiRequest("GET", API_URL, {}, {});  
-    // 응답에는 status와 tracking_no가 포함되어 있다고 가정
+    const response = await apiRequest("GET", API_URL, {}, {});
     return response;
   } catch (error) {
     console.error("Error fetching shipment detail:", error.message);
     throw error;
   }
+}
+
+/**
+ * 주문번호에 대한 배송번호(Shipping Code) 조회 함수
+ * GET https://{mallid}.cafe24api.com/api/v2/admin/orders/{order_id}/receivers
+ * (실제 응답 구조에 맞게 수정 필요)
+ */
+function getShippingCode(orderId) {
+  return new Promise((resolve, reject) => {
+    var request = require("request");
+    var options = { 
+      method: 'GET',
+      url: `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders/${orderId}/receivers`,
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': "application/json",
+        'X-Cafe24-Api-Version': "{version}" // 실제 API 버전 사용
+      }
+    };
+    request(options, function (error, response, body) {
+      if (error) return reject(error);
+      try {
+        const data = JSON.parse(body);
+        // 가정: 응답 구조가 { receivers: [ { shipping_code: "SHIPPING123" } ] } 형태라고 가정
+        if (data.receivers && data.receivers.length > 0 && data.receivers[0].shipping_code) {
+          resolve(data.receivers[0].shipping_code);
+        } else {
+          reject(new Error("배송번호(shipping_code)를 찾을 수 없습니다."));
+        }
+      } catch (e) {
+        reject(e);
+      }
+    });
+  });
 }
 
 /**
@@ -205,37 +238,15 @@ function summarizeHistory(text, maxLength = 300) {
 }
 
 /**
- * 기존 주문 객체의 배송 상태 메시지 생성 (기본 정보)
- * 단, 이번 예제에서는 getShipmentDetail를 통해 상세 정보를 조회하므로 사용하지 않습니다.
- */
-function processOrderShippingStatus(order) {
-  let message = "";
-  if (order.shipping_status === "N40") {
-    const shipBegin = order.shipbegin_date || "정보 없음";
-    const shipEnd = order.shipend_date || "정보 없음";
-    message = `배송완료 처리되었습니다. 배송 시작일: ${shipBegin}, 배송 완료일: ${shipEnd}.`;
-  } else if (order.shipping_status === "N30") {
-    const invoiceNumber = order.invoice_number || "정보 없음";
-    message = `배송중입니다. 송장번호: ${invoiceNumber}.`;
-  } else {
-    message = "배송 상태를 확인할 수 없습니다.";
-  }
-  return message;
-}
-
-// 주문번호 패턴 검사 (예: 20240920-0000167 형태)
-function containsOrderNumber(input) {
-  return /\d{8}-\d{7}/.test(input);
-}
-
-/**
  * 챗봇 메인 로직 함수  
  * 처리 순서:
  * 1. 회원 아이디 조회
- * 2. 주문번호가 포함된 경우 → 해당 주문번호에 대해 배송 상세 정보(getShipmentDetail)를 조회하여 status와 tracking_no 안내
+ * 2. 주문번호가 포함된 경우 → 해당 주문번호의 배송 상세 정보 조회
  * 3. "주문정보 확인" → 주문번호 목록 제공
- * 4. "주문상태 확인"/"배송 상태 확인" (주문번호 미포함) → 
- *    멤버 아이디에 따라 지정된 기간 내 최신 주문의 order_id와 shipping_code를 가져와 상세 정보를 조회 후 안내
+ * 4. "주문상태 확인"/"배송 상태 확인" (주문번호 미포함) →
+ *    멤버 아이디에 따라 지정된 기간 내 최신 주문의 order_id를 가져와,
+ *    그 주문의 배송번호를 receivers 엔드포인트를 통해 얻은 후,
+ *    상세 배송 정보를 조회하여 status와 tracking_no 안내
  * 5. 그 외 → 기본 응답
  */
 async function findAnswer(userInput, memberId) {
@@ -250,14 +261,14 @@ async function findAnswer(userInput, memberId) {
   ) {
     if (memberId && memberId !== "null") {
       return {
-        text: `안녕하세요 ${memberId} 고객님, 채팅창에 궁금하신 사항을 남겨주세요.`,
+        text: `안녕하세요 ${memberId} 고객님, 궁금하신 사항을 남겨주세요.`,
         videoHtml: null,
         description: null,
         imageUrl: null,
       };
     } else {
       return {
-        text: "안녕하세요 고객님, 채팅창에 궁금하신 사항을 남겨주세요.",
+        text: "안녕하세요 고객님, 궁금하신 사항을 남겨주세요.",
         videoHtml: null,
         description: null,
         imageUrl: null,
@@ -271,10 +282,9 @@ async function findAnswer(userInput, memberId) {
       try {
         const match = normalizedUserInput.match(/\d{8}-\d{7}/);
         const targetOrderNumber = match ? match[0] : "";
-        // 가정: 주문번호에 해당하는 배송번호는 주문정보 내에 별도로 저장되어 있거나,
-        // 주문번호와 동일하게 구성되어 있다고 가정하고, 여기서는 targetOrderNumber를 shipping_code로 사용
-        const shipmentDetail = await getShipmentDetail(targetOrderNumber, targetOrderNumber);
-        // shipmentDetail 응답에서 status와 tracking_no 추출 (예: shipmentDetail.status, shipmentDetail.tracking_no)
+        // receivers 엔드포인트 대신 이미 주문번호가 있는 경우, shipping_code를 같은 값으로 가정할 수도 있습니다.
+        const shippingCode = targetOrderNumber; // 혹은 별도 저장된 배송번호 사용
+        const shipmentDetail = await getShipmentDetail(targetOrderNumber, shippingCode);
         if (shipmentDetail) {
           let status = shipmentDetail.status || "정보 없음";
           let trackingNo = shipmentDetail.tracking_no || "정보 없음";
@@ -331,16 +341,17 @@ async function findAnswer(userInput, memberId) {
   }
 
   // 4. "주문상태 확인" 또는 "배송 상태 확인" (주문번호 미포함)
-  // 멤버 아이디에 따라 지정된 기간 내 최신 주문의 order_id와 shipping_code를 사용하여 상세 배송 정보를 조회
+  // 멤버 아이디에 따라 지정된 기간 내 최신 주문의 order_id를 사용하여,
+  // receivers 엔드포인트를 통해 배송번호(shipping_code)를 얻고,
+  // 그 후 상세 배송 정보를 조회하여 status와 tracking_no 안내
   if ((normalizedUserInput.includes("주문상태 확인") || normalizedUserInput.includes("배송 상태 확인")) && !containsOrderNumber(normalizedUserInput)) {
     if (memberId && memberId !== "null") {
       try {
         const orderData = await getOrderShippingInfo(memberId);
         if (orderData.orders && orderData.orders.length > 0) {
-          // 최신 주문(첫 번째 주문)을 사용
           const targetOrder = orderData.orders[0];
-          // 배송번호가 별도로 있다면 사용, 없으면 가정: order_id와 동일한 값으로 사용
-          let shippingCode = targetOrder.shipping_code || targetOrder.order_id;
+          // 대상 주문의 order_id로 receivers 엔드포인트 호출하여 shipping_code 얻기
+          const shippingCode = await getShippingCode(targetOrder.order_id);
           const shipmentDetail = await getShipmentDetail(targetOrder.order_id, shippingCode);
           if (shipmentDetail) {
             let status = shipmentDetail.status || "정보 없음";

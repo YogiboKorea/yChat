@@ -171,12 +171,16 @@ async function getOrderShippingInfo(memberId) {
   }
 }
 
+
+
 /**
  * 주문번호에 대한 배송 상세 정보 조회 함수
  * GET https://{mallid}.cafe24api.com/api/v2/admin/orders/{order_id}/shipments/{shipping_code}
  */
 async function getShipmentDetail(orderId, shippingCode) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders/${orderId}/shipments/${shippingCode}`;
+
+  
   try {
     const response = await apiRequest("GET", API_URL, {}, {});
     return response;
@@ -376,6 +380,8 @@ async function findAnswer(userInput, memberId) {
       return { text: "회원 정보가 확인되지 않습니다. 로그인 후 다시 시도해주세요." };
     }
   }
+
+
 
   // 6. "주문상태 확인", "배송 상태 확인", 또는 "배송정보 확인" (주문번호 미포함)
   if (

@@ -263,7 +263,9 @@ function containsOrderNumber(input) {
  * 1. "내 아이디", "나의 아이디", "아이디 조회", "아이디 알려줘" → 회원 아이디 응답
  * 2. 입력에 주문번호가 포함되어 있으면 해당 주문의 배송 상태를 바로 응답
  * 3. "주문정보 확인" → 주문번호 목록 제공
- * 4. "주문상태 확인" 또는 "배송 상태 확인" (주문번호 미포함) → 주문번호 목록 제공
+ * 4. "주문상태 확인" 또는 "배송 상태 확인" (주문번호 미포함) →
+ *    - 주문이 1건이면 자동으로 해당 주문의 상태를 안내
+ *    - 주문이 여러 건이면 주문번호 목록을 안내하여 구체적인 주문번호 입력 요청
  * 5. 그 외 → 기본 응답
  */
 async function findAnswer(userInput, memberId) {
@@ -304,7 +306,7 @@ async function findAnswer(userInput, memberId) {
         if (targetOrder) {
           const shippingMessage = processOrderShippingStatus(targetOrder);
           return {
-            text: `주문번호 ${targetOrder.order_id}: ${shippingMessage}`,
+            text: `해당 주문번호 ${targetOrder.order_id}에 대한 주문상태를 말씀드리겠습니다: ${shippingMessage}`,
             videoHtml: null,
             description: null,
             imageUrl: null,
@@ -355,21 +357,32 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 4. "주문상태 확인" 또는 "배송 상태 확인" (주문번호 미포함) → 주문번호 목록 안내
+  // 4. "주문상태 확인" 또는 "배송 상태 확인" (주문번호 미포함)
   if ((normalizedUserInput.includes("주문상태 확인") || normalizedUserInput.includes("배송 상태 확인")) && !containsOrderNumber(normalizedUserInput)) {
     if (memberId && memberId !== "null") {
       try {
         const orderData = await getOrderShippingInfo(memberId);
         if (orderData.orders && orderData.orders.length > 0) {
-          const orderNumbers = orderData.orders.map(order => order.order_id);
-          return {
-            text: `주문상태를 확인하시려면 주문 번호나 관련 정보를 제공해주셔야 합니다. 고객님의 주문 번호는 ${orderNumbers.join(
-              ", "
-            )} 입니다. 원하시는 주문 번호를 입력해주세요.`,
-            videoHtml: null,
-            description: null,
-            imageUrl: null,
-          };
+          if (orderData.orders.length === 1) {
+            // 단 1건이면 자동으로 해당 주문의 상태 안내
+            const targetOrder = orderData.orders[0];
+            const shippingMessage = processOrderShippingStatus(targetOrder);
+            return {
+              text: `해당 주문번호 ${targetOrder.order_id}에 대한 주문상태를 말씀드리겠습니다: ${shippingMessage}`,
+              videoHtml: null,
+              description: null,
+              imageUrl: null,
+            };
+          } else {
+            // 주문이 여러 건이면 주문번호 목록 안내
+            const orderNumbers = orderData.orders.map(order => order.order_id);
+            return {
+              text: `주문상태를 확인하시려면 주문 번호나 관련 정보를 제공해주셔야 합니다. 고객님의 주문 번호는 ${orderNumbers.join(", ")} 입니다. 원하시는 주문 번호를 입력해주세요.`,
+              videoHtml: null,
+              description: null,
+              imageUrl: null,
+            };
+          }
         } else {
           return {
             text: "고객님의 주문 정보가 없습니다.",

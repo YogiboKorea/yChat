@@ -206,6 +206,18 @@ async function getShipmentDetail(orderId) {
     throw error;
   }
 }
+const shipment = await getShipmentDetail(targetOrder.order_id);
+if (shipment) {
+  let status = shipment.status || "정보 없음";
+  let trackingNo = shipment.tracking_no || "정보 없음";
+  let shippingCompany = shipment.shipping_company_name || "정보 없음";
+  return {
+  text: `주문번호 ${targetOrder.order_id}의 배송 상태는 ${status}이며, 송장번호는 ${trackingNo}, 택배사는 ${shippingCompany} 입니다.`,
+  videoHtml: null,
+  description: null,
+  imageUrl: null,
+  };
+}
 
 /**
  * 유틸 함수들

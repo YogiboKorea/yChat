@@ -18,6 +18,8 @@ const DB_NAME = process.env.DB_NAME;
 const MONGODB_URI = process.env.MONGODB_URI;
 const CAFE24_MALLID = process.env.CAFE24_MALLID;
 const OPEN_URL = process.env.OPEN_URL; // OpenAI API URL
+
+// Cafe24 API 버전 (환경변수나 기본값 사용)
 const CAFE24_API_VERSION = process.env.CAFE24_API_VERSION || '2024-06-01';
 
 // Express 앱 초기화
@@ -33,8 +35,7 @@ const companyData = JSON.parse(fs.readFileSync("./json/companyData.json", "utf-8
 const tokenCollectionName = "tokens";
 
 /**
- * 주문번호 패턴 검사 함수
- * 예: "20240920-0000167"
+ * 주문번호 패턴 검사 함수 (예: "20240920-0000167")
  */
 function containsOrderNumber(input) {
   return /\d{8}-\d{7}/.test(input);
@@ -206,18 +207,6 @@ async function getShipmentDetail(orderId) {
     throw error;
   }
 }
-const shipment = await getShipmentDetail(targetOrder.order_id);
-if (shipment) {
-  let status = shipment.status || "정보 없음";
-  let trackingNo = shipment.tracking_no || "정보 없음";
-  let shippingCompany = shipment.shipping_company_name || "정보 없음";
-  return {
-  text: `주문번호 ${targetOrder.order_id}의 배송 상태는 ${status}이며, 송장번호는 ${trackingNo}, 택배사는 ${shippingCompany} 입니다.`,
-  videoHtml: null,
-  description: null,
-  imageUrl: null,
-  };
-}
 
 /**
  * 유틸 함수들
@@ -245,17 +234,14 @@ function summarizeHistory(text, maxLength = 300) {
 }
 
 /**
- * 챗봇 메인 로직 함수  
- * 처리 순서:
+ * 챗봇 메인 로직 함수 (async)  
  * 1. 회원 아이디 조회
- * 2. "주문번호"라고 입력하면 → 해당 멤버의 주문번호 목록 반환
- * 3. "배송번호"라고 입력하면 → 최신 주문의 배송번호를, 
- *    GET /api/v2/admin/orders/{order_id}/shipments 엔드포인트를 통해 반환
- * 4. 주문번호가 포함된 경우 → 해당 주문번호의 배송 상세 정보를 조회하여 status와 tracking_no 안내
- * 5. "주문정보 확인" → 주문번호 목록 제공
- * 6. "주문상태 확인", "배송 상태 확인", 또는 "배송정보 확인" (주문번호 미포함) →
- *    최신 주문의 배송 상세 정보를 조회하여 status와 tracking_no 안내
- * 7. 그 외 → 기본 응답
+ * 2. "주문번호" → 주문번호 목록
+ * 3. "배송번호" → 최신 주문의 배송번호
+ * 4. 주문번호가 포함 → 해당 주문번호의 배송 상세 정보(status, tracking_no, 택배사)
+ * 5. "주문정보 확인" → 주문번호 목록
+ * 6. "주문상태 확인"/"배송 상태 확인"/"배송정보 확인"(주문번호 미포함) → 최신 주문의 배송 상세 정보
+ * 7. 기본 응답
  */
 async function findAnswer(userInput, memberId) {
   const normalizedUserInput = normalizeSentence(userInput);
@@ -284,7 +270,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 2. "주문번호"라고 입력하면 → 해당 멤버의 주문번호 목록 반환
+  // 2. "주문번호"라고 입력하면 → 해당 멤버의 주문번호 목록
   if (normalizedUserInput.includes("주문번호")) {
     if (memberId && memberId !== "null") {
       try {
@@ -308,7 +294,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 3. "배송번호"라고 입력하면 → 최신 주문의 배송번호 반환
+  // 3. "배송번호"라고 입력하면 → 최신 주문의 배송번호
   if (normalizedUserInput.includes("배송번호")) {
     if (memberId && memberId !== "null") {
       try {
@@ -337,7 +323,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 4. 주문번호가 포함된 경우 → 해당 주문번호의 배송 상세 정보를 조회
+  // 4. 주문번호가 포함된 경우 → 해당 주문번호의 배송 상세 정보 조회
   if (containsOrderNumber(normalizedUserInput)) {
     if (memberId && memberId !== "null") {
       try {
@@ -347,8 +333,9 @@ async function findAnswer(userInput, memberId) {
         if (shipment) {
           let status = shipment.status || "정보 없음";
           let trackingNo = shipment.tracking_no || "정보 없음";
+          let shippingCompany = shipment.shipping_company_name || "정보 없음";
           return {
-            text: `주문번호 ${targetOrderNumber}의 배송 상태는 ${status}이며, 송장번호는 ${trackingNo} 입니다.`,
+            text: `주문번호 ${targetOrderNumber}의 배송 상태는 ${status}이며, 송장번호는 ${trackingNo}, 택배사는 ${shippingCompany} 입니다.`,
             videoHtml: null,
             description: null,
             imageUrl: null,
@@ -407,10 +394,11 @@ async function findAnswer(userInput, memberId) {
           const targetOrder = orderData.orders[0];
           const shipment = await getShipmentDetail(targetOrder.order_id);
           if (shipment) {
-            let status = shipment.status || "배송완료";
+            let status = shipment.status || "정보 없음";
             let trackingNo = shipment.tracking_no || "정보 없음";
+            let shippingCompany = shipment.shipping_company_name || "정보 없음";
             return {
-              text: `주문번호 ${targetOrder.order_id}의 배송 상태는 ${status}이며, 송장번호는 ${trackingNo} 입니다.`,
+              text: `주문번호 ${targetOrder.order_id}의 배송 상태는 ${status}이며, 송장번호는 ${trackingNo}, 택배사는 ${shippingCompany} 입니다.`,
               videoHtml: null,
               description: null,
               imageUrl: null,

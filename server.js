@@ -18,8 +18,7 @@ const DB_NAME = process.env.DB_NAME;
 const MONGODB_URI = process.env.MONGODB_URI;
 const CAFE24_MALLID = process.env.CAFE24_MALLID;
 const OPEN_URL = process.env.OPEN_URL; // OpenAI API URL
-// API 버전 (환경변수로 정의하거나 기본값 사용)
-const CAFE24_API_VERSION = process.env.CAFE24_API_VERSION || '2024-06-01';
+const CAFE24_API_VERSION = process.env.CAFE24_API_VERSION || '2020-04-01';
 
 // Express 앱 초기화
 const app = express();
@@ -41,9 +40,7 @@ function containsOrderNumber(input) {
   return /\d{8}-\d{7}/.test(input);
 }
 
-/**
- * MongoDB에서 토큰을 불러오는 함수 (전체 문서를 가져옴)
- */
+// MongoDB에서 토큰을 불러오는 함수 (전체 문서를 가져옴)
 async function getTokensFromDB() {
   const client = new MongoClient(MONGODB_URI);
   try {
@@ -66,9 +63,7 @@ async function getTokensFromDB() {
   }
 }
 
-/**
- * MongoDB에 토큰을 저장하는 함수
- */
+// MongoDB에 토큰을 저장하는 함수
 async function saveTokensToDB(newAccessToken, newRefreshToken) {
   const client = new MongoClient(MONGODB_URI);
   try {
@@ -132,6 +127,9 @@ async function refreshAccessToken() {
  * API 요청 함수 (자동 토큰 갱신 포함)
  */
 async function apiRequest(method, url, data = {}, params = {}) {
+  console.log(`Request: ${method} ${url}`);
+  console.log("Params:", params);
+  console.log("Data:", data);
   try {
     const response = await axios({
       method,
@@ -180,36 +178,21 @@ async function getOrderShippingInfo(memberId) {
 
 /**
  * 주문번호에 대한 배송 상세 정보 조회 함수
- * GET https://{mallid}.cafe24api.com/api/v2/admin/orders/{order_id}/shipments/{shipping_code}
- */
-async function getShipmentDetail(orderId, shippingCode) {
-  const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders/${orderId}/shipments/${shippingCode}`;
-  try {
-    const response = await apiRequest("GET", API_URL, {}, {});
-    return response; // 응답 내 shipment 객체 포함
-  } catch (error) {
-    console.error("Error fetching shipment detail:", error.message);
-    throw error;
-  }
-}
-
-/**
- * 주문번호에 대한 배송번호(Shipping Code) 조회 함수
  * GET https://{mallid}.cafe24api.com/api/v2/admin/orders/{order_id}/shipments
- * 여기서 shipments 배열 내 첫 번째 항목의 shipping_code를 반환합니다.
+ * 해당 URL을 호출하면 shipments 배열이 반환되며, 첫 번째 항목의 정보를 사용합니다.
  */
-async function getShippingCodeFromShipments(orderId) {
+async function getShipmentDetail(orderId) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders/${orderId}/shipments`;
   const params = { shop_no: 1 };
   try {
     const response = await apiRequest("GET", API_URL, {}, params);
-    if (response.shipments && response.shipments.length > 0 && response.shipments[0].shipping_code) {
-      return response.shipments[0].shipping_code;
+    if (response.shipments && response.shipments.length > 0) {
+      return response.shipments[0]; // 첫 번째 shipment 객체 반환
     } else {
-      throw new Error("배송번호(shipping_code)를 찾을 수 없습니다.");
+      throw new Error("배송 정보를 찾을 수 없습니다.");
     }
   } catch (error) {
-    console.error(error);
+    console.error("Error fetching shipment detail:", error.message);
     throw error;
   }
 }
@@ -223,7 +206,6 @@ function normalizeSentence(sentence) {
     .replace(/없나요/g, "없어요")
     .trim();
 }
-
 
 function getAdditionalBizComment() {
   const comments = [
@@ -245,8 +227,9 @@ function summarizeHistory(text, maxLength = 300) {
  * 처리 순서:
  * 1. 회원 아이디 조회
  * 2. "주문번호"라고 입력하면 → 해당 멤버의 주문번호 목록 반환
- * 3. "배송번호"라고 입력하면 → 최신 주문의 배송번호를 getShippingCodeFromShipments를 통해 반환
- * 4. 주문번호가 포함된 경우 → 해당 주문번호의 배송 상세 정보 조회
+ * 3. "배송번호"라고 입력하면 → 최신 주문의 배송번호를, 
+ *    GET /api/v2/admin/orders/{order_id}/shipments 엔드포인트를 통해 반환
+ * 4. 주문번호가 포함된 경우 → 해당 주문번호의 배송 상세 정보를 조회하여 status와 tracking_no 안내
  * 5. "주문정보 확인" → 주문번호 목록 제공
  * 6. "주문상태 확인", "배송 상태 확인", 또는 "배송정보 확인" (주문번호 미포함) →
  *    최신 주문의 배송 상세 정보를 조회하여 status와 tracking_no 안내
@@ -303,20 +286,24 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 3. "배송번호"라고 입력하면 → 최신 주문의 배송번호 반환 (shipments 엔드포인트 사용)
+  // 3. "배송번호"라고 입력하면 → 최신 주문의 배송번호 반환
   if (normalizedUserInput.includes("배송번호")) {
     if (memberId && memberId !== "null") {
       try {
         const orderData = await getOrderShippingInfo(memberId);
         if (orderData.orders && orderData.orders.length > 0) {
           const targetOrder = orderData.orders[0];
-          const shippingCode = await getShippingCodeFromShipments(targetOrder.order_id);
-          return {
-            text: `최신 주문의 배송번호는 ${shippingCode} 입니다.`,
-            videoHtml: null,
-            description: null,
-            imageUrl: null,
-          };
+          const shipment = await getShipmentDetail(targetOrder.order_id);
+          if (shipment && shipment.shipping_code) {
+            return {
+              text: `최신 주문의 배송번호는 ${shipment.shipping_code} 입니다.`,
+              videoHtml: null,
+              description: null,
+              imageUrl: null,
+            };
+          } else {
+            return { text: "배송번호를 찾을 수 없습니다." };
+          }
         } else {
           return { text: "주문 정보가 없습니다." };
         }
@@ -328,18 +315,16 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 4. 주문번호가 포함된 경우 → 해당 주문번호의 배송 상세 정보 조회
+  // 4. 주문번호가 포함된 경우 → 해당 주문번호의 배송 상세 정보를 조회
   if (containsOrderNumber(normalizedUserInput)) {
     if (memberId && memberId !== "null") {
       try {
         const match = normalizedUserInput.match(/\d{8}-\d{7}/);
         const targetOrderNumber = match ? match[0] : "";
-        // 배송번호가 별도로 입력되지 않았다면, 주문번호와 동일하다고 가정
-        const shippingCode = targetOrderNumber;
-        const shipmentDetail = await getShipmentDetail(targetOrderNumber, shippingCode);
-        if (shipmentDetail && shipmentDetail.shipment) {
-          let status = shipmentDetail.shipment.status || "정보 없음";
-          let trackingNo = shipmentDetail.shipment.tracking_no || "정보 없음";
+        const shipment = await getShipmentDetail(targetOrderNumber);
+        if (shipment) {
+          let status = shipment.status || "정보 없음";
+          let trackingNo = shipment.tracking_no || "정보 없음";
           return {
             text: `주문번호 ${targetOrderNumber}의 배송 상태는 ${status}이며, 송장번호는 ${trackingNo} 입니다.`,
             videoHtml: null,
@@ -398,11 +383,10 @@ async function findAnswer(userInput, memberId) {
         const orderData = await getOrderShippingInfo(memberId);
         if (orderData.orders && orderData.orders.length > 0) {
           const targetOrder = orderData.orders[0];
-          const shippingCode = await getShippingCodeFromShipments(targetOrder.order_id);
-          const shipmentDetail = await getShipmentDetail(targetOrder.order_id, shippingCode);
-          if (shipmentDetail && shipmentDetail.shipment) {
-            let status = shipmentDetail.shipment.status || "정보 없음";
-            let trackingNo = shipmentDetail.shipment.tracking_no || "정보 없음";
+          const shipment = await getShipmentDetail(targetOrder.order_id);
+          if (shipment) {
+            let status = shipment.status || "정보 없음";
+            let trackingNo = shipment.tracking_no || "정보 없음";
             return {
               text: `주문번호 ${targetOrder.order_id}의 배송 상태는 ${status}이며, 송장번호는 ${trackingNo} 입니다.`,
               videoHtml: null,
@@ -492,39 +476,6 @@ app.post("/chat", async (req, res) => {
     });
   }
 });
-
-
-async function apiRequest(method, url, data = {}, params = {}) {
-  // 실제 요청 전에 URL, params, data를 출력합니다.
-  console.log(`Request: ${method} ${url}`);
-  console.log("Params:", params);
-  console.log("Data:", data);
-
-  try {
-    const response = await axios({
-      method,
-      url,
-      data,
-      params,
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        'X-Cafe24-Api-Version': CAFE24_API_VERSION
-      },
-    });
-    return response.data;
-  } catch (error) {
-    if (error.response && error.response.status === 401) {
-      console.log('Access Token 만료. 갱신 중...');
-      await refreshAccessToken();
-      return apiRequest(method, url, data, params);
-    } else {
-      console.error('API 요청 오류:', error.response ? error.response.data : error.message);
-      throw error;
-    }
-  }
-}
-
 
 // 서버 시작 전 MongoDB에서 토큰 로드 후 실행
 (async function initialize() {

@@ -31,6 +31,14 @@ const companyData = JSON.parse(fs.readFileSync("./json/companyData.json", "utf-8
 // 컬렉션명을 "tokens"로 사용
 const tokenCollectionName = "tokens";
 
+/**
+ * 주문번호 패턴 검사 함수
+ * 예: "20240920-0000167"
+ */
+function containsOrderNumber(input) {
+  return /\d{8}-\d{7}/.test(input);
+}
+
 // MongoDB에서 토큰을 불러오는 함수 (전체 문서를 가져옴)
 async function getTokensFromDB() {
   const client = new MongoClient(MONGODB_URI);
@@ -144,7 +152,7 @@ async function apiRequest(method, url, data = {}, params = {}) {
 
 /**
  * Cafe24 주문 배송 정보 조회 함수 (전체 주문 목록 조회)
- * 지정된 기간 내 회원의 주문 목록을 가져옵니다.
+ * 지정된 기간(2024-08-31 ~ 2024-09-31) 내의 주문 정보를 가져옵니다.
  */
 async function getOrderShippingInfo(memberId) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`;
@@ -156,7 +164,7 @@ async function getOrderShippingInfo(memberId) {
   };
   try {
     const response = await apiRequest("GET", API_URL, {}, params);
-    return response; // 응답에 orders 배열 포함
+    return response; // 응답 내 orders 배열 포함
   } catch (error) {
     console.error("Error fetching order shipping info:", error.message);
     throw error;
@@ -164,7 +172,7 @@ async function getOrderShippingInfo(memberId) {
 }
 
 /**
- * 주문번호에 대한 배송 상세 정보 조회 함수 (신규 엔드포인트 사용)
+ * 주문번호에 대한 배송 상세 정보 조회 함수
  * GET https://{mallid}.cafe24api.com/api/v2/admin/orders/{order_id}/shipments/{shipping_code}
  */
 async function getShipmentDetail(orderId, shippingCode) {
@@ -181,7 +189,7 @@ async function getShipmentDetail(orderId, shippingCode) {
 /**
  * 주문번호에 대한 배송번호(Shipping Code) 조회 함수
  * GET https://{mallid}.cafe24api.com/api/v2/admin/orders/{order_id}/receivers
- * (실제 응답 구조에 맞게 수정 필요)
+ * 실제 응답 구조에 따라 수정 필요
  */
 function getShippingCode(orderId) {
   return new Promise((resolve, reject) => {
@@ -199,7 +207,7 @@ function getShippingCode(orderId) {
       if (error) return reject(error);
       try {
         const data = JSON.parse(body);
-        // 가정: 응답 구조가 { receivers: [ { shipping_code: "SHIPPING123" } ] } 형태라고 가정
+        // 가정: 응답 구조가 { receivers: [ { shipping_code: "SHIPPING123" } ] } 형태
         if (data.receivers && data.receivers.length > 0 && data.receivers[0].shipping_code) {
           resolve(data.receivers[0].shipping_code);
         } else {
@@ -282,8 +290,8 @@ async function findAnswer(userInput, memberId) {
       try {
         const match = normalizedUserInput.match(/\d{8}-\d{7}/);
         const targetOrderNumber = match ? match[0] : "";
-        // receivers 엔드포인트 대신 이미 주문번호가 있는 경우, shipping_code를 같은 값으로 가정할 수도 있습니다.
-        const shippingCode = targetOrderNumber; // 혹은 별도 저장된 배송번호 사용
+        // 여기서는 주문번호와 배송번호가 동일하다고 가정하거나, 별도로 저장된 배송번호를 사용
+        const shippingCode = targetOrderNumber; 
         const shipmentDetail = await getShipmentDetail(targetOrderNumber, shippingCode);
         if (shipmentDetail) {
           let status = shipmentDetail.status || "정보 없음";
@@ -341,16 +349,15 @@ async function findAnswer(userInput, memberId) {
   }
 
   // 4. "주문상태 확인" 또는 "배송 상태 확인" (주문번호 미포함)
-  // 멤버 아이디에 따라 지정된 기간 내 최신 주문의 order_id를 사용하여,
-  // receivers 엔드포인트를 통해 배송번호(shipping_code)를 얻고,
-  // 그 후 상세 배송 정보를 조회하여 status와 tracking_no 안내
+  // 멤버 아이디에 따라 지정된 기간 내 최신 주문의 order_id를 가져와,
+  // 그 주문의 배송번호를 receivers 엔드포인트를 통해 얻은 후,
+  // 상세 배송 정보를 조회하여 status와 tracking_no 안내
   if ((normalizedUserInput.includes("주문상태 확인") || normalizedUserInput.includes("배송 상태 확인")) && !containsOrderNumber(normalizedUserInput)) {
     if (memberId && memberId !== "null") {
       try {
         const orderData = await getOrderShippingInfo(memberId);
         if (orderData.orders && orderData.orders.length > 0) {
           const targetOrder = orderData.orders[0];
-          // 대상 주문의 order_id로 receivers 엔드포인트 호출하여 shipping_code 얻기
           const shippingCode = await getShippingCode(targetOrder.order_id);
           const shipmentDetail = await getShipmentDetail(targetOrder.order_id, shippingCode);
           if (shipmentDetail) {

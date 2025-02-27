@@ -191,7 +191,7 @@ async function getShipmentDetail(orderId) {
       const shipment = response.shipments[0];
       
       // shipping_company_code가 "19"이면 "롯데 택배"로 매핑
-      if (shipment.shipping_company_code === "19") {
+      if (shipment.shipping_company_code === "0019") {
         shipment.shipping_company_name = "롯데 택배";
       } else {
         // 다른 코드 처리 (예: DB나 매핑 테이블을 사용하거나, 기본적으로 코드만 표시)
@@ -394,7 +394,7 @@ async function findAnswer(userInput, memberId) {
           const targetOrder = orderData.orders[0];
           const shipment = await getShipmentDetail(targetOrder.order_id);
           if (shipment) {
-            let status = shipment.status || "정보 없음";
+            let status = shipment.status || "배송완료";
             let trackingNo = shipment.tracking_no || "정보 없음";
             let shippingCompany = shipment.shipping_company_name || "정보 없음";
             return {

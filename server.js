@@ -208,8 +208,8 @@ async function getOrderShippingInfo(memberId) {
   const API_URL = `https://yogibo.cafe24api.com/api/v2/admin/orders`;
   const params = {
     member_id: memberId,
-    start_date: '2020-01-01',
-    end_date: '2025-12-31',
+    start_date: '2024-08-31',
+    end_date: '2024-09-31',
     limit: 10,
   };
   try {

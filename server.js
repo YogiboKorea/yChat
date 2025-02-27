@@ -19,9 +19,6 @@ const MONGODB_URI = process.env.MONGODB_URI;
 const CAFE24_MALLID = process.env.CAFE24_MALLID;
 const OPEN_URL = process.env.OPEN_URL; // OpenAI API URL
 
-
-
-
 // Express 앱 초기화
 const app = express();
 app.use(cors());
@@ -31,7 +28,7 @@ app.use(express.static(path.join(__dirname, "public")));
 
 // 예제용 JSON 데이터 (필요 시)
 const companyData = JSON.parse(fs.readFileSync("./json/companyData.json", "utf-8"));
-// 컬렉션명을 "tokens"로 변경
+// 컬렉션명을 "tokens"로 사용
 const tokenCollectionName = "tokens";
 
 // MongoDB에서 토큰을 불러오는 함수 (전체 문서를 가져옴)
@@ -153,7 +150,7 @@ async function apiRequest(method, url, data = {}, params = {}) {
  * memberId를 기준으로 주문 내역을 조회합니다.
  */
 async function getOrderInfo(memberId) {
-  const API_URL = `https://yogibo.cafe24api.com/api/v2/admin/orders`;
+  const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`;
   // 날짜 범위는 필요에 따라 수정하세요.
   const params = {
     member_id: memberId,
@@ -172,6 +169,26 @@ async function getOrderInfo(memberId) {
   } catch (error) {
     console.error("Error fetching order info:", error.message);
     return "주문 정보를 가져오는 데 실패했습니다.";
+  }
+}
+
+/**
+ * 주문 배송 정보 조회 함수: 회원의 주문 데이터를 원본 형태로 반환
+ */
+async function getOrderShippingInfo(memberId) {
+  const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`;
+  const params = {
+    member_id: memberId,
+    start_date: '2024-08-31',
+    end_date: '2024-09-31',
+    limit: 10,
+  };
+  try {
+    const response = await apiRequest("GET", API_URL, {}, params);
+    return response; // API의 원본 응답(JSON 형태)
+  } catch (error) {
+    console.error("Error fetching order shipping info:", error.message);
+    throw error;
   }
 }
 
@@ -198,27 +215,6 @@ function getAdditionalBizComment() {
 function summarizeHistory(text, maxLength = 300) {
   if (text.length <= maxLength) return text;
   return text.substring(0, maxLength) + "...";
-}
-
-
-/**
- * 주문 배송 정보 조회 함수: 회원의 주문 데이터를 원본 형태로 반환
- */
-async function getOrderShippingInfo(memberId) {
-  const API_URL = `https://yogibo.cafe24api.com/api/v2/admin/orders`;
-  const params = {
-    member_id: memberId,
-    start_date: '2024-08-31',
-    end_date: '2024-09-31',
-    limit: 10,
-  };
-  try {
-    const response = await apiRequest("GET", API_URL, {}, params);
-    return response; // API의 원본 응답(JSON 형태)
-  } catch (error) {
-    console.error("Error fetching order shipping info:", error.message);
-    throw error;
-  }
 }
 
 /**
@@ -259,50 +255,59 @@ function processOrdersResponse(apiResponse) {
   }
 }
 
+// 주문번호 패턴 검사 (예: 20170710-0000013 형태)
+function containsOrderNumber(input) {
+  return /\d{8}-\d{7}/.test(input);
+}
+
 /**
  * 챗봇 메인 로직 함수  
- * userInput과 memberId가 전달되며, "주문상태 확인" 또는 "배송 상태 확인" 문의에 대해
- * 주문 데이터를 조회하고 배송 상태에 따른 메시지를 생성하여 응답합니다.
+ * userInput과 memberId가 전달되며, 아래와 같이 처리합니다.
+ * 
+ * 1. "내 아이디", "나의 아이디", "아이디 조회", "아이디 알려줘" 문의 시 회원 아이디를 응답.
+ * 2. "주문정보 확인" 문의 시 주문번호 목록을 제공.
+ * 3. "주문상태 확인" 또는 "배송 상태 확인" 문의 시,
+ *    - 주문번호가 포함되어 있지 않으면 주문번호 목록을 안내하고 주문번호 입력 요청.
+ *    - 주문번호가 포함되어 있으면 해당 주문의 배송 상태 정보를 응답.
+ * 4. 그 외 문의는 기본 메시지로 응답.
  */
 async function findAnswer(userInput, memberId) {
   const normalizedUserInput = normalizeSentence(userInput);
 
-  // 배송 상태 확인 조건 추가
+  // 1. 회원 아이디 조회
   if (
-    normalizedUserInput.includes("주문상태 확인") ||
-    normalizedUserInput.includes("배송 상태 확인")
+    normalizedUserInput.includes("내 아이디") ||
+    normalizedUserInput.includes("나의 아이디") ||
+    normalizedUserInput.includes("아이디 조회") ||
+    normalizedUserInput.includes("아이디 알려줘")
   ) {
     if (memberId && memberId !== "null") {
-      try {
-        // 주문 데이터 원본을 가져와서 배송 상태 메시지 생성
-        const orderData = await getOrderShippingInfo(memberId);
-        const processedOrders = processOrdersResponse(orderData);
-        if (processedOrders.length > 0) {
-          const messages = processedOrders
-            .map(o => `주문번호 ${o.order_id}: ${o.message}`)
-            .join("\n");
-          return {
-            text: messages,
-            videoHtml: null,
-            description: null,
-            imageUrl: null,
-          };
-        } else {
-          return {
-            text: "주문 정보를 찾을 수 없습니다.",
-            videoHtml: null,
-            description: null,
-            imageUrl: null,
-          };
-        }
-      } catch (error) {
-        return {
-          text: "배송 상태를 가져오는 데 오류가 발생했습니다.",
-          videoHtml: null,
-          description: null,
-          imageUrl: null,
-        };
-      }
+      return {
+        text: `안녕하세요 ${memberId} 고객님 반갑습니다. 채팅창에 요기보에 대해 궁금하신 사항을 남겨주세요.`,
+        videoHtml: null,
+        description: null,
+        imageUrl: null,
+      };
+    } else {
+      return {
+        text: "안녕하세요 고객님, 채팅창에 요기보에 대해 궁금하신 사항을 남겨주세요.",
+        videoHtml: null,
+        description: null,
+        imageUrl: null,
+      };
+    }
+  }
+
+  // 2. 주문정보 확인
+  if (normalizedUserInput.includes("주문정보 확인")) {
+    if (memberId && memberId !== "null") {
+      const orderResult = await getOrderInfo(memberId);
+      return {
+        text: orderResult,
+        videoHtml: null,
+        description: null,
+        imageUrl: null,
+      };
     } else {
       return {
         text: "회원 정보가 확인되지 않습니다. 로그인 후 다시 시도해주세요.",
@@ -313,30 +318,10 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 기존 다른 조건들...
-  // 예를 들어, "내 아이디" 조회, "주문정보 확인" 등 기존 로직이 여기에 위치
-  return {
-    text: "질문을 이해하지 못했어요. 좀더 자세히 입력 해주시겠어요",
-    videoHtml: null,
-    description: null,
-    imageUrl: null,
-  };
-}
-
-
-
-// 주문번호 패턴 검사 (예: 20170710-0000013 형태)
-function containsOrderNumber(input) {
-  return /\d{8}-\d{7}/.test(input);
-}
-
-async function findAnswer(userInput, memberId) {
-  const normalizedUserInput = normalizeSentence(userInput);
-
-  // 배송/주문 상태 확인 요청 처리
+  // 3. 주문상태/배송 상태 확인
   if (normalizedUserInput.includes("주문상태 확인") || normalizedUserInput.includes("배송 상태 확인")) {
     if (memberId && memberId !== "null") {
-      // 주문번호가 포함되어 있지 않은 경우: 주문번호 목록을 안내
+      // 주문번호가 포함되어 있지 않으면 주문번호 목록 안내
       if (!containsOrderNumber(normalizedUserInput)) {
         try {
           const orderData = await getOrderShippingInfo(memberId);
@@ -367,10 +352,9 @@ async function findAnswer(userInput, memberId) {
           };
         }
       } else {
-        // 주문번호가 포함된 경우: 해당 주문에 대한 배송 상태 확인
+        // 주문번호가 포함되어 있는 경우
         try {
           const orderData = await getOrderShippingInfo(memberId);
-          // 정규식으로 주문번호 추출 (예: 20170710-0000013)
           const match = normalizedUserInput.match(/\d{8}-\d{7}/);
           const targetOrderNumber = match ? match[0] : "";
           const targetOrder = orderData.orders.find(order => order.order_id.includes(targetOrderNumber));
@@ -409,7 +393,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 기타 질문 처리 로직 ...
+  // 4. 그 외 문의에 대한 기본 응답
   return {
     text: "질문을 이해하지 못했어요. 좀더 자세히 입력 해주시겠어요",
     videoHtml: null,
@@ -417,70 +401,6 @@ async function findAnswer(userInput, memberId) {
     imageUrl: null,
   };
 }
-
-
-// 회원 아이디 부분
-async function findAnswer(userInput, memberId) {
-  const normalizedUserInput = normalizeSentence(userInput);
-
-  // 회원 아이디 조회 기능 추가 (예: "내 아이디", "나의 아이디", "아이디 조회", "아이디 알려줘")
-  if (
-    normalizedUserInput.includes("내 아이디") ||
-    normalizedUserInput.includes("나의 아이디") ||
-    normalizedUserInput.includes("아이디 조회") ||
-    normalizedUserInput.includes("아이디 알려줘")
-  ) {
-    if (memberId && memberId !== "null") {
-      return {
-        text: `안녕하세요 ${memberId} 고객님 반갑습니다. 채팅창에 요기보에 대해 궁금하신 사항을 남겨주세요.`,
-        videoHtml: null,
-        description: null,
-        imageUrl: null,
-      };
-    } else {
-      return {
-        text: "안녕하세요 고객님 채팅창에 요기보에 대해 궁금하신 사항을 남겨주세요.",
-        videoHtml: null,
-        description: null,
-        imageUrl: null,
-      };
-    }
-  }
-
-  // 주문 정보 조회 예제
-  if (normalizedUserInput.includes("주문정보 확인")) {
-    if (memberId && memberId !== "null") {
-      const orderResult = await getOrderInfo(memberId);
-      return {
-        text: orderResult,
-        videoHtml: null,
-        description: null,
-        imageUrl: null,
-      };
-    } else {
-      return {
-        text: "회원 정보가 확인되지 않습니다. 로그인 후 다시 시도해주세요.",
-        videoHtml: null,
-        description: null,
-        imageUrl: null,
-      };
-    }
-  }
-
-  // 기타 질문 처리 로직은 필요에 따라 추가...
-  return {
-    text: "질문을 이해하지 못했어요. 좀더 자세히 입력 해주시겠어요",
-    videoHtml: null,
-    description: null,
-    imageUrl: null,
-  };
-}
-
-
-
-
-
-
 
 /**
  * GPT API 연동 함수 (fallback)

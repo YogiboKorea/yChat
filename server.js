@@ -385,7 +385,7 @@ async function findAnswer(userInput, memberId) {
           const targetOrder = orderData.orders[0];
           const shipment = await getShipmentDetail(targetOrder.order_id);
           if (shipment) {
-            let status = shipment.status || "정보 없음";
+            let status = shipment.status || "배송완료";
             let trackingNo = shipment.tracking_no || "정보 없음";
             return {
               text: `주문번호 ${targetOrder.order_id}의 배송 상태는 ${status}이며, 송장번호는 ${trackingNo} 입니다.`,

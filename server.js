@@ -145,6 +145,31 @@ async function apiRequest(method, url, data = {}, params = {}) {
   }
 }
 
+/**
+ * Cafe24 주문 정보 조회 함수  
+ * memberId를 기준으로 주문 내역을 조회합니다.
+ */
+async function getOrderInfo(memberId) {
+  const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`;
+  const params = {
+    member_id: memberId,
+    start_date: '2024-08-31',
+    end_date: '2024-09-31',
+    limit: 10,
+  };
+  try {
+    const response = await apiRequest("GET", API_URL, {}, params);
+    const orders = response.orders;
+    if (!orders || orders.length === 0) {
+      return "주문 정보가 없습니다.";
+    }
+    let orderNumbers = orders.map(order => order.order_id).join(", ");
+    return `회원님의 주문번호: ${orderNumbers}`;
+  } catch (error) {
+    console.error("Error fetching order info:", error.message);
+    return "주문 정보를 가져오는 데 실패했습니다.";
+  }
+}
 
 /**
  * 주문 배송 정보 조회 함수: 회원의 주문 데이터를 원본 형태로 반환
@@ -159,7 +184,7 @@ async function getOrderShippingInfo(memberId) {
   };
   try {
     const response = await apiRequest("GET", API_URL, {}, params);
-    return response; // API의 원본 응답(JSON 형태)
+    return response;
   } catch (error) {
     console.error("Error fetching order shipping info:", error.message);
     throw error;
@@ -197,12 +222,10 @@ function summarizeHistory(text, maxLength = 300) {
 function processOrderShippingStatus(order) {
   let message = "";
   if (order.shipping_status === "N40") {
-    // 배송완료: 배송 시작일(shipbegin_date)과 배송 완료일(shipend_date)을 표시
     const shipBegin = order.shipbegin_date || "정보 없음";
     const shipEnd = order.shipend_date || "정보 없음";
     message = `고객님이 주문하신 상품은 배송완료 처리되었습니다. 배송 시작일: ${shipBegin}, 배송 완료일: ${shipEnd}.`;
   } else if (order.shipping_status === "N30") {
-    // 배송중: 송장번호(invoice_number)를 함께 표시
     const invoiceNumber = order.invoice_number || "정보 없음";
     message = `해당 상품은 배송중에 있습니다. 송장번호: ${invoiceNumber}.`;
   } else {
@@ -229,21 +252,19 @@ function processOrdersResponse(apiResponse) {
   }
 }
 
-// 주문번호 패턴 검사 (예: 20170710-0000013 형태)
+// 주문번호 패턴 검사 (예: 20240920-0000167 형태)
 function containsOrderNumber(input) {
   return /\d{8}-\d{7}/.test(input);
 }
 
 /**
  * 챗봇 메인 로직 함수  
- * userInput과 memberId가 전달되며, 아래와 같이 처리합니다.
- * 
- * 1. "내 아이디", "나의 아이디", "아이디 조회", "아이디 알려줘" 문의 시 회원 아이디를 응답.
- * 2. "주문정보 확인" 문의 시 주문번호 목록을 제공.
- * 3. "주문상태 확인" 또는 "배송 상태 확인" 문의 시,
- *    - 주문번호가 포함되어 있지 않으면 주문번호 목록을 안내하고 주문번호 입력 요청.
- *    - 주문번호가 포함되어 있으면 해당 주문의 배송 상태 정보를 응답.
- * 4. 그 외 문의는 기본 메시지로 응답.
+ * 아래 순서로 문의를 처리합니다.
+ * 1. "내 아이디", "나의 아이디", "아이디 조회", "아이디 알려줘" → 회원 아이디 응답
+ * 2. 입력에 주문번호가 포함되어 있으면 해당 주문의 배송 상태를 바로 응답
+ * 3. "주문정보 확인" → 주문번호 목록 제공
+ * 4. "주문상태 확인" 또는 "배송 상태 확인" (주문번호 미포함) → 주문번호 목록 제공
+ * 5. 그 외 → 기본 응답
  */
 async function findAnswer(userInput, memberId) {
   const normalizedUserInput = normalizeSentence(userInput);
@@ -272,7 +293,49 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 2. 주문정보 확인
+  // 2. 주문번호가 포함된 경우 → 바로 해당 주문의 배송 상태 확인
+  if (containsOrderNumber(normalizedUserInput)) {
+    if (memberId && memberId !== "null") {
+      try {
+        const orderData = await getOrderShippingInfo(memberId);
+        const match = normalizedUserInput.match(/\d{8}-\d{7}/);
+        const targetOrderNumber = match ? match[0] : "";
+        const targetOrder = orderData.orders.find(order => order.order_id.includes(targetOrderNumber));
+        if (targetOrder) {
+          const shippingMessage = processOrderShippingStatus(targetOrder);
+          return {
+            text: `주문번호 ${targetOrder.order_id}: ${shippingMessage}`,
+            videoHtml: null,
+            description: null,
+            imageUrl: null,
+          };
+        } else {
+          return {
+            text: "해당 주문 번호에 해당하는 주문 정보를 찾을 수 없습니다.",
+            videoHtml: null,
+            description: null,
+            imageUrl: null,
+          };
+        }
+      } catch (error) {
+        return {
+          text: "주문 상태를 확인하는 데 오류가 발생했습니다.",
+          videoHtml: null,
+          description: null,
+          imageUrl: null,
+        };
+      }
+    } else {
+      return {
+        text: "회원 정보가 확인되지 않습니다. 로그인 후 다시 시도해주세요.",
+        videoHtml: null,
+        description: null,
+        imageUrl: null,
+      };
+    }
+  }
+
+  // 3. 주문정보 확인 → 주문번호 목록 제공
   if (normalizedUserInput.includes("주문정보 확인")) {
     if (memberId && memberId !== "null") {
       const orderResult = await getOrderInfo(memberId);
@@ -292,70 +355,36 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 3. 주문상태/배송 상태 확인
-  if (normalizedUserInput.includes("주문상태 확인") || normalizedUserInput.includes("배송 상태 확인")) {
+  // 4. "주문상태 확인" 또는 "배송 상태 확인" (주문번호 미포함) → 주문번호 목록 안내
+  if ((normalizedUserInput.includes("주문상태 확인") || normalizedUserInput.includes("배송 상태 확인")) && !containsOrderNumber(normalizedUserInput)) {
     if (memberId && memberId !== "null") {
-      // 주문번호가 포함되어 있지 않으면 주문번호 목록 안내
-      if (!containsOrderNumber(normalizedUserInput)) {
-        try {
-          const orderData = await getOrderShippingInfo(memberId);
-          if (orderData.orders && orderData.orders.length > 0) {
-            const orderNumbers = orderData.orders.map(order => order.order_id);
-            return {
-              text: `주문상태를 확인하시려면 주문 번호나 관련 정보를 제공해주셔야 합니다. 고객님의 주문 번호는 ${orderNumbers.join(
-                ", "
-              )} 입니다. 원하시는 주문 번호를 입력해주세요.`,
-              videoHtml: null,
-              description: null,
-              imageUrl: null,
-            };
-          } else {
-            return {
-              text: "고객님의 주문 정보가 없습니다.",
-              videoHtml: null,
-              description: null,
-              imageUrl: null,
-            };
-          }
-        } catch (error) {
+      try {
+        const orderData = await getOrderShippingInfo(memberId);
+        if (orderData.orders && orderData.orders.length > 0) {
+          const orderNumbers = orderData.orders.map(order => order.order_id);
           return {
-            text: "주문 정보를 가져오는 데 오류가 발생했습니다.",
+            text: `주문상태를 확인하시려면 주문 번호나 관련 정보를 제공해주셔야 합니다. 고객님의 주문 번호는 ${orderNumbers.join(
+              ", "
+            )} 입니다. 원하시는 주문 번호를 입력해주세요.`,
+            videoHtml: null,
+            description: null,
+            imageUrl: null,
+          };
+        } else {
+          return {
+            text: "고객님의 주문 정보가 없습니다.",
             videoHtml: null,
             description: null,
             imageUrl: null,
           };
         }
-      } else {
-        // 주문번호가 포함되어 있는 경우
-        try {
-          const orderData = await getOrderShippingInfo(memberId);
-          const match = normalizedUserInput.match(/\d{8}-\d{7}/);
-          const targetOrderNumber = match ? match[0] : "";
-          const targetOrder = orderData.orders.find(order => order.order_id.includes(targetOrderNumber));
-          if (targetOrder) {
-            const shippingMessage = processOrderShippingStatus(targetOrder);
-            return {
-              text: `주문번호 ${targetOrder.order_id}: ${shippingMessage}`,
-              videoHtml: null,
-              description: null,
-              imageUrl: null,
-            };
-          } else {
-            return {
-              text: "해당 주문 번호에 해당하는 주문 정보를 찾을 수 없습니다.",
-              videoHtml: null,
-              description: null,
-              imageUrl: null,
-            };
-          }
-        } catch (error) {
-          return {
-            text: "주문 상태를 확인하는 데 오류가 발생했습니다.",
-            videoHtml: null,
-            description: null,
-            imageUrl: null,
-          };
-        }
+      } catch (error) {
+        return {
+          text: "주문 정보를 가져오는 데 오류가 발생했습니다.",
+          videoHtml: null,
+          description: null,
+          imageUrl: null,
+        };
       }
     } else {
       return {
@@ -367,7 +396,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 4. 그 외 문의에 대한 기본 응답
+  // 5. 그 외 → 기본 응답
   return {
     text: "질문을 이해하지 못했어요. 좀더 자세히 입력 해주시겠어요",
     videoHtml: null,

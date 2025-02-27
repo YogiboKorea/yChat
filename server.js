@@ -38,7 +38,6 @@ async function getTokensFromDB() {
     await client.connect();
     const db = client.db(DB_NAME);
     const collection = db.collection(tokenCollectionName);
-    // 컬렉션 내 첫 번째 문서를 가져옵니다.
     const tokensDoc = await collection.findOne({});
     if (tokensDoc) {
       accessToken = tokensDoc.accessToken;
@@ -55,14 +54,13 @@ async function getTokensFromDB() {
   }
 }
 
-// MongoDB에 토큰을 저장하는 함수 (업데이트 시 필터를 {}로 사용)
+// MongoDB에 토큰을 저장하는 함수
 async function saveTokensToDB(newAccessToken, newRefreshToken) {
   const client = new MongoClient(MONGODB_URI);
   try {
     await client.connect();
     const db = client.db(DB_NAME);
     const collection = db.collection(tokenCollectionName);
-    // 빈 필터 {}로 문서를 업데이트(없으면 새 문서 생성)
     await collection.updateOne(
       {},
       {
@@ -84,7 +82,6 @@ async function saveTokensToDB(newAccessToken, newRefreshToken) {
 
 /**
  * Access Token 갱신 함수  
- * 401 에러 발생 시 refreshToken을 사용하여 토큰을 갱신하고 DB에 저장합니다.
  */
 async function refreshAccessToken() {
   try {
@@ -147,7 +144,7 @@ async function apiRequest(method, url, data = {}, params = {}) {
 
 /**
  * Cafe24 주문 정보 조회 함수  
- * memberId를 기준으로 주문 내역을 조회합니다.
+ * (전체 주문 목록 조회용)
  */
 async function getOrderInfo(memberId) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`;
@@ -172,7 +169,7 @@ async function getOrderInfo(memberId) {
 }
 
 /**
- * 주문 배송 정보 조회 함수: 회원의 주문 데이터를 원본 형태로 반환
+ * 주문 배송 정보 조회 함수: 기존 getOrderShippingInfo는 주문 목록을 조회함
  */
 async function getOrderShippingInfo(memberId) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`;
@@ -187,6 +184,31 @@ async function getOrderShippingInfo(memberId) {
     return response;
   } catch (error) {
     console.error("Error fetching order shipping info:", error.message);
+    throw error;
+  }
+}
+
+/**
+ * 주문번호에 대한 배송 상태 조회 함수 (새로운 엔드포인트 사용)
+ * GET https://{mallid}.cafe24api.com/api/v2/admin/orders/{order_id}/shipments
+ * required query parameters는 예시로 dummy 값 사용 (실제 값은 주문 데이터에 따라 채워야 함)
+ */
+async function getOrderShipmentInfo(orderId) {
+  const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders/${orderId}/shipments`;
+  const params = {
+    shop_no: 1,
+    tracking_no: 'dummy_tracking_no',            // 실제 송장번호 (또는 관련 데이터를 사용)
+    shipping_company_code: 'dummy_company_code',    // 실제 배송업체 코드
+    order_item_code: 'dummy_order_item_code',       // 실제 품목 코드
+    status: 'shipping',                             // 배송 상태 (shipping 또는 standby)
+    shipping_code: 'dummy_shipping_code',           // 실제 배송번호
+    carrier_id: 'dummy_carrier_id'                  // 실제 배송사 아이디
+  };
+  try {
+    const response = await apiRequest("GET", API_URL, {}, params);
+    return response;
+  } catch (error) {
+    console.error("Error fetching order shipment info:", error.message);
     throw error;
   }
 }
@@ -217,17 +239,17 @@ function summarizeHistory(text, maxLength = 300) {
 }
 
 /**
- * 주문 객체(order)의 배송 상태에 따라 메시지를 생성하는 함수
+ * 주문 객체(order)의 배송 상태에 따라 메시지를 생성하는 함수 (기존)
  */
 function processOrderShippingStatus(order) {
   let message = "";
   if (order.shipping_status === "N40") {
     const shipBegin = order.shipbegin_date || "정보 없음";
     const shipEnd = order.shipend_date || "정보 없음";
-    message = `고객님이 주문하신 상품은 배송완료 처리되었습니다. 배송 시작일: ${shipBegin}, 배송 완료일: ${shipEnd}.`;
+    message = `배송완료 처리되었습니다. 배송 시작일: ${shipBegin}, 배송 완료일: ${shipEnd}.`;
   } else if (order.shipping_status === "N30") {
     const invoiceNumber = order.invoice_number || "정보 없음";
-    message = `해당 상품은 배송중에 있습니다. 송장번호: ${invoiceNumber}.`;
+    message = `배송중입니다. 송장번호: ${invoiceNumber}.`;
   } else {
     message = "배송 상태를 확인할 수 없습니다.";
   }
@@ -235,7 +257,7 @@ function processOrderShippingStatus(order) {
 }
 
 /**
- * API 응답 데이터 내 orders 배열을 처리하여 각 주문별 배송 상태 메시지를 생성하는 함수
+ * API 응답 데이터 내 orders 배열을 처리하는 함수 (기존)
  */
 function processOrdersResponse(apiResponse) {
   if (apiResponse.orders && Array.isArray(apiResponse.orders)) {
@@ -259,13 +281,12 @@ function containsOrderNumber(input) {
 
 /**
  * 챗봇 메인 로직 함수  
- * 아래 순서로 문의를 처리합니다.
- * 1. "내 아이디", "나의 아이디", "아이디 조회", "아이디 알려줘" → 회원 아이디 응답
- * 2. 입력에 주문번호가 포함되어 있으면 해당 주문의 배송 상태를 바로 응답
+ * 처리 순서:
+ * 1. 회원 아이디 조회
+ * 2. 주문번호가 포함된 경우 → 해당 주문번호에 대한 배송 상태 안내 (신규 엔드포인트 사용)
  * 3. "주문정보 확인" → 주문번호 목록 제공
- * 4. "주문상태 확인" 또는 "배송 상태 확인" (주문번호 미포함) →
- *    - 주문이 1건이면 자동으로 해당 주문의 상태를 안내
- *    - 주문이 여러 건이면 주문번호 목록을 안내하여 구체적인 주문번호 입력 요청
+ * 4. "주문상태 확인"/"배송 상태 확인" (주문번호 미포함) →
+ *    - 단일 주문이면 자동 안내, 다수이면 주문번호 목록 안내
  * 5. 그 외 → 기본 응답
  */
 async function findAnswer(userInput, memberId) {
@@ -280,14 +301,14 @@ async function findAnswer(userInput, memberId) {
   ) {
     if (memberId && memberId !== "null") {
       return {
-        text: `안녕하세요 ${memberId} 고객님 반갑습니다. 채팅창에 요기보에 대해 궁금하신 사항을 남겨주세요.`,
+        text: `안녕하세요 ${memberId} 고객님, 채팅창에 궁금하신 사항을 남겨주세요.`,
         videoHtml: null,
         description: null,
         imageUrl: null,
       };
     } else {
       return {
-        text: "안녕하세요 고객님, 채팅창에 요기보에 대해 궁금하신 사항을 남겨주세요.",
+        text: "안녕하세요 고객님, 채팅창에 궁금하신 사항을 남겨주세요.",
         videoHtml: null,
         description: null,
         imageUrl: null,
@@ -295,25 +316,33 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 2. 주문번호가 포함된 경우 → 바로 해당 주문의 배송 상태 확인
+  // 2. 주문번호가 포함된 경우 → 바로 해당 주문의 배송 상태 확인 (신규 엔드포인트 사용)
   if (containsOrderNumber(normalizedUserInput)) {
     if (memberId && memberId !== "null") {
       try {
-        const orderData = await getOrderShippingInfo(memberId);
         const match = normalizedUserInput.match(/\d{8}-\d{7}/);
         const targetOrderNumber = match ? match[0] : "";
-        const targetOrder = orderData.orders.find(order => order.order_id.includes(targetOrderNumber));
-        if (targetOrder) {
-          const shippingMessage = processOrderShippingStatus(targetOrder);
+        const shipmentInfo = await getOrderShipmentInfo(targetOrderNumber);
+        // shipmentInfo 예시: { shipments: [ { status, tracking_no, ... } ] }
+        if (shipmentInfo.shipments && shipmentInfo.shipments.length > 0) {
+          const shipment = shipmentInfo.shipments[0];
+          let shippingMessage = "";
+          if (shipment.status === "shipping") {
+            shippingMessage = `배송중입니다. 송장번호: ${shipment.tracking_no}.`;
+          } else if (shipment.status === "standby") {
+            shippingMessage = "배송대기 상태입니다.";
+          } else {
+            shippingMessage = "배송 상태를 확인할 수 없습니다.";
+          }
           return {
-            text: `해당 주문번호 ${targetOrder.order_id}에 대한 주문상태를 말씀드리겠습니다: ${shippingMessage}`,
+            text: `해당 주문번호 ${targetOrderNumber}에 대한 주문상태를 말씀드리겠습니다: ${shippingMessage}`,
             videoHtml: null,
             description: null,
             imageUrl: null,
           };
         } else {
           return {
-            text: "해당 주문 번호에 해당하는 주문 정보를 찾을 수 없습니다.",
+            text: "해당 주문번호에 대한 배송 정보를 찾을 수 없습니다.",
             videoHtml: null,
             description: null,
             imageUrl: null,
@@ -364,8 +393,9 @@ async function findAnswer(userInput, memberId) {
         const orderData = await getOrderShippingInfo(memberId);
         if (orderData.orders && orderData.orders.length > 0) {
           if (orderData.orders.length === 1) {
-            // 단 1건이면 자동으로 해당 주문의 상태 안내
             const targetOrder = orderData.orders[0];
+            // 여기서는 기존 getOrderShippingInfo로 배송 상태를 처리할 수 있지만,
+            // 주문이 1건이면 자동으로 해당 주문의 상태 안내 메시지 출력
             const shippingMessage = processOrderShippingStatus(targetOrder);
             return {
               text: `해당 주문번호 ${targetOrder.order_id}에 대한 주문상태를 말씀드리겠습니다: ${shippingMessage}`,
@@ -374,7 +404,6 @@ async function findAnswer(userInput, memberId) {
               imageUrl: null,
             };
           } else {
-            // 주문이 여러 건이면 주문번호 목록 안내
             const orderNumbers = orderData.orders.map(order => order.order_id);
             return {
               text: `주문상태를 확인하시려면 주문 번호나 관련 정보를 제공해주셔야 합니다. 고객님의 주문 번호는 ${orderNumbers.join(", ")} 입니다. 원하시는 주문 번호를 입력해주세요.`,
@@ -458,7 +487,6 @@ app.post("/chat", async (req, res) => {
   }
   try {
     const answer = await findAnswer(userInput, memberId);
-    // fallback: 기본 응답이 fallback 메시지면 GPT API 호출
     if (answer.text === "질문을 이해하지 못했어요. 좀더 자세히 입력 해주시겠어요") {
       const gptResponse = await getGPT3TurboResponse(userInput);
       return res.json({

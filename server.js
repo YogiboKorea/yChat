@@ -242,6 +242,73 @@ async function findAnswer(userInput, memberId) {
   };
 }
 
+
+// 회원 아이디 부분
+
+async function findAnswer(userInput, memberId) {
+  const normalizedUserInput = normalizeSentence(userInput);
+
+  // 회원 아이디 조회 기능 추가
+  if (
+    normalizedUserInput.includes("내 아이디") ||
+    normalizedUserInput.includes("나의 아이디") ||
+    normalizedUserInput.includes("아이디 조회")
+  ) {
+    if (memberId && memberId !== "null") {
+      return {
+        text: `회원님의 아이디는 ${memberId} 입니다.`,
+        videoHtml: null,
+        description: null,
+        imageUrl: null,
+      };
+    } else {
+      return {
+        text: "회원 정보가 확인되지 않습니다. 로그인 후 다시 시도해주세요.",
+        videoHtml: null,
+        description: null,
+        imageUrl: null,
+      };
+    }
+  }
+
+  // 주문 정보 조회 예제
+  if (normalizedUserInput.includes("주문정보 확인")) {
+    if (memberId && memberId !== "null") {
+      const orderResult = await getOrderInfo(memberId);
+      return {
+        text: orderResult,
+        videoHtml: null,
+        description: null,
+        imageUrl: null,
+      };
+    } else {
+      return {
+        text: "회원 정보가 확인되지 않습니다. 로그인 후 다시 시도해주세요.",
+        videoHtml: null,
+        description: null,
+        imageUrl: null,
+      };
+    }
+  }
+
+  // 기타 질문 처리 로직은 필요에 따라 추가...
+  return {
+    text: "질문을 이해하지 못했어요. 좀더 자세히 입력 해주시겠어요",
+    videoHtml: null,
+    description: null,
+    imageUrl: null,
+  };
+}
+
+
+
+
+
+
+
+
+
+
 /**
  * GPT API 연동 함수 (fallback)
  */

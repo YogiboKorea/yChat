@@ -251,7 +251,7 @@ function summarizeHistory(text, maxLength = 300) {
  * 1. 회원 아이디 조회
  * 2. 주문번호가 포함된 경우 → 해당 주문번호의 배송 상세 정보 조회
  * 3. "주문정보 확인" → 주문번호 목록 제공
- * 4. "주문상태 확인"/"배송 상태 확인" (주문번호 미포함) →
+ * 4. "주문상태 확인", "배송 상태 확인", 또는 "배송정보 확인" (주문번호 미포함) →
  *    멤버 아이디에 따라 지정된 기간 내 최신 주문의 order_id를 가져와,
  *    그 주문의 배송번호를 receivers 엔드포인트를 통해 얻은 후,
  *    상세 배송 정보를 조회하여 status와 tracking_no 안내
@@ -290,8 +290,8 @@ async function findAnswer(userInput, memberId) {
       try {
         const match = normalizedUserInput.match(/\d{8}-\d{7}/);
         const targetOrderNumber = match ? match[0] : "";
-        // 여기서는 주문번호와 배송번호가 동일하다고 가정하거나, 별도로 저장된 배송번호를 사용
-        const shippingCode = targetOrderNumber; 
+        // 주문번호와 배송번호가 동일하다고 가정(혹은 별도로 저장된 배송번호 사용)
+        const shippingCode = targetOrderNumber;
         const shipmentDetail = await getShipmentDetail(targetOrderNumber, shippingCode);
         if (shipmentDetail) {
           let status = shipmentDetail.status || "정보 없음";
@@ -348,11 +348,14 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 4. "주문상태 확인" 또는 "배송 상태 확인" (주문번호 미포함)
-  // 멤버 아이디에 따라 지정된 기간 내 최신 주문의 order_id를 가져와,
-  // 그 주문의 배송번호를 receivers 엔드포인트를 통해 얻은 후,
-  // 상세 배송 정보를 조회하여 status와 tracking_no 안내
-  if ((normalizedUserInput.includes("주문상태 확인") || normalizedUserInput.includes("배송 상태 확인")) && !containsOrderNumber(normalizedUserInput)) {
+  // 4. "주문상태 확인", "배송 상태 확인", 또는 "배송정보 확인" (주문번호 미포함)
+  // 단순히 해당 키워드만 입력하면, 최신 주문의 주문번호를 자동으로 사용
+  if (
+    (normalizedUserInput.includes("주문상태 확인") ||
+      normalizedUserInput.includes("배송 상태 확인") ||
+      normalizedUserInput.includes("배송정보 확인")) &&
+    !containsOrderNumber(normalizedUserInput)
+  ) {
     if (memberId && memberId !== "null") {
       try {
         const orderData = await getOrderShippingInfo(memberId);

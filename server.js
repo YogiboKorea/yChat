@@ -187,7 +187,17 @@ async function getShipmentDetail(orderId) {
   try {
     const response = await apiRequest("GET", API_URL, {}, params);
     if (response.shipments && response.shipments.length > 0) {
-      return response.shipments[0]; // 첫 번째 shipment 객체 반환
+      const shipment = response.shipments[0];
+      
+      // shipping_company_code가 "19"이면 "롯데 택배"로 매핑
+      if (shipment.shipping_company_code === "19") {
+        shipment.shipping_company_name = "롯데 택배";
+      } else {
+        // 다른 코드 처리 (예: DB나 매핑 테이블을 사용하거나, 기본적으로 코드만 표시)
+        shipment.shipping_company_name = shipment.shipping_company_code || "정보 없음";
+      }
+
+      return shipment;
     } else {
       throw new Error("배송 정보를 찾을 수 없습니다.");
     }

@@ -200,47 +200,32 @@ function summarizeHistory(text, maxLength = 300) {
   return text.substring(0, maxLength) + "...";
 }
 
+
 /**
- * 챗봇 메인 로직 함수  
- * userInput과 함께 memberId가 전달되며,
- * "주문정보 확인" 문구가 포함되면 해당 회원의 주문 정보를 조회합니다.
+ * 주문 배송 정보 조회 함수: 회원의 주문 데이터를 원본 형태로 반환
  */
-async function findAnswer(userInput, memberId) {
-  const normalizedUserInput = normalizeSentence(userInput);
-
-  // 주문 정보 조회 예제
-  if (normalizedUserInput.includes("주문정보 확인")) {
-    if (memberId && memberId !== "null") {
-      const orderResult = await getOrderInfo(memberId);
-      return {
-        text: orderResult,
-        videoHtml: null,
-        description: null,
-        imageUrl: null,
-      };
-    } else {
-      return {
-        text: "회원 정보가 확인되지 않습니다. 로그인 후 다시 시도해주세요.",
-        videoHtml: null,
-        description: null,
-        imageUrl: null,
-      };
-    }
-  }
-
-  // 기타 질문 처리 로직은 필요에 따라 추가할 수 있습니다.
-  return {
-    text: "질문을 이해하지 못했어요. 좀더 자세히 입력 해주시겠어요",
-    videoHtml: null,
-    description: null,
-    imageUrl: null,
+async function getOrderShippingInfo(memberId) {
+  const API_URL = `https://yogibo.cafe24api.com/api/v2/admin/orders`;
+  const params = {
+    member_id: memberId,
+    start_date: '2020-01-01',
+    end_date: '2025-12-31',
+    limit: 10,
   };
+  try {
+    const response = await apiRequest("GET", API_URL, {}, params);
+    return response; // API의 원본 응답(JSON 형태)
+  } catch (error) {
+    console.error("Error fetching order shipping info:", error.message);
+    throw error;
+  }
 }
 
-
+/**
+ * 주문 객체(order)의 배송 상태에 따라 메시지를 생성하는 함수
+ */
 function processOrderShippingStatus(order) {
   let message = "";
-
   if (order.shipping_status === "N40") {
     // 배송완료: 배송 시작일(shipbegin_date)과 배송 완료일(shipend_date)을 표시
     const shipBegin = order.shipbegin_date || "정보 없음";
@@ -253,15 +238,15 @@ function processOrderShippingStatus(order) {
   } else {
     message = "배송 상태를 확인할 수 없습니다.";
   }
-
   return message;
 }
 
-// API 응답 데이터 예시를 처리하는 코드
+/**
+ * API 응답 데이터 내 orders 배열을 처리하여 각 주문별 배송 상태 메시지를 생성하는 함수
+ */
 function processOrdersResponse(apiResponse) {
   if (apiResponse.orders && Array.isArray(apiResponse.orders)) {
     return apiResponse.orders.map(order => {
-      // 각 주문에 대해 배송 상태 메시지 생성
       const shippingMessage = processOrderShippingStatus(order);
       return {
         order_id: order.order_id,
@@ -272,6 +257,70 @@ function processOrdersResponse(apiResponse) {
   } else {
     return [];
   }
+}
+
+/**
+ * 챗봇 메인 로직 함수  
+ * userInput과 memberId가 전달되며, "주문상태 확인" 또는 "배송 상태 확인" 문의에 대해
+ * 주문 데이터를 조회하고 배송 상태에 따른 메시지를 생성하여 응답합니다.
+ */
+async function findAnswer(userInput, memberId) {
+  const normalizedUserInput = normalizeSentence(userInput);
+
+  // 배송 상태 확인 조건 추가
+  if (
+    normalizedUserInput.includes("주문상태 확인") ||
+    normalizedUserInput.includes("배송 상태 확인")
+  ) {
+    if (memberId && memberId !== "null") {
+      try {
+        // 주문 데이터 원본을 가져와서 배송 상태 메시지 생성
+        const orderData = await getOrderShippingInfo(memberId);
+        const processedOrders = processOrdersResponse(orderData);
+        if (processedOrders.length > 0) {
+          const messages = processedOrders
+            .map(o => `주문번호 ${o.order_id}: ${o.message}`)
+            .join("\n");
+          return {
+            text: messages,
+            videoHtml: null,
+            description: null,
+            imageUrl: null,
+          };
+        } else {
+          return {
+            text: "주문 정보를 찾을 수 없습니다.",
+            videoHtml: null,
+            description: null,
+            imageUrl: null,
+          };
+        }
+      } catch (error) {
+        return {
+          text: "배송 상태를 가져오는 데 오류가 발생했습니다.",
+          videoHtml: null,
+          description: null,
+          imageUrl: null,
+        };
+      }
+    } else {
+      return {
+        text: "회원 정보가 확인되지 않습니다. 로그인 후 다시 시도해주세요.",
+        videoHtml: null,
+        description: null,
+        imageUrl: null,
+      };
+    }
+  }
+
+  // 기존 다른 조건들...
+  // 예를 들어, "내 아이디" 조회, "주문정보 확인" 등 기존 로직이 여기에 위치
+  return {
+    text: "질문을 이해하지 못했어요. 좀더 자세히 입력 해주시겠어요",
+    videoHtml: null,
+    description: null,
+    imageUrl: null,
+  };
 }
 
 

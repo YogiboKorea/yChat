@@ -384,6 +384,7 @@ async function findAnswer(userInput, memberId) {
   if (
     (normalizedUserInput.includes("주문상태 확인") ||
       normalizedUserInput.includes("배송 상태 확인") ||
+      normalizedUserInput.includes("배송상태 확인") ||
       normalizedUserInput.includes("배송정보 확인")) &&
     !containsOrderNumber(normalizedUserInput)
   ) {
@@ -398,7 +399,9 @@ async function findAnswer(userInput, memberId) {
             let trackingNo = shipment.tracking_no || "정보 없음";
             let shippingCompany = shipment.shipping_company_name || "정보 없음";
             return {
-              text: `고객님이 주문하신 상품의 경우 ${status}이며, ${shippingCompany} 배송 진행 되었으며 운송장번호 ${trackingNo}입니다.`,
+              text: `
+              고객님이 주문하신 상품의 경우 ${shippingCompany} 통해 배송완료 되었으며 ${trackingNo} 운송장 번호로 확인 가능하십니다.
+              `,
               videoHtml: null,
               description: null,
               imageUrl: null,

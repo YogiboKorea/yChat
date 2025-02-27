@@ -89,7 +89,7 @@ async function saveTokensToDB(newAccessToken, newRefreshToken) {
 }
 
 /**
- * Access Token 갱신 함수
+ * Access Token 갱신 함수  
  */
 async function refreshAccessToken() {
   try {
@@ -188,22 +188,15 @@ async function getShipmentDetail(orderId, shippingCode) {
 
 /**
  * 주문번호에 대한 배송번호(Shipping Code) 조회 함수
- * GET https://{mallid}.cafe24api.com/api/v2/admin/orders/{order_id}/receivers
+ * GET https://{mallid}.cafe24api.com/api/v2/admin/orders/{order_id}/shipments
+ * 여기서 shipments 배열 내의 첫번째 항목의 shipping_code를 반환합니다.
  */
-async function getShippingCode(orderId) {
-  const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders/${orderId}/receivers`;
+async function getShippingCodeFromShipments(orderId) {
+  const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders/${orderId}/shipments`;
   try {
-    const response = await axios.get(API_URL, {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        'X-Cafe24-Api-Version': '{version}' // 실제 API 버전으로 대체
-      }
-    });
-    const data = response.data;
-    // 가정: 응답 구조가 { receivers: [ { shipping_code: "SHIPPING123" } ] } 형태
-    if (data.receivers && data.receivers.length > 0 && data.receivers[0].shipping_code) {
-      return data.receivers[0].shipping_code;
+    const response = await apiRequest("GET", API_URL, {}, {});
+    if (response.shipments && response.shipments.length > 0 && response.shipments[0].shipping_code) {
+      return response.shipments[0].shipping_code;
     } else {
       throw new Error("배송번호(shipping_code)를 찾을 수 없습니다.");
     }
@@ -242,7 +235,7 @@ function summarizeHistory(text, maxLength = 300) {
  * 처리 순서:
  * 1. 회원 아이디 조회
  * 2. "주문번호"라고 입력하면 → 해당 멤버의 주문번호 목록 반환
- * 3. "배송번호"라고 입력하면 → 최신 주문의 배송번호 반환
+ * 3. "배송번호"라고 입력하면 → 최신 주문의 배송번호를 getShippingCodeFromShipments를 통해 반환
  * 4. 주문번호가 포함된 경우 → 해당 주문번호의 배송 상세 정보 조회
  * 5. "주문정보 확인" → 주문번호 목록 제공
  * 6. "주문상태 확인", "배송 상태 확인", 또는 "배송정보 확인" (주문번호 미포함) →
@@ -300,14 +293,14 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 3. "배송번호"라고 입력하면 → 최신 주문의 배송번호 반환
+  // 3. "배송번호"라고 입력하면 → 최신 주문의 배송번호 반환 (receivers 대신 shipments 엔드포인트 사용)
   if (normalizedUserInput.includes("배송번호")) {
     if (memberId && memberId !== "null") {
       try {
         const orderData = await getOrderShippingInfo(memberId);
         if (orderData.orders && orderData.orders.length > 0) {
           const targetOrder = orderData.orders[0];
-          const shippingCode = await getShippingCode(targetOrder.order_id);
+          const shippingCode = await getShippingCodeFromShipments(targetOrder.order_id);
           return {
             text: `최신 주문의 배송번호는 ${shippingCode} 입니다.`,
             videoHtml: null,
@@ -395,7 +388,7 @@ async function findAnswer(userInput, memberId) {
         const orderData = await getOrderShippingInfo(memberId);
         if (orderData.orders && orderData.orders.length > 0) {
           const targetOrder = orderData.orders[0];
-          const shippingCode = await getShippingCode(targetOrder.order_id);
+          const shippingCode = await getShippingCodeFromShipments(targetOrder.order_id);
           const shipmentDetail = await getShipmentDetail(targetOrder.order_id, shippingCode);
           if (shipmentDetail) {
             let status = shipmentDetail.status || "정보 없음";

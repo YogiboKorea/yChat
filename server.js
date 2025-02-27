@@ -39,7 +39,7 @@ function containsOrderNumber(input) {
   return /\d{8}-\d{7}/.test(input);
 }
 
-// MongoDB에서 토큰을 불러오는 함수
+// MongoDB에서 토큰을 불러오는 함수 (전체 문서를 가져옴)
 async function getTokensFromDB() {
   const client = new MongoClient(MONGODB_URI);
   try {
@@ -189,7 +189,6 @@ async function getShipmentDetail(orderId, shippingCode) {
 /**
  * 주문번호에 대한 배송번호(Shipping Code) 조회 함수
  * GET https://{mallid}.cafe24api.com/api/v2/admin/orders/{order_id}/receivers
- * 실제 응답 구조에 따라 수정 필요
  */
 async function getShippingCode(orderId) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders/${orderId}/receivers`;
@@ -198,7 +197,7 @@ async function getShippingCode(orderId) {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
-        'X-Cafe24-Api-Version': '{version}' // 실제 API 버전 사용
+        'X-Cafe24-Api-Version': '{version}' // 실제 API 버전으로 대체
       }
     });
     const data = response.data;
@@ -332,7 +331,7 @@ async function findAnswer(userInput, memberId) {
       try {
         const match = normalizedUserInput.match(/\d{8}-\d{7}/);
         const targetOrderNumber = match ? match[0] : "";
-        // 배송번호가 별도로 입력되지 않았다면, 주문번호와 동일한 값으로 가정
+        // 배송번호가 별도로 입력되지 않았다면, 주문번호와 동일하다고 가정
         const shippingCode = targetOrderNumber;
         const shipmentDetail = await getShipmentDetail(targetOrderNumber, shippingCode);
         if (shipmentDetail) {
@@ -445,8 +444,8 @@ async function getGPT3TurboResponse(userInput) {
         ]
       },
       {
-        headers: { 
-          'Authorization': `Bearer ${process.env.API_KEY}`, 
+        headers: {
+          'Authorization': `Bearer ${process.env.API_KEY}`,
           'Content-Type': 'application/json'
         }
       }

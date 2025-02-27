@@ -201,6 +201,7 @@ async function getShippingCodeFromShipments(orderId) {
       throw new Error("배송번호(shipping_code)를 찾을 수 없습니다.");
     }
   } catch (error) {
+    console.log(error)
     throw error;
   }
 }

@@ -145,32 +145,6 @@ async function apiRequest(method, url, data = {}, params = {}) {
   }
 }
 
-/**
- * Cafe24 주문 정보 조회 함수  
- * memberId를 기준으로 주문 내역을 조회합니다.
- */
-async function getOrderInfo(memberId) {
-  const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`;
-  // 날짜 범위는 필요에 따라 수정하세요.
-  const params = {
-    member_id: memberId,
-    start_date: '2024-08-31',
-    end_date: '2024-09-31',
-    limit: 10,
-  };
-  try {
-    const response = await apiRequest("GET", API_URL, {}, params);
-    const orders = response.orders;
-    if (!orders || orders.length === 0) {
-      return "주문 정보가 없습니다.";
-    }
-    let orderNumbers = orders.map(order => order.order_id).join(", ");
-    return `회원님의 주문번호: ${orderNumbers}`;
-  } catch (error) {
-    console.error("Error fetching order info:", error.message);
-    return "주문 정보를 가져오는 데 실패했습니다.";
-  }
-}
 
 /**
  * 주문 배송 정보 조회 함수: 회원의 주문 데이터를 원본 형태로 반환

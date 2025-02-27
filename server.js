@@ -244,15 +244,15 @@ async function findAnswer(userInput, memberId) {
 
 
 // 회원 아이디 부분
-
 async function findAnswer(userInput, memberId) {
   const normalizedUserInput = normalizeSentence(userInput);
 
-  // 회원 아이디 조회 기능 추가
+  // 회원 아이디 조회 기능 추가 (예: "내 아이디", "나의 아이디", "아이디 조회", "아이디 알려줘")
   if (
     normalizedUserInput.includes("내 아이디") ||
     normalizedUserInput.includes("나의 아이디") ||
-    normalizedUserInput.includes("아이디 조회")
+    normalizedUserInput.includes("아이디 조회") ||
+    normalizedUserInput.includes("아이디 알려줘")
   ) {
     if (memberId && memberId !== "null") {
       return {
@@ -299,9 +299,6 @@ async function findAnswer(userInput, memberId) {
     imageUrl: null,
   };
 }
-
-
-
 
 
 

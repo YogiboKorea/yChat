@@ -389,6 +389,7 @@ async function findAnswer(userInput, memberId) {
           };
         }
       } catch (error) {
+        console.log(error)
         return {
           text: "배송 정보를 가져오는 데 오류가 발생했습니다.",
           videoHtml: null,

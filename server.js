@@ -171,19 +171,15 @@ async function getOrderShippingInfo(memberId) {
   }
 }
 
-
-
 /**
  * 주문번호에 대한 배송 상세 정보 조회 함수
  * GET https://{mallid}.cafe24api.com/api/v2/admin/orders/{order_id}/shipments/{shipping_code}
  */
 async function getShipmentDetail(orderId, shippingCode) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders/${orderId}/shipments/${shippingCode}`;
-
-  
   try {
     const response = await apiRequest("GET", API_URL, {}, {});
-    return response;
+    return response; // 응답 내 shipment 객체 포함
   } catch (error) {
     console.error("Error fetching shipment detail:", error.message);
     throw error;
@@ -193,7 +189,7 @@ async function getShipmentDetail(orderId, shippingCode) {
 /**
  * 주문번호에 대한 배송번호(Shipping Code) 조회 함수
  * GET https://{mallid}.cafe24api.com/api/v2/admin/orders/{order_id}/shipments
- * 여기서 shipments 배열 내의 첫번째 항목의 shipping_code를 반환합니다.
+ * 여기서 shipments 배열 내 첫 번째 항목의 shipping_code를 반환합니다.
  */
 async function getShippingCodeFromShipments(orderId) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders/${orderId}/shipments`;
@@ -205,7 +201,7 @@ async function getShippingCodeFromShipments(orderId) {
       throw new Error("배송번호(shipping_code)를 찾을 수 없습니다.");
     }
   } catch (error) {
-    console.log(error)
+    console.error(error);
     throw error;
   }
 }
@@ -298,7 +294,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 3. "배송번호"라고 입력하면 → 최신 주문의 배송번호 반환 (receivers 대신 shipments 엔드포인트 사용)
+  // 3. "배송번호"라고 입력하면 → 최신 주문의 배송번호 반환 (shipments 엔드포인트 사용)
   if (normalizedUserInput.includes("배송번호")) {
     if (memberId && memberId !== "null") {
       try {
@@ -332,9 +328,9 @@ async function findAnswer(userInput, memberId) {
         // 배송번호가 별도로 입력되지 않았다면, 주문번호와 동일하다고 가정
         const shippingCode = targetOrderNumber;
         const shipmentDetail = await getShipmentDetail(targetOrderNumber, shippingCode);
-        if (shipmentDetail) {
-          let status = shipmentDetail.status || "정보 없음";
-          let trackingNo = shipmentDetail.tracking_no || "정보 없음";
+        if (shipmentDetail && shipmentDetail.shipment) {
+          let status = shipmentDetail.shipment.status || "정보 없음";
+          let trackingNo = shipmentDetail.shipment.tracking_no || "정보 없음";
           return {
             text: `주문번호 ${targetOrderNumber}의 배송 상태는 ${status}이며, 송장번호는 ${trackingNo} 입니다.`,
             videoHtml: null,
@@ -381,8 +377,6 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-
-
   // 6. "주문상태 확인", "배송 상태 확인", 또는 "배송정보 확인" (주문번호 미포함)
   if (
     (normalizedUserInput.includes("주문상태 확인") ||
@@ -397,9 +391,9 @@ async function findAnswer(userInput, memberId) {
           const targetOrder = orderData.orders[0];
           const shippingCode = await getShippingCodeFromShipments(targetOrder.order_id);
           const shipmentDetail = await getShipmentDetail(targetOrder.order_id, shippingCode);
-          if (shipmentDetail) {
-            let status = shipmentDetail.status || "정보 없음";
-            let trackingNo = shipmentDetail.tracking_no || "정보 없음";
+          if (shipmentDetail && shipmentDetail.shipment) {
+            let status = shipmentDetail.shipment.status || "정보 없음";
+            let trackingNo = shipmentDetail.shipment.tracking_no || "정보 없음";
             return {
               text: `주문번호 ${targetOrder.order_id}의 배송 상태는 ${status}이며, 송장번호는 ${trackingNo} 입니다.`,
               videoHtml: null,

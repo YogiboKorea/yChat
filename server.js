@@ -284,8 +284,8 @@ function containsOrderNumber(input) {
  * 1. 회원 아이디 조회
  * 2. 주문번호가 포함된 경우 → 해당 주문번호에 대한 배송 상태 안내 (신규 엔드포인트 사용)
  * 3. "주문정보 확인" → 주문번호 목록 제공
- * 4. "주문상태 확인"/"배송 상태 확인" (주문번호 미포함) → 
- *    주문번호를 별도 안내하지 않고, 최신 주문(또는 첫 번째 주문)의 배송 상태를 바로 안내
+ * 4. "주문상태 확인"/"배송 상태 확인" (주문번호 미포함) →
+ *    주문번호 입력 없이 멤버 아이디에 따라 최신 주문(첫 번째 주문)의 배송 상태를 바로 안내
  * 5. 그 외 → 기본 응답
  */
 async function findAnswer(userInput, memberId) {
@@ -387,13 +387,12 @@ async function findAnswer(userInput, memberId) {
   }
 
   // 4. "주문상태 확인" 또는 "배송 상태 확인" (주문번호 미포함)
-  // 주문번호 입력 없이 단순히 "주문상태"라고 하면, 최신 주문(첫 번째 주문)의 배송 상태를 바로 안내
+  // 단순히 "배송 상태"라고 하면, 멤버 아이디에 따라 최신 주문(첫 번째 주문)의 배송 상태를 바로 안내
   if ((normalizedUserInput.includes("주문상태 확인") || normalizedUserInput.includes("배송 상태 확인")) && !containsOrderNumber(normalizedUserInput)) {
     if (memberId && memberId !== "null") {
       try {
         const orderData = await getOrderShippingInfo(memberId);
         if (orderData.orders && orderData.orders.length > 0) {
-          // 최신 주문(혹은 첫 번째 주문)을 선택하여 배송 상태 안내
           const targetOrder = orderData.orders[0];
           const shippingMessage = processOrderShippingStatus(targetOrder);
           return {

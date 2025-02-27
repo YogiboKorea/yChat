@@ -224,6 +224,7 @@ function normalizeSentence(sentence) {
     .trim();
 }
 
+
 function getAdditionalBizComment() {
   const comments = [
     "추가로 궁금하신 사항이 있으시면 언제든 말씀해주세요.",
@@ -491,6 +492,39 @@ app.post("/chat", async (req, res) => {
     });
   }
 });
+
+
+async function apiRequest(method, url, data = {}, params = {}) {
+  // 실제 요청 전에 URL, params, data를 출력합니다.
+  console.log(`Request: ${method} ${url}`);
+  console.log("Params:", params);
+  console.log("Data:", data);
+
+  try {
+    const response = await axios({
+      method,
+      url,
+      data,
+      params,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'X-Cafe24-Api-Version': CAFE24_API_VERSION
+      },
+    });
+    return response.data;
+  } catch (error) {
+    if (error.response && error.response.status === 401) {
+      console.log('Access Token 만료. 갱신 중...');
+      await refreshAccessToken();
+      return apiRequest(method, url, data, params);
+    } else {
+      console.error('API 요청 오류:', error.response ? error.response.data : error.message);
+      throw error;
+    }
+  }
+}
+
 
 // 서버 시작 전 MongoDB에서 토큰 로드 후 실행
 (async function initialize() {

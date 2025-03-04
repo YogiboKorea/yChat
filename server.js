@@ -460,25 +460,25 @@ async function findAnswer(userInput, memberId) {
   }
 
  // (8) asInfo
-// if (companyData.asInfoList) {
-//   let asInfoMatch = null;
-//   let asInfoDist = Infinity;
-//   for (let question in companyData.asInfo) {
-//     const distance = levenshtein.get(normalizedUserInput, normalizeSentence(question));
-//     if (distance < asInfoDist) {
-//       asInfoDist = distance;
-//       asInfoMatch = companyData.asInfo[question];
-//     }
-//   }
-//   if (asInfoDist < 8 && asInfoMatch) {
-//     return {
-//       text: asInfoMatch.description,
-//       videoHtml: null,
-//       description: null,
-//       imageUrl: null
-//     };
-//   }
-// }
+if (companyData.asInfoList) {
+  let asInfoMatch = null;
+  let asInfoDist = Infinity;
+  for (let question in companyData.asInfo) {
+    const distance = levenshtein.get(normalizedUserInput, normalizeSentence(question));
+    if (distance < asInfoDist) {
+      asInfoDist = distance;
+      asInfoMatch = companyData.asInfo[question];
+    }
+  }
+  if (asInfoDist < 8 && asInfoMatch) {
+    return {
+      text: asInfoMatch.description,
+      videoHtml: null,
+      description: null,
+      imageUrl: null
+    };
+  }
+}
 
 
 

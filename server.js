@@ -404,9 +404,7 @@ async function findAnswer(userInput, memberId) {
   };
 }
 
-/**
- * GPT API 연동 함수 (fallback)
- */
+// server.js의 getGPT3TurboResponse 예시
 async function getGPT3TurboResponse(userInput) {
   try {
     const response = await axios.post(

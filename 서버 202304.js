@@ -396,30 +396,6 @@ async function findAnswer(userInput, memberId) {
   }
 
   // -------------------------
-  // (5) 요기보 히스토리
-  // -------------------------
-  if (
-    normalizedUserInput.includes("요기보") &&
-    (normalizedUserInput.includes("역사") ||
-      normalizedUserInput.includes("알려줘") ||
-      normalizedUserInput.includes("란") ||
-      normalizedUserInput.includes("탄생") ||
-      normalizedUserInput.includes("에 대해"))
-  ) {
-    const key = "요기보 에 대해 알고 싶어";
-    if (companyData.history && companyData.history[key]) {
-      const fullHistory = companyData.history[key].description;
-      const summary = summarizeHistory(fullHistory, 300);
-      return {
-        text: summary,
-        videoHtml: null,
-        description: fullHistory,
-        imageUrl: null
-      };
-    }
-  }
-
-  // -------------------------
   // (6) goodsInfo (유사도 매칭)
   // -------------------------
   if (companyData.goodsInfo) {

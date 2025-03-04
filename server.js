@@ -495,58 +495,58 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 2. "주문번호"
-  if (normalizedUserInput.includes("주문번호")) {
-    if (memberId && memberId !== "null") {
-      try {
-        const orderData = await getOrderShippingInfo(memberId);
-        if (orderData.orders && orderData.orders.length > 0) {
-          const orderNumbers = orderData.orders.map(o => o.order_id).join(", ");
-          return {
-            text: `고객님의 주문번호는 ${orderNumbers} 입니다.`,
-            videoHtml: null,
-            description: null,
-            imageUrl: null,
-          };
-        } else {
-          return { text: "주문 정보가 없습니다." };
-        }
-      } catch (error) {
-        return { text: "주문번호를 가져오는 데 오류가 발생했습니다." };
-      }
-    } else {
-      return { text: "회원 정보가 확인되지 않습니다. 로그인 후 다시 시도해주세요." };
-    }
-  }
+  // // 2. "주문번호"
+  // if (normalizedUserInput.includes("주문번호")) {
+  //   if (memberId && memberId !== "null") {
+  //     try {
+  //       const orderData = await getOrderShippingInfo(memberId);
+  //       if (orderData.orders && orderData.orders.length > 0) {
+  //         const orderNumbers = orderData.orders.map(o => o.order_id).join(", ");
+  //         return {
+  //           text: `고객님의 주문번호는 ${orderNumbers} 입니다.`,
+  //           videoHtml: null,
+  //           description: null,
+  //           imageUrl: null,
+  //         };
+  //       } else {
+  //         return { text: "주문 정보가 없습니다." };
+  //       }
+  //     } catch (error) {
+  //       return { text: "주문번호를 가져오는 데 오류가 발생했습니다." };
+  //     }
+  //   } else {
+  //     return { text: "회원 정보가 확인되지 않습니다. 로그인 후 다시 시도해주세요." };
+  //   }
+  // }
 
-  // 3. "배송번호"
-  if (normalizedUserInput.includes("배송번호")) {
-    if (memberId && memberId !== "null") {
-      try {
-        const orderData = await getOrderShippingInfo(memberId);
-        if (orderData.orders && orderData.orders.length > 0) {
-          const targetOrder = orderData.orders[0];
-          const shipment = await getShipmentDetail(targetOrder.order_id);
-          if (shipment && shipment.shipping_code) {
-            return {
-              text: `최신 주문의 배송번호는 ${shipment.shipping_code} 입니다.`,
-              videoHtml: null,
-              description: null,
-              imageUrl: null,
-            };
-          } else {
-            return { text: "배송번호를 찾을 수 없습니다." };
-          }
-        } else {
-          return { text: "주문 정보가 없습니다." };
-        }
-      } catch (error) {
-        return { text: "배송번호를 가져오는 데 오류가 발생했습니다." };
-      }
-    } else {
-      return { text: "회원 정보가 확인되지 않습니다. 로그인 후 다시 시도해주세요." };
-    }
-  }
+  // // 3. "배송번호"
+  // if (normalizedUserInput.includes("배송번호")) {
+  //   if (memberId && memberId !== "null") {
+  //     try {
+  //       const orderData = await getOrderShippingInfo(memberId);
+  //       if (orderData.orders && orderData.orders.length > 0) {
+  //         const targetOrder = orderData.orders[0];
+  //         const shipment = await getShipmentDetail(targetOrder.order_id);
+  //         if (shipment && shipment.shipping_code) {
+  //           return {
+  //             text: `최신 주문의 배송번호는 ${shipment.shipping_code} 입니다.`,
+  //             videoHtml: null,
+  //             description: null,
+  //             imageUrl: null,
+  //           };
+  //         } else {
+  //           return { text: "배송번호를 찾을 수 없습니다." };
+  //         }
+  //       } else {
+  //         return { text: "주문 정보가 없습니다." };
+  //       }
+  //     } catch (error) {
+  //       return { text: "배송번호를 가져오는 데 오류가 발생했습니다." };
+  //     }
+  //   } else {
+  //     return { text: "회원 정보가 확인되지 않습니다. 로그인 후 다시 시도해주세요." };
+  //   }
+  // }
 
   // 4. 주문번호 패턴 (ex: 20240920-0000167)
   if (containsOrderNumber(normalizedUserInput)) {

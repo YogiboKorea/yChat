@@ -1,6 +1,7 @@
 /******************************************************
- * server.js (예시) - 주문/배송 로직 + FAQ + 맥락 주입
+ * server.js - JSON FAQ + 주문배송 로직 + ChatGPT fallback
  ******************************************************/
+
 const express = require("express");
 const bodyParser = require("body-parser");
 const fs = require("fs");
@@ -26,7 +27,7 @@ const API_KEY = process.env.API_KEY;    // OpenAI API 키
 const FINETUNED_MODEL = process.env.FINETUNED_MODEL || "gpt-3.5-turbo";
 const CAFE24_API_VERSION = process.env.CAFE24_API_VERSION || '2024-06-01';
 
-// **요기보 브랜드 맥락(시스템 프롬프트)**
+// **Yogibo 브랜드 맥락(시스템 프롬프트)**
 const YOGIBO_SYSTEM_PROMPT = `
 You are a helpful assistant for the "Yogibo" brand.
 Yogibo is known for comfortable bean bag furniture and accessories.
@@ -42,6 +43,7 @@ app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "public")));
 
 // ========== [2] JSON 데이터 로드 (FAQ/제품 안내 등) ==========
+// companyData.json 파일에 covering, washing, sizeInfo, biz, goodsInfo 등 추가 가능
 const companyDataPath = path.join(__dirname, "json", "companyData.json");
 const companyData = JSON.parse(fs.readFileSync(companyDataPath, "utf-8"));
 
@@ -53,7 +55,6 @@ let pendingWashingContext = false;
 const tokenCollectionName = "tokens";
 
 // ========== [3] MongoDB 토큰 관리 함수 ==========
-
 async function getTokensFromDB() {
   const client = new MongoClient(MONGODB_URI);
   try {
@@ -101,7 +102,6 @@ async function saveTokensToDB(newAccessToken, newRefreshToken) {
   }
 }
 
-// 401 에러 시 MongoDB에서 다시 토큰을 불러옴
 async function refreshAccessToken() {
   console.log('401 에러 발생: MongoDB에서 토큰 정보 다시 가져오기...');
   await getTokensFromDB();
@@ -141,6 +141,7 @@ async function apiRequest(method, url, data = {}, params = {}) {
 }
 
 // ========== [5] Cafe24 주문/배송 관련 함수 ==========
+
 async function getOrderShippingInfo(memberId) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`;
   const params = {
@@ -251,20 +252,192 @@ async function findAnswer(userInput, memberId) {
   const normalizedUserInput = normalizeSentence(userInput);
 
   /************************************************
-   * A. 먼저 JSON 기반 FAQ / 제품 안내 로직 처리
-   *    (커버링, 세탁, 사이즈, 비즈, 히스토리 등)
+   * A. JSON 기반 FAQ / 제품 안내 로직
    ************************************************/
-  // (기존 FAQ 로직 / 세탁 / 커버링 등)
-  // ... (생략 or 그대로 유지)
 
-  // ========== 예시: 간단 세탁방법 감지 ==========
-  if (normalizedUserInput.includes("세탁방법")) {
+  // (1) 세탁 방법 맥락 처리
+  if (pendingWashingContext) {
+    const washingMap = {
+      "요기보": "요기보",
+      "줄라": "줄라",
+      "럭스": "럭스",
+      "모듀": "모듀",
+      "메이트": "메이트"
+    };
+    for (let key in washingMap) {
+      if (normalizedUserInput.includes(key)) {
+        if (companyData.washing && companyData.washing[key]) {
+          pendingWashingContext = false;
+          return {
+            text: companyData.washing[key].description,
+            videoHtml: null,
+            description: null,
+            imageUrl: null
+          };
+        }
+      }
+    }
+    pendingWashingContext = false;
     return {
-      text: "어떤 커버 세탁 방법이 궁금하신가요? (예: 요기보, 줄라, 럭스 등)",
+      text: "해당 커버 종류를 찾지 못했어요. (요기보, 줄라, 럭스, 모듀, 메이트 중 하나를 입력해주세요.)",
       videoHtml: null,
       description: null,
       imageUrl: null
     };
+  }
+
+  if (
+    normalizedUserInput.includes("세탁방법") ||
+    (normalizedUserInput.includes("세탁") && normalizedUserInput.includes("방법"))
+  ) {
+    pendingWashingContext = true;
+    return {
+      text: "어떤 커버(제품) 세탁 방법이 궁금하신가요? (요기보, 줄라, 럭스, 모듀, 메이트 등)",
+      videoHtml: null,
+      description: null,
+      imageUrl: null
+    };
+  }
+
+  // (2) 커버링 방법 맥락 처리
+  if (pendingCoveringContext) {
+    const coveringTypes = ["더블", "맥스", "프라임", "슬림", "미디", "미니", "팟", "드롭", "라운저", "피라미드"];
+    if (coveringTypes.includes(normalizedUserInput)) {
+      const key = `${normalizedUserInput} 커버링 방법을 알고 싶어`;
+      if (companyData.covering && companyData.covering[key]) {
+        const videoUrl = companyData.covering[key].videoUrl;
+        pendingCoveringContext = false;
+        return {
+          text: companyData.covering[key].answer,
+          videoHtml: videoUrl
+            ? `<iframe width="100%" height="auto" src="${videoUrl}" frameborder="0" allowfullscreen></iframe>`
+            : null,
+          description: null,
+          imageUrl: null
+        };
+      }
+      pendingCoveringContext = false;
+    }
+  }
+
+  if (
+    normalizedUserInput.includes("커버링") &&
+    normalizedUserInput.includes("방법") &&
+    !normalizedUserInput.includes("주문")
+  ) {
+    const coveringTypes2 = ["더블", "맥스", "프라임", "슬림", "미디", "미니", "팟", "드롭", "라운저", "피라미드"];
+    const foundType = coveringTypes2.find(type => normalizedUserInput.includes(type));
+    if (foundType) {
+      const key = `${foundType} 커버링 방법을 알고 싶어`;
+      if (companyData.covering && companyData.covering[key]) {
+        const videoUrl = companyData.covering[key].videoUrl;
+        return {
+          text: companyData.covering[key].answer,
+          videoHtml: videoUrl
+            ? `<iframe width="100%" height="auto" src="${videoUrl}" frameborder="0" allowfullscreen></iframe>`
+            : null,
+          description: null,
+          imageUrl: null
+        };
+      }
+    } else {
+      pendingCoveringContext = true;
+      return {
+        text: "어떤 커버링을 알고 싶으신가요? (맥스, 더블, 프라임, 슬림, 미니, etc.)",
+        videoHtml: null,
+        description: null,
+        imageUrl: null
+      };
+    }
+  }
+
+  // (3) 사이즈 안내
+  const sizeTypes = ["더블", "맥스", "프라임", "슬림", "미디", "미니", "팟", "드롭", "라운저", "피라미드"];
+  if (
+    normalizedUserInput.includes("사이즈") ||
+    normalizedUserInput.includes("크기")
+  ) {
+    for (let sizeType of sizeTypes) {
+      if (normalizedUserInput.includes(sizeType)) {
+        const key = sizeType + " 사이즈 또는 크기.";
+        if (companyData.sizeInfo && companyData.sizeInfo[key]) {
+          return {
+            text: companyData.sizeInfo[key].description,
+            videoHtml: null,
+            description: null,
+            imageUrl: companyData.sizeInfo[key].imageUrl
+          };
+        }
+      }
+    }
+  }
+
+  // (4) 비즈 안내
+  const bizTypes = ["프리미엄 플러스", "프리미엄", "스탠다드"];
+  if (normalizedUserInput.includes("비즈")) {
+    for (let bizType of bizTypes) {
+      if (normalizedUserInput.includes(bizType)) {
+        const key = `${bizType} 비즈 에 대해 알고 싶어`;
+        if (companyData.biz && companyData.biz[key]) {
+          return {
+            text: companyData.biz[key].description + " " + getAdditionalBizComment(),
+            videoHtml: null,
+            description: null,
+            imageUrl: null
+          };
+        }
+      }
+    }
+    return {
+      text: "어떤 비즈가 궁금하신가요? (스탠다드, 프리미엄, 프리미엄 플러스 등)",
+      videoHtml: null,
+      description: null,
+      imageUrl: null
+    };
+  }
+
+  // (6) goodsInfo (유사도 매칭)
+  if (companyData.goodsInfo) {
+    let bestGoodsMatch = null;
+    let bestGoodsDistance = Infinity;
+    for (let question in companyData.goodsInfo) {
+      const distance = levenshtein.get(normalizedUserInput, normalizeSentence(question));
+      if (distance < bestGoodsDistance) {
+        bestGoodsDistance = distance;
+        bestGoodsMatch = companyData.goodsInfo[question];
+      }
+    }
+    if (bestGoodsDistance < 6 && bestGoodsMatch) {
+      return {
+        text: Array.isArray(bestGoodsMatch.description)
+          ? bestGoodsMatch.description.join("\n")
+          : bestGoodsMatch.description,
+        videoHtml: null,
+        description: null,
+        imageUrl: bestGoodsMatch.imageUrl || null
+      };
+    }
+  }
+
+  // (7) homePage 등
+  if (companyData.homePage) {
+    let bestHomeMatch = null;
+    let bestHomeDist = Infinity;
+    for (let question in companyData.homePage) {
+      const distance = levenshtein.get(normalizedUserInput, normalizeSentence(question));
+      if (distance < bestHomeDist) {
+        bestHomeDist = distance;
+        bestHomeMatch = companyData.homePage[question];
+      }
+    }
+    if (bestHomeDist < 5 && bestHomeMatch) {
+      return {
+        text: bestHomeMatch.description,
+        videoHtml: null,
+        description: null,
+        imageUrl: null
+      };
+    }
   }
 
   /************************************************
@@ -295,7 +468,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 4. 주문번호 패턴 (예: 20240920-0000167)
+  // 주문번호 패턴 (ex: 20240920-0000167)
   if (containsOrderNumber(normalizedUserInput)) {
     if (memberId && memberId !== "null") {
       try {
@@ -333,7 +506,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 6. "주문상태 확인", "배송 상태 확인", "배송정보 확인" (주문번호 미포함)
+  // "주문상태 확인", "배송 상태 확인", "배송정보 확인" (주문번호 미포함)
   if (
     (normalizedUserInput.includes("주문상태 확인") ||
       normalizedUserInput.includes("배송 상태 확인") ||
@@ -354,7 +527,7 @@ async function findAnswer(userInput, memberId) {
             let trackingNo = shipment.tracking_no || "정보 없음";
             let shippingCompany = shipment.shipping_company_name || "정보 없음";
             return {
-              text: `고객님이 주문하신 상품의 경우 ${shippingCompany}를 통해 배송완료 되었으며, 운송장 번호는 ${trackingNo} 입니다.`,
+              text: `고객님이 주문하신 상품의 경우 ${shippingCompany}를 통해 ${status} 되었으며, 운송장 번호는 ${trackingNo} 입니다.`,
               videoHtml: null,
               description: null,
               imageUrl: null,
@@ -366,7 +539,7 @@ async function findAnswer(userInput, memberId) {
           return { text: "고객님의 주문 정보가 없습니다." };
         }
       } catch (error) {
-        return { text: "고객님이 주문 정보가 존재 하지 않습니다 주문여부를 다시 한번 확인 부탁드립니다." };
+        return { text: "고객님의 주문 정보를 찾을 수 없습니다. 주문 여부를 확인해주세요." };
       }
     } else {
       return { text: "회원 정보가 확인되지 않습니다. 로그인 후 다시 시도해주세요." };
@@ -395,7 +568,6 @@ app.post("/chat", async (req, res) => {
 
   try {
     const answer = await findAnswer(userInput, memberId);
-    // 만약 "질문을 이해하지 못했어요..." 라면 GPT에 fallback
     if (answer.text === "질문을 이해하지 못했어요. 좀더 자세히 입력 해주시겠어요") {
       const gptResponse = await getGPT3TurboResponse(userInput);
       return res.json({
@@ -405,7 +577,6 @@ app.post("/chat", async (req, res) => {
         imageUrl: null
       });
     }
-    // 일반 응답
     return res.json(answer);
   } catch (error) {
     console.error("Error in /chat endpoint:", error.message);

@@ -459,7 +459,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
- // (8) asInfo
+ // (8) asInfo 정보
 if (companyData.asInfoList) {
   let asInfoMatch = null;
   let asInfoDist = Infinity;
@@ -478,6 +478,27 @@ if (companyData.asInfoList) {
       imageUrl: null
     };
   }
+}
+
+if (
+  normalizedUserInput.includes("상담사 연결") ||
+  normalizedUserInput.includes("상담원 연결")
+) {
+  return {
+    text: `
+      상담사와 연결을 도와드릴게요.<br>
+      <a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank" style="color:blue;text-decoration:underline;background:#58b5ca;color:#fff;">
+        카카오플친 연결하기
+      </a>
+      <br>
+      <a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank" style="color:blue;text-decoration:underline;background:#58b5ca;color:#fff;">
+        네이버톡톡 연결하기
+      </a>
+    `,
+    videoHtml: null,
+    description: null,
+    imageUrl: null
+  };
 }
 
 

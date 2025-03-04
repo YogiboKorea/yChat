@@ -222,12 +222,12 @@ async function getGPT3TurboResponse(userInput) {
           {
             role: "system",
             content: `
-            You are a helpful assistant for the "Yogibo" brand.
-            Yogibo is known for comfortable bean bag furniture and accessories.
-            Answer user questions specifically about Yogibo products, shipping, and brand information.
-            If you are unsure or the question is out of scope, ask for clarification or provide a fallback response.
-            If you ask for an answer that goes against the request, you can check it through the customer center
-            `
+              You are a helpful assistant for the "Yogibo" brand.
+              Yogibo is known for comfortable bean bag furniture and accessories.
+              Answer user questions in Korean, specifically about Yogibo products, shipping, and brand information.
+              If you are unsure or the question is out of scope, ask for clarification or provide a fallback response in Korean.
+              If you ask for an answer that goes against the request, you can check it through the customer center
+          `
           },
           { role: "user", content: userInput }
         ]
@@ -243,6 +243,7 @@ async function getGPT3TurboResponse(userInput) {
     return gptAnswer;
   } catch (error) {
     console.error("Error calling OpenAI:", error.message);
+    // 에러 시에도 한국어 메시지
     return "요기보 챗봇 오류가 발생했습니다. 다시 시도 부탁드립니다.";
   }
 }

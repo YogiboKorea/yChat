@@ -1,4 +1,6 @@
-// server.js
+/******************************************************
+ * server.js
+ ******************************************************/
 const express = require("express");
 const bodyParser = require("body-parser");
 const fs = require("fs");
@@ -7,10 +9,10 @@ const cors = require("cors");
 const compression = require("compression");
 const axios = require("axios");
 const { MongoClient } = require("mongodb");
-const levenshtein = require("fast-levenshtein");
+const levenshtein = require("fast-levenshtein"); // 필요하다면 유사 매칭용
 require("dotenv").config();
 
-// .env 변수 사용
+// ======== 환경변수(.env)에서 가져올 값들 ========
 let accessToken = process.env.ACCESS_TOKEN || 'pPhbiZ29IZ9kuJmZ3jr15C';
 let refreshToken = process.env.REFRESH_TOKEN || 'CMLScZx0Bh3sIxlFTHDeMD';
 const CAFE24_CLIENT_ID = process.env.CAFE24_CLIENT_ID;
@@ -18,21 +20,23 @@ const CAFE24_CLIENT_SECRET = process.env.CAFE24_CLIENT_SECRET;
 const DB_NAME = process.env.DB_NAME;
 const MONGODB_URI = process.env.MONGODB_URI;
 const CAFE24_MALLID = process.env.CAFE24_MALLID;
-const OPEN_URL = process.env.OPEN_URL; // OpenAI API URL
-
-// Cafe24 API 버전 (환경변수나 기본값 사용)
+const OPEN_URL = process.env.OPEN_URL; // 예: "https://api.openai.com/v1/chat/completions"
 const CAFE24_API_VERSION = process.env.CAFE24_API_VERSION || '2024-06-01';
+const API_KEY = process.env.API_KEY; // OpenAI API 키
+const FINETUNED_MODEL = process.env.FINETUNED_MODEL || "gpt-3.5-turbo"; 
 
-// Express 앱 초기화
+// ======== Express 앱 초기화 ========
 const app = express();
 app.use(cors());
 app.use(compression());
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-// 예제용 JSON 데이터 (필요 시)
-const companyData = JSON.parse(fs.readFileSync("./json/companyData.json", "utf-8"));
-// 컬렉션명을 "tokens"로 사용
+// ======== JSON 파일 로드 (회사 데이터, FAQ 등) ========
+const companyDataPath = path.join(__dirname, "json", "companyData.json");
+const companyData = JSON.parse(fs.readFileSync(companyDataPath, "utf-8"));
+
+// ======== MongoDB 토큰 컬렉션 관련 ========
 const tokenCollectionName = "tokens";
 
 /**
@@ -42,7 +46,7 @@ function containsOrderNumber(input) {
   return /\d{8}-\d{7}/.test(input);
 }
 
-// MongoDB에서 토큰을 불러오는 함수 (전체 문서를 가져옴)
+// ======== MongoDB에서 토큰 불러오기/저장하기 ========
 async function getTokensFromDB() {
   const client = new MongoClient(MONGODB_URI);
   try {
@@ -65,7 +69,6 @@ async function getTokensFromDB() {
   }
 }
 
-// MongoDB에 토큰을 저장하는 함수
 async function saveTokensToDB(newAccessToken, newRefreshToken) {
   const client = new MongoClient(MONGODB_URI);
   try {
@@ -92,18 +95,17 @@ async function saveTokensToDB(newAccessToken, newRefreshToken) {
 }
 
 /**
- * Access Token 갱신 함수 (MongoDB에서 토큰 정보 갱신)
- * 401 에러 발생 시 MongoDB에서 최신 토큰을 가져옵니다.
+ * Access Token 갱신 함수 (401 에러 시 MongoDB에서 최신 토큰 가져옴)
  */
 async function refreshAccessToken() {
-  console.log('401 에러 발생: MongoDB에서 토큰 정보 가져오는 중...');
+  console.log('401 에러 발생: MongoDB에서 토큰 정보 다시 가져오기...');
   await getTokensFromDB();
   console.log('MongoDB에서 토큰 갱신 완료:', accessToken, refreshToken);
   return accessToken;
 }
 
 /**
- * API 요청 함수 (자동 토큰 갱신 포함)
+ * Cafe24 API 요청 함수 (자동 토큰 갱신 포함)
  */
 async function apiRequest(method, url, data = {}, params = {}) {
   console.log(`Request: ${method} ${url}`);
@@ -134,10 +136,7 @@ async function apiRequest(method, url, data = {}, params = {}) {
   }
 }
 
-/**
- * Cafe24 주문 배송 정보 조회 함수 (전체 주문 목록 조회)
- * 지정된 기간(2024-08-31 ~ 2024-09-31) 내의 주문 정보를 가져옵니다.
- */
+// ======== Cafe24 주문 관련 예시 함수들 ========
 async function getOrderShippingInfo(memberId) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`;
   const params = {
@@ -148,18 +147,13 @@ async function getOrderShippingInfo(memberId) {
   };
   try {
     const response = await apiRequest("GET", API_URL, {}, params);
-    return response; // 응답 내 orders 배열 포함
+    return response; // 응답 내 orders 배열
   } catch (error) {
     console.error("Error fetching order shipping info:", error.message);
     throw error;
   }
 }
 
-/**
- * 주문번호에 대한 배송 상세 정보 조회 함수
- * GET https://{mallid}.cafe24api.com/api/v2/admin/orders/{order_id}/shipments
- * 해당 URL을 호출하면 shipments 배열이 반환되며, 첫 번째 항목의 정보를 사용합니다.
- */
 async function getShipmentDetail(orderId) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders/${orderId}/shipments`;
   const params = { shop_no: 1 };
@@ -167,12 +161,10 @@ async function getShipmentDetail(orderId) {
     const response = await apiRequest("GET", API_URL, {}, params);
     if (response.shipments && response.shipments.length > 0) {
       const shipment = response.shipments[0];
-      
-      // shipping_company_code가 "0019"이면 "롯데 택배"로 매핑
+      // 간단한 택배사 코드 매핑 예시
       if (shipment.shipping_company_code === "0019") {
         shipment.shipping_company_name = "롯데 택배";
       } else {
-        // 다른 코드 처리 (예: DB나 매핑 테이블을 사용하거나, 기본적으로 코드만 표시)
         shipment.shipping_company_name = shipment.shipping_company_code || "정보 없음";
       }
       return shipment;
@@ -185,9 +177,7 @@ async function getShipmentDetail(orderId) {
   }
 }
 
-/**
- * 유틸 함수들
- */
+// ======== 유틸 함수들 ========
 function normalizeSentence(sentence) {
   return sentence
     .replace(/[?!！？]/g, "")
@@ -195,34 +185,89 @@ function normalizeSentence(sentence) {
     .trim();
 }
 
-function getAdditionalBizComment() {
-  const comments = [
-    "추가로 궁금하신 사항이 있으시면 언제든 말씀해주세요.",
-    "이 정보가 도움이 되길 바랍니다.",
-    "더 자세한 정보가 필요하시면 문의해 주세요.",
-    "고객님의 선택에 도움이 되었으면 좋겠습니다."
-  ];
-  return comments[Math.floor(Math.random() * comments.length)];
+/**
+ * companyData.json 내 여러 카테고리(covering, sizeInfo, biz, history, goodsInfo, homePage, washing 등)
+ * 질문과 일치하는 항목을 찾는 함수
+ */
+function findMatchingAnswer(normalizedUserInput) {
+  // 이 배열에 JSON 파일에 있는 주요 카테고리 키를 추가
+  const categories = ["covering", "sizeInfo", "biz", "history", "goodsInfo", "homePage", "washing"];
+
+  for (const cat of categories) {
+    const catData = companyData[cat];
+    if (!catData) continue;
+
+    // catData는 예: { "더블 커버링 방법을 알고 싶어": { answer: "...", videoUrl: "..." }, ... }
+    for (const question in catData) {
+      // 단순히 'includes'로 비교 (필요하다면 정교한 매칭 로직을 추가)
+      // normalizeSentence(question)도 적용하면 좋을 수 있음
+      if (normalizedUserInput.includes(question.replace(/[?!！？]/g, ""))) {
+        const data = catData[question];
+        // answer 혹은 description을 우선으로 사용
+        const text = data.answer || data.description || "";
+        const videoUrl = data.videoUrl || "";
+        const imageUrl = data.imageUrl || "";
+
+        // 매칭되면 즉시 결과 반환
+        return { text, videoUrl, imageUrl };
+      }
+    }
+  }
+
+  // 여기까지 못 찾으면 null
+  return null;
 }
 
-function summarizeHistory(text, maxLength = 300) {
-  if (text.length <= maxLength) return text;
-  return text.substring(0, maxLength) + "...";
+// ======== GPT API 연동 (fallback) ========
+async function getGPT3TurboResponse(userInput) {
+  try {
+    const response = await axios.post(
+      OPEN_URL,
+      {
+        model: FINETUNED_MODEL,  // 파인 튜닝 모델명 or 기본 gpt-3.5-turbo
+        messages: [
+          { role: "system", content: "You are a helpful assistant." },
+          { role: "user", content: userInput }
+        ]
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    const gptAnswer = response.data.choices[0].message.content;
+    return gptAnswer;
+  } catch (error) {
+    console.error("Error calling OpenAI:", error.message);
+    return "GPT fallback response";
+  }
 }
 
 /**
- * 챗봇 메인 로직 함수 (async)  
- * 1. 회원 아이디 조회  
- * 2. "주문번호" → 주문번호 목록  
- * 3. "배송번호" → 최신 주문의 배송번호  
- * 4. 주문번호가 포함된 경우 → 해당 주문번호의 배송 상세 정보 조회  
- * 5. "주문정보 확인" → 주문번호 목록 제공  
- * 6. "주문상태 확인"/"배송 상태 확인"/"배송정보 확인"(주문번호 미포함) → 최신 주문의 배송 상세 정보 조회  
- * 7. 그 외 → 기본 응답
+ * 메인 챗봇 로직
+ * 1) companyData.json 매칭
+ * 2) Cafe24 주문/배송 로직
+ * 3) 매칭 안 되면 GPT fallback
  */
 async function findAnswer(userInput, memberId) {
   const normalizedUserInput = normalizeSentence(userInput);
 
+  // A. 먼저 companyData.json 내에서 매칭 시도
+  const matched = findMatchingAnswer(normalizedUserInput);
+  if (matched) {
+    // 동영상 URL이 있으면 iframe HTML을 만들어서 videoHtml 필드로 넘길 수도 있음
+    // 여기서는 예시로 text만 넘기고, videoHtml은 null 처리
+    return {
+      text: matched.text,
+      videoHtml: matched.videoUrl ? `<iframe width="560" height="315" src="${matched.videoUrl}" frameborder="0" allowfullscreen></iframe>` : null,
+      description: null,
+      imageUrl: matched.imageUrl || null
+    };
+  }
+
+  // B. 기존 Cafe24 주문/배송 로직
   // 1. 회원 아이디 조회
   if (
     normalizedUserInput.includes("내 아이디") ||
@@ -247,7 +292,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 2. "주문번호"라고 입력하면 → 해당 멤버의 주문번호 목록 제공
+  // 2. "주문번호"라고 입력하면 → 해당 멤버의 주문번호 목록
   if (normalizedUserInput.includes("주문번호")) {
     if (memberId && memberId !== "null") {
       try {
@@ -271,7 +316,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 3. "배송번호"라고 입력하면 → 최신 주문의 배송번호 제공
+  // 3. "배송번호"라고 입력하면 → 최신 주문의 배송번호
   if (normalizedUserInput.includes("배송번호")) {
     if (memberId && memberId !== "null") {
       try {
@@ -300,7 +345,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 4. 질문에 주문번호(패턴: 20240920-0000167)가 포함된 경우 → 해당 주문번호의 배송 상세 정보 조회
+  // 4. 주문번호 패턴(예: 20240920-0000167)이 포함된 경우
   if (containsOrderNumber(normalizedUserInput)) {
     if (memberId && memberId !== "null") {
       try {
@@ -338,7 +383,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 5. "주문정보 확인" → 주문번호 목록 제공
+  // 5. "주문정보 확인"
   if (normalizedUserInput.includes("주문정보 확인")) {
     if (memberId && memberId !== "null") {
       try {
@@ -357,7 +402,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 6. "주문상태 확인", "배송 상태 확인", 또는 "배송정보 확인"(주문번호 미포함) → 최신 주문의 배송 상세 정보 제공
+  // 6. "주문상태 확인", "배송 상태 확인", "배송정보 확인" (주문번호 미포함)
   if (
     (normalizedUserInput.includes("주문상태 확인") ||
       normalizedUserInput.includes("배송 상태 확인") ||
@@ -395,7 +440,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 7. 그 외 → 기본 응답
+  // C. 모든 조건 미매칭 → GPT fallback
   return {
     text: "질문을 이해하지 못했어요. 좀더 자세히 입력 해주시겠어요",
     videoHtml: null,
@@ -404,36 +449,7 @@ async function findAnswer(userInput, memberId) {
   };
 }
 
-// server.js의 getGPT3TurboResponse 예시
-async function getGPT3TurboResponse(userInput) {
-  try {
-    const response = await axios.post(
-      OPEN_URL,
-      {
-        model: process.env.FINETUNED_MODEL || "gpt-3.5-turbo",
-        messages: [
-          { role: "system", content: "You are a helpful assistant." },
-          { role: "user", content: userInput }
-        ]
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${process.env.API_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-    const gptAnswer = response.data.choices[0].message.content;
-    return gptAnswer;
-  } catch (error) {
-    console.error("Error calling OpenAI:", error.message);
-    return "GPT fallback response";
-  }
-}
-
-/**
- * Express 라우팅
- */
+// ======== Express 라우팅 ========
 app.post("/chat", async (req, res) => {
   const userInput = req.body.message;
   const memberId = req.body.memberId; // 프론트에서 전달한 회원 ID
@@ -442,6 +458,7 @@ app.post("/chat", async (req, res) => {
   }
   try {
     const answer = await findAnswer(userInput, memberId);
+    // 만약 answer.text가 특정 문구(예: "질문을 이해하지 못했어요")라면, GPT에게 fallback
     if (answer.text === "질문을 이해하지 못했어요. 좀더 자세히 입력 해주시겠어요") {
       const gptResponse = await getGPT3TurboResponse(userInput);
       return res.json({
@@ -451,6 +468,7 @@ app.post("/chat", async (req, res) => {
         imageUrl: null
       });
     }
+    // 매칭되었거나, Cafe24 로직에서 처리된 경우
     return res.json(answer);
   } catch (error) {
     console.error("Error in /chat endpoint:", error.message);
@@ -463,7 +481,7 @@ app.post("/chat", async (req, res) => {
   }
 });
 
-// 서버 시작 전 MongoDB에서 토큰 로드 후 실행
+// ======== 서버 시작 전 MongoDB에서 토큰 로드 후 실행 ========
 (async function initialize() {
   await getTokensFromDB();
   const PORT = process.env.PORT || 5000;

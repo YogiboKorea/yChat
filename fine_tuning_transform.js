@@ -2,12 +2,17 @@
 const fs = require("fs");
 const path = require("path");
 
-// json 폴더 안의 companyData.json 파일 경로를 지정
 const inputFilePath = path.join(__dirname, "json", "companyData.json");
 const outputFilePath = path.join(__dirname, "fine_tuning_data.jsonl");
 
-// 원본 JSON 데이터 읽기
+console.log("Input file path:", inputFilePath);
+console.log("Output file path:", outputFilePath);
+
 const rawData = JSON.parse(fs.readFileSync(inputFilePath, "utf-8"));
+
+// 입력 데이터가 잘 불러와졌는지 확인 (예: 데이터 개수, 카테고리 이름 등)
+console.log("Loaded data keys:", Object.keys(rawData));
+
 const output = [];
 
 // 각 카테고리별 데이터 순회
@@ -23,17 +28,21 @@ for (const category in rawData) {
       additionalInfo += ` [Image URL: ${items[question].imageUrl}]`;
     }
 
-    // 카테고리 정보 + 질문을 prompt로, 답변을 completion으로
     const prompt = `[${category}] ${question}`;
     const completion = `${answer}${additionalInfo}`;
 
     output.push({
       prompt,
-      completion
+      completion,
     });
   }
 }
 
-// JSONL 파일로 저장
-fs.writeFileSync(outputFilePath, output.map(item => JSON.stringify(item)).join("\n"));
+// 변환 결과 확인
+console.log("Total prompt-completion pairs:", output.length);
+
+fs.writeFileSync(
+  outputFilePath,
+  output.map((item) => JSON.stringify(item)).join("\n")
+);
 console.log("JSONL 파일이 생성되었습니다:", outputFilePath);

@@ -1,5 +1,5 @@
 /******************************************************
- * server.js (예시) - "맥락 주입" 버전
+ * server.js (예시) - 주문/배송 로직 + FAQ + 맥락 주입
  ******************************************************/
 const express = require("express");
 const bodyParser = require("body-parser");
@@ -211,16 +211,12 @@ function containsOrderNumber(input) {
 
 // ========== [7] OpenAI GPT (fallback) - 맥락(컨텍스트) 주입 ==========
 
-/**
- * "You are a helpful assistant for the Yogibo brand..." 와 같은
- * 시스템 프롬프트를 삽입하여, 모델이 요기보 전용으로 답변하도록 유도합니다.
- */
 async function getGPT3TurboResponse(userInput) {
   try {
     const response = await axios.post(
       OPEN_URL,
       {
-        model: FINETUNED_MODEL, // 파인 튜닝 모델 or 기본 gpt-3.5-turbo
+        model: FINETUNED_MODEL,
         messages: [
           {
             role: "system",
@@ -251,24 +247,135 @@ If you are unsure or the question is out of scope, ask for clarification or prov
 
 // ========== [8] 메인 로직: findAnswer ==========
 
-/**
- * JSON 기반 FAQ/제품 안내 처리 → Cafe24 주문/배송 처리 → fallback
- * fallback 시 ChatGPT로 넘어가며, "Yogibo" 전용 시스템 프롬프트가 주입됨
- */
 async function findAnswer(userInput, memberId) {
   const normalizedUserInput = normalizeSentence(userInput);
 
-  // [A] 먼저 JSON 기반 로직 (FAQ, 세탁, 커버링, 사이즈, 비즈, 히스토리 등)을 처리
-  // (중략 - 기존 FAQ 로직)
-  // ...
-  // (FAQ 처리 로직 생략, or 그대로 유지)
+  /************************************************
+   * A. 먼저 JSON 기반 FAQ / 제품 안내 로직 처리
+   *    (커버링, 세탁, 사이즈, 비즈, 히스토리 등)
+   ************************************************/
+  // (기존 FAQ 로직 / 세탁 / 커버링 등)
+  // ... (생략 or 그대로 유지)
 
-  // [B] Cafe24 주문/배송 로직
-  // (중략 - 기존 Cafe24 로직)
-  // ...
-  // (Cafe24 주문/배송 처리 로직 생략, or 그대로 유지)
+  // ========== 예시: 간단 세탁방법 감지 ==========
+  if (normalizedUserInput.includes("세탁방법")) {
+    return {
+      text: "어떤 커버 세탁 방법이 궁금하신가요? (예: 요기보, 줄라, 럭스 등)",
+      videoHtml: null,
+      description: null,
+      imageUrl: null
+    };
+  }
 
-  // 최종 fallback
+  /************************************************
+   * B. Café24 주문/배송 로직
+   ************************************************/
+
+  // 1. 회원 아이디 조회
+  if (
+    normalizedUserInput.includes("내 아이디") ||
+    normalizedUserInput.includes("나의 아이디") ||
+    normalizedUserInput.includes("아이디 조회") ||
+    normalizedUserInput.includes("아이디 알려줘")
+  ) {
+    if (memberId && memberId !== "null") {
+      return {
+        text: `안녕하세요 ${memberId} 고객님, 궁금하신 사항을 남겨주세요.`,
+        videoHtml: null,
+        description: null,
+        imageUrl: null,
+      };
+    } else {
+      return {
+        text: "안녕하세요 고객님, 궁금하신 사항을 남겨주세요.",
+        videoHtml: null,
+        description: null,
+        imageUrl: null,
+      };
+    }
+  }
+
+  // 4. 주문번호 패턴 (예: 20240920-0000167)
+  if (containsOrderNumber(normalizedUserInput)) {
+    if (memberId && memberId !== "null") {
+      try {
+        const match = normalizedUserInput.match(/\d{8}-\d{7}/);
+        const targetOrderNumber = match ? match[0] : "";
+        const shipment = await getShipmentDetail(targetOrderNumber);
+        if (shipment) {
+          let status = shipment.status || "정보 없음";
+          let trackingNo = shipment.tracking_no || "정보 없음";
+          let shippingCompany = shipment.shipping_company_name || "정보 없음";
+          return {
+            text: `주문번호 ${targetOrderNumber}의 배송 상태는 ${status}이며, 송장번호는 ${trackingNo}, 택배사는 ${shippingCompany} 입니다.`,
+            videoHtml: null,
+            description: null,
+            imageUrl: null,
+          };
+        } else {
+          return {
+            text: "해당 주문번호에 대한 배송 정보를 찾을 수 없습니다.",
+            videoHtml: null,
+            description: null,
+            imageUrl: null,
+          };
+        }
+      } catch (error) {
+        return {
+          text: "배송 정보를 확인하는 데 오류가 발생했습니다.",
+          videoHtml: null,
+          description: null,
+          imageUrl: null,
+        };
+      }
+    } else {
+      return { text: "회원 정보가 확인되지 않습니다. 로그인 후 다시 시도해주세요." };
+    }
+  }
+
+  // 6. "주문상태 확인", "배송 상태 확인", "배송정보 확인" (주문번호 미포함)
+  if (
+    (normalizedUserInput.includes("주문상태 확인") ||
+      normalizedUserInput.includes("배송 상태 확인") ||
+      normalizedUserInput.includes("상품 배송정보") ||
+      normalizedUserInput.includes("배송상태 확인") ||
+      normalizedUserInput.includes("주문정보 확인") ||
+      normalizedUserInput.includes("배송정보 확인")) &&
+    !containsOrderNumber(normalizedUserInput)
+  ) {
+    if (memberId && memberId !== "null") {
+      try {
+        const orderData = await getOrderShippingInfo(memberId);
+        if (orderData.orders && orderData.orders.length > 0) {
+          const targetOrder = orderData.orders[0];
+          const shipment = await getShipmentDetail(targetOrder.order_id);
+          if (shipment) {
+            let status = shipment.status || "배송완료";
+            let trackingNo = shipment.tracking_no || "정보 없음";
+            let shippingCompany = shipment.shipping_company_name || "정보 없음";
+            return {
+              text: `고객님이 주문하신 상품의 경우 ${shippingCompany}를 통해 배송완료 되었으며, 운송장 번호는 ${trackingNo} 입니다.`,
+              videoHtml: null,
+              description: null,
+              imageUrl: null,
+            };
+          } else {
+            return { text: "해당 주문에 대한 배송 상세 정보를 찾을 수 없습니다." };
+          }
+        } else {
+          return { text: "고객님의 주문 정보가 없습니다." };
+        }
+      } catch (error) {
+        return { text: "고객님이 주문 정보가 존재 하지 않습니다 주문여부를 다시 한번 확인 부탁드립니다." };
+      }
+    } else {
+      return { text: "회원 정보가 확인되지 않습니다. 로그인 후 다시 시도해주세요." };
+    }
+  }
+
+  /************************************************
+   * C. 최종 fallback
+   ************************************************/
   return {
     text: "질문을 이해하지 못했어요. 좀더 자세히 입력 해주시겠어요",
     videoHtml: null,

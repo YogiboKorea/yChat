@@ -459,6 +459,29 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
+
+    // (7) asInfo 등
+    if (companyData.asInfo) {
+      let asInfoMatch = null;
+      let asInfoDist = Infinity;
+      for (let question in companyData.asInfo) {
+        const distance = levenshtein.get(normalizedUserInput, normalizeSentence(question));
+        if (distance < asInfoDist) {
+          asInfoDist = distance;
+          asInfoMatch = companyData.asInfo[question];
+        }
+      }
+      if (asInfoDist < 6 && asInfoMatch) {
+        return {
+          text: asInfoMatch.description,
+          videoHtml: null,
+          description: null,
+          imageUrl: null
+        };
+      }
+    }
+
+    
   /************************************************
    * B. Café24 주문/배송 로직
    ************************************************/

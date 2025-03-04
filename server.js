@@ -375,28 +375,45 @@ async function findAnswer(userInput, memberId) {
   }
 
   // (4) 비즈 안내
-  const bizTypes = ["프리미엄 플러스", "프리미엄", "스탠다드"];
-  if (normalizedUserInput.includes("비즈")) {
-    for (let bizType of bizTypes) {
-      if (normalizedUserInput.includes(bizType)) {
-        const key = `${bizType} 비즈 에 대해 알고 싶어`;
-        if (companyData.biz && companyData.biz[key]) {
-          return {
-            text: companyData.biz[key].description + " " + getAdditionalBizComment(),
-            videoHtml: null,
-            description: null,
-            imageUrl: null
-          };
-        }
+  const bizKeywords = ["스탠다드", "프리미엄", "프리미엄 플러스", "비즈"];
+  if (bizKeywords.some(bw => normalizedUserInput.includes(bw))) {
+    // 어떤 비즈인지 구분
+    // "스탠다드" / "프리미엄" / "프리미엄 플러스" 중 어떤 단어가 들어있는지 확인
+    let matchedType = null;
+    if (normalizedUserInput.includes("스탠다드")) matchedType = "스탠다드";
+    else if (normalizedUserInput.includes("프리미엄 플러스")) matchedType = "프리미엄 플러스";
+    else if (normalizedUserInput.includes("프리미엄")) matchedType = "프리미엄";
+    // 만약 "비즈"만 포함하고 구체적 타입은 없을 수도 있으니 처리
+    if (matchedType) {
+      // "스탠다드 비즈 에 대해 알고 싶어" 같은 JSON 키
+      const key = `${matchedType} 비즈 에 대해 알고 싶어`;
+      if (companyData.biz && companyData.biz[key]) {
+        return {
+          text: companyData.biz[key].description,
+          videoHtml: null,
+          description: null,
+          imageUrl: null
+        };
+      } else {
+        // JSON에 해당 키가 없으면 fallback
+        return {
+          text: `${matchedType} 비즈 정보가 없습니다. (JSON에 등록되어 있는지 확인해주세요)`,
+          videoHtml: null,
+          description: null,
+          imageUrl: null
+        };
       }
+    } else {
+      // "비즈"라는 단어만 포함되었을 때
+      return {
+        text: "어떤 비즈가 궁금하신가요? (스탠다드, 프리미엄, 프리미엄 플러스 등)",
+        videoHtml: null,
+        description: null,
+        imageUrl: null
+      };
     }
-    return {
-      text: "어떤 비즈가 궁금하신가요? (스탠다드, 프리미엄, 프리미엄 플러스 등)",
-      videoHtml: null,
-      description: null,
-      imageUrl: null
-    };
   }
+
 
   // (6) goodsInfo (유사도 매칭)
   if (companyData.goodsInfo) {

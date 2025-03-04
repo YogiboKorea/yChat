@@ -9,29 +9,39 @@ const { MongoClient } = require("mongodb");
 const levenshtein = require("fast-levenshtein");
 require("dotenv").config();
 
-let accessToken = process.env.ACCESS_TOKEN;
-let refreshToken = process.env.REFRESH_TOKEN ;
+// .env 변수 사용
+let accessToken = process.env.ACCESS_TOKEN || 'pPhbiZ29IZ9kuJmZ3jr15C';
+let refreshToken = process.env.REFRESH_TOKEN || 'CMLScZx0Bh3sIxlFTHDeMD';
 const CAFE24_CLIENT_ID = process.env.CAFE24_CLIENT_ID;
 const CAFE24_CLIENT_SECRET = process.env.CAFE24_CLIENT_SECRET;
 const DB_NAME = process.env.DB_NAME;
 const MONGODB_URI = process.env.MONGODB_URI;
 const CAFE24_MALLID = process.env.CAFE24_MALLID;
 const OPEN_URL = process.env.OPEN_URL; // OpenAI API URL
+
+// Cafe24 API 버전 (환경변수나 기본값 사용)
 const CAFE24_API_VERSION = process.env.CAFE24_API_VERSION || '2024-06-01';
 
+// Express 앱 초기화
 const app = express();
 app.use(cors());
 app.use(compression());
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "public")));
 
+// 예제용 JSON 데이터 (필요 시)
 const companyData = JSON.parse(fs.readFileSync("./json/companyData.json", "utf-8"));
+// 컬렉션명을 "tokens"로 사용
 const tokenCollectionName = "tokens";
 
+/**
+ * 주문번호 패턴 검사 함수 (예: "20240920-0000167")
+ */
 function containsOrderNumber(input) {
   return /\d{8}-\d{7}/.test(input);
 }
 
+// MongoDB에서 토큰을 불러오는 함수 (전체 문서를 가져옴)
 async function getTokensFromDB() {
   const client = new MongoClient(MONGODB_URI);
   try {
@@ -54,6 +64,7 @@ async function getTokensFromDB() {
   }
 }
 
+// MongoDB에 토큰을 저장하는 함수
 async function saveTokensToDB(newAccessToken, newRefreshToken) {
   const client = new MongoClient(MONGODB_URI);
   try {
@@ -79,8 +90,20 @@ async function saveTokensToDB(newAccessToken, newRefreshToken) {
   }
 }
 
-// refreshAccessToken 함수 제거됨
+/**
+ * Access Token 갱신 함수 (MongoDB에서 토큰 정보 갱신)
+ * 401 에러 발생 시 MongoDB에서 최신 토큰을 가져옵니다.
+ */
+async function refreshAccessToken() {
+  console.log('401 에러 발생: MongoDB에서 토큰 정보 가져오는 중...');
+  await getTokensFromDB();
+  console.log('MongoDB에서 토큰 갱신 완료:', accessToken, refreshToken);
+  return accessToken;
+}
 
+/**
+ * API 요청 함수 (자동 토큰 갱신 포함)
+ */
 async function apiRequest(method, url, data = {}, params = {}) {
   console.log(`Request: ${method} ${url}`);
   console.log("Params:", params);
@@ -100,9 +123,8 @@ async function apiRequest(method, url, data = {}, params = {}) {
     return response.data;
   } catch (error) {
     if (error.response && error.response.status === 401) {
-      console.log('Access Token 만료. MongoDB에서 토큰을 다시 가져옵니다.');
-      // 토큰 만료 시 MongoDB에서 다시 토큰을 로드 후 재시도
-      await getTokensFromDB();
+      console.log('Access Token 만료. 갱신 중...');
+      await refreshAccessToken();
       return apiRequest(method, url, data, params);
     } else {
       console.error('API 요청 오류:', error.response ? error.response.data : error.message);
@@ -145,7 +167,7 @@ async function getShipmentDetail(orderId) {
     if (response.shipments && response.shipments.length > 0) {
       const shipment = response.shipments[0];
       
-      // shipping_company_code가 "19"이면 "롯데 택배"로 매핑
+      // shipping_company_code가 "0019"이면 "롯데 택배"로 매핑
       if (shipment.shipping_company_code === "0019") {
         shipment.shipping_company_name = "롯데 택배";
       } else {

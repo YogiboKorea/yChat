@@ -460,7 +460,7 @@ async function findAnswer(userInput, memberId) {
   }
 
  // (8) asInfo
-if (companyData.asInfo) {
+if (companyData.asInfoList) {
   let asInfoMatch = null;
   let asInfoDist = Infinity;
   for (let question in companyData.asInfo) {

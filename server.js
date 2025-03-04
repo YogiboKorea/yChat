@@ -9,8 +9,8 @@ const { MongoClient } = require("mongodb");
 const levenshtein = require("fast-levenshtein");
 require("dotenv").config();
 
-let accessToken = process.env.ACCESS_TOKEN || 'pPhbiZ29IZ9kuJmZ3jr15C';
-let refreshToken = process.env.REFRESH_TOKEN || 'CMLScZx0Bh3sIxlFTHDeMD';
+let accessToken = process.env.ACCESS_TOKEN;
+let refreshToken = process.env.REFRESH_TOKEN ;
 const CAFE24_CLIENT_ID = process.env.CAFE24_CLIENT_ID;
 const CAFE24_CLIENT_SECRET = process.env.CAFE24_CLIENT_SECRET;
 const DB_NAME = process.env.DB_NAME;
@@ -111,7 +111,10 @@ async function apiRequest(method, url, data = {}, params = {}) {
   }
 }
 
-// 나머지 함수들은 그대로 유지
+/**
+ * Cafe24 주문 배송 정보 조회 함수 (전체 주문 목록 조회)
+ * 지정된 기간(2024-08-31 ~ 2024-09-31) 내의 주문 정보를 가져옵니다.
+ */
 async function getOrderShippingInfo(memberId) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`;
   const params = {
@@ -122,13 +125,18 @@ async function getOrderShippingInfo(memberId) {
   };
   try {
     const response = await apiRequest("GET", API_URL, {}, params);
-    return response;
+    return response; // 응답 내 orders 배열 포함
   } catch (error) {
     console.error("Error fetching order shipping info:", error.message);
     throw error;
   }
 }
 
+/**
+ * 주문번호에 대한 배송 상세 정보 조회 함수
+ * GET https://{mallid}.cafe24api.com/api/v2/admin/orders/{order_id}/shipments
+ * 해당 URL을 호출하면 shipments 배열이 반환되며, 첫 번째 항목의 정보를 사용합니다.
+ */
 async function getShipmentDetail(orderId) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders/${orderId}/shipments`;
   const params = { shop_no: 1 };
@@ -136,11 +144,15 @@ async function getShipmentDetail(orderId) {
     const response = await apiRequest("GET", API_URL, {}, params);
     if (response.shipments && response.shipments.length > 0) {
       const shipment = response.shipments[0];
+      
+      // shipping_company_code가 "19"이면 "롯데 택배"로 매핑
       if (shipment.shipping_company_code === "0019") {
         shipment.shipping_company_name = "롯데 택배";
       } else {
+        // 다른 코드 처리 (예: DB나 매핑 테이블을 사용하거나, 기본적으로 코드만 표시)
         shipment.shipping_company_name = shipment.shipping_company_code || "정보 없음";
       }
+
       return shipment;
     } else {
       throw new Error("배송 정보를 찾을 수 없습니다.");
@@ -151,6 +163,9 @@ async function getShipmentDetail(orderId) {
   }
 }
 
+/**
+ * 유틸 함수들
+ */
 function normalizeSentence(sentence) {
   return sentence
     .replace(/[?!！？]/g, "")
@@ -173,9 +188,20 @@ function summarizeHistory(text, maxLength = 300) {
   return text.substring(0, maxLength) + "...";
 }
 
+/**
+ * 챗봇 메인 로직 함수 (async)  
+ * 1. 회원 아이디 조회
+ * 2. "주문번호" → 주문번호 목록
+ * 3. "배송번호" → 최신 주문의 배송번호
+ * 4. 주문번호가 포함 → 해당 주문번호의 배송 상세 정보(status, tracking_no, 택배사)
+ * 5. "주문정보 확인" → 주문번호 목록
+ * 6. "주문상태 확인"/"배송 상태 확인"/"배송정보 확인"(주문번호 미포함) → 최신 주문의 배송 상세 정보
+ * 7. 기본 응답
+ */
 async function findAnswer(userInput, memberId) {
   const normalizedUserInput = normalizeSentence(userInput);
 
+  // 1. 회원 아이디 조회
   if (
     normalizedUserInput.includes("내 아이디") ||
     normalizedUserInput.includes("나의 아이디") ||
@@ -199,6 +225,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
+  // 2. "주문번호"라고 입력하면 → 해당 멤버의 주문번호 목록
   if (normalizedUserInput.includes("주문번호")) {
     if (memberId && memberId !== "null") {
       try {
@@ -222,6 +249,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
+  // 3. "배송번호"라고 입력하면 → 최신 주문의 배송번호
   if (normalizedUserInput.includes("배송번호")) {
     if (memberId && memberId !== "null") {
       try {
@@ -250,6 +278,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
+  // 4. 주문번호가 포함된 경우 → 해당 주문번호의 배송 상세 정보 조회
   if (containsOrderNumber(normalizedUserInput)) {
     if (memberId && memberId !== "null") {
       try {
@@ -287,6 +316,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
+  // 5. "주문정보 확인" → 주문번호 목록 제공
   if (normalizedUserInput.includes("주문정보 확인")) {
     if (memberId && memberId !== "null") {
       try {
@@ -305,6 +335,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
+  // 6. "주문상태 확인", "배송 상태 확인", 또는 "배송정보 확인" (주문번호 미포함)
   if (
     (normalizedUserInput.includes("주문상태 확인") ||
       normalizedUserInput.includes("배송 상태 확인") ||
@@ -323,7 +354,9 @@ async function findAnswer(userInput, memberId) {
             let trackingNo = shipment.tracking_no || "정보 없음";
             let shippingCompany = shipment.shipping_company_name || "정보 없음";
             return {
-              text: `고객님이 주문하신 상품은 ${shippingCompany}를 통해 배송완료되었으며, 운송장 번호는 ${trackingNo} 입니다.`,
+              text: `
+              고객님이 주문하신 상품의 경우 ${shippingCompany} 통해 배송완료 되었으며 ${trackingNo} 운송장 번호로 확인 가능하십니다.
+              `,
               videoHtml: null,
               description: null,
               imageUrl: null,
@@ -342,6 +375,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
+  // 7. 그 외 → 기본 응답
   return {
     text: "질문을 이해하지 못했어요. 좀더 자세히 입력 해주시겠어요",
     videoHtml: null,
@@ -350,6 +384,9 @@ async function findAnswer(userInput, memberId) {
   };
 }
 
+/**
+ * GPT API 연동 함수 (fallback)
+ */
 async function getGPT3TurboResponse(userInput) {
   try {
     const response = await axios.post(
@@ -376,9 +413,12 @@ async function getGPT3TurboResponse(userInput) {
   }
 }
 
+/**
+ * Express 라우팅
+ */
 app.post("/chat", async (req, res) => {
   const userInput = req.body.message;
-  const memberId = req.body.memberId;
+  const memberId = req.body.memberId; // 프론트에서 전달한 회원 ID
   if (!userInput) {
     return res.status(400).json({ error: "Message is required" });
   }
@@ -405,6 +445,7 @@ app.post("/chat", async (req, res) => {
   }
 });
 
+// 서버 시작 전 MongoDB에서 토큰 로드 후 실행
 (async function initialize() {
   await getTokensFromDB();
   const PORT = process.env.PORT || 5000;

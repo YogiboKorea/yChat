@@ -220,7 +220,7 @@ async function getGPT3TurboResponse(userInput) {
     return gptAnswer;
   } catch (error) {
     console.error("Error calling OpenAI:", error.message);
-    return "GPT fallback response";
+    return "좀더 자세히 입력 해주세요";
   }
 }
 
@@ -610,6 +610,7 @@ async function findAnswer(userInput, memberId) {
     (normalizedUserInput.includes("주문상태 확인") ||
       normalizedUserInput.includes("배송 상태 확인") ||
       normalizedUserInput.includes("배송상태 확인") ||
+      normalizedUserInput.includes("주문정보 확인") ||
       normalizedUserInput.includes("배송정보 확인")) &&
     !containsOrderNumber(normalizedUserInput)
   ) {
@@ -636,7 +637,7 @@ async function findAnswer(userInput, memberId) {
           return { text: "고객님의 주문 정보가 없습니다." };
         }
       } catch (error) {
-        return { text: "배송 정보를 가져오는 데 오류가 발생했습니다." };
+        return { text: "고객님이 주문 정보가 존재 하지 않습니다 주문여부를 다시 한번 확인 부탁드립니다." };
       }
     } else {
       return { text: "회원 정보가 확인되지 않습니다. 로그인 후 다시 시도해주세요." };

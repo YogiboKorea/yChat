@@ -10,8 +10,8 @@ const levenshtein = require("fast-levenshtein");
 require("dotenv").config();
 
 // .env 변수 사용
-let accessToken = process.env.ACCESS_TOKEN || 'nvhEJTMEMF2mSkMxQwTYxB';
-let refreshToken = process.env.REFRESH_TOKEN || '5mfcD1dmDarczNU3ZOut6F';
+let accessToken = process.env.ACCESS_TOKEN || 'pPhbiZ29IZ9kuJmZ3jr15C';
+let refreshToken = process.env.REFRESH_TOKEN || 'CMLScZx0Bh3sIxlFTHDeMD';
 const CAFE24_CLIENT_ID = process.env.CAFE24_CLIENT_ID;
 const CAFE24_CLIENT_SECRET = process.env.CAFE24_CLIENT_SECRET;
 const DB_NAME = process.env.DB_NAME;
@@ -91,37 +91,14 @@ async function saveTokensToDB(newAccessToken, newRefreshToken) {
 }
 
 /**
- * Access Token 갱신 함수  
+ * Access Token 갱신 함수 (MongoDB에서 토큰 정보 갱신)
+ * 401 에러 발생 시 MongoDB에서 최신 토큰을 가져옵니다.
  */
 async function refreshAccessToken() {
-  try {
-    const basicAuth = Buffer.from(`${CAFE24_CLIENT_ID}:${CAFE24_CLIENT_SECRET}`).toString('base64');
-    const response = await axios.post(
-      `https://${CAFE24_MALLID}.cafe24api.com/api/v2/oauth/token`,
-      `grant_type=refresh_token&refresh_token=${refreshToken}`,
-      {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Authorization': `Basic ${basicAuth}`,
-        },
-      }
-    );
-    const newAccessToken = response.data.access_token;
-    const newRefreshToken = response.data.refresh_token;
-    console.log('Access Token 갱신 성공:', newAccessToken);
-    console.log('Refresh Token 갱신 성공:', newRefreshToken);
-    await saveTokensToDB(newAccessToken, newRefreshToken);
-    accessToken = newAccessToken;
-    refreshToken = newRefreshToken;
-    return newAccessToken;
-  } catch (error) {
-    if (error.response && error.response.data && error.response.data.error === 'invalid_grant') {
-      console.error('Refresh Token이 만료되었습니다. 인증 단계를 다시 수행해야 합니다.');
-    } else {
-      console.error('Access Token 갱신 실패:', error.response ? error.response.data : error.message);
-    }
-    throw error;
-  }
+  console.log('401 에러 발생: MongoDB에서 토큰 정보 가져오는 중...');
+  await getTokensFromDB();
+  console.log('MongoDB에서 토큰 갱신 완료:', accessToken, refreshToken);
+  return accessToken;
 }
 
 /**
@@ -190,7 +167,7 @@ async function getShipmentDetail(orderId) {
     if (response.shipments && response.shipments.length > 0) {
       const shipment = response.shipments[0];
       
-      // shipping_company_code가 "19"이면 "롯데 택배"로 매핑
+      // shipping_company_code가 "0019"이면 "롯데 택배"로 매핑
       if (shipment.shipping_company_code === "0019") {
         shipment.shipping_company_name = "롯데 택배";
       } else {

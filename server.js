@@ -1,6 +1,4 @@
-/******************************************************
- * server.js
- ******************************************************/
+// server.js
 const express = require("express");
 const bodyParser = require("body-parser");
 const fs = require("fs");
@@ -9,10 +7,10 @@ const cors = require("cors");
 const compression = require("compression");
 const axios = require("axios");
 const { MongoClient } = require("mongodb");
-const levenshtein = require("fast-levenshtein"); // 필요하다면 유사 매칭용
+const levenshtein = require("fast-levenshtein");
 require("dotenv").config();
 
-// ======== 환경변수(.env)에서 가져올 값들 ========
+// .env 변수 사용
 let accessToken = process.env.ACCESS_TOKEN || 'pPhbiZ29IZ9kuJmZ3jr15C';
 let refreshToken = process.env.REFRESH_TOKEN || 'CMLScZx0Bh3sIxlFTHDeMD';
 const CAFE24_CLIENT_ID = process.env.CAFE24_CLIENT_ID;
@@ -20,23 +18,21 @@ const CAFE24_CLIENT_SECRET = process.env.CAFE24_CLIENT_SECRET;
 const DB_NAME = process.env.DB_NAME;
 const MONGODB_URI = process.env.MONGODB_URI;
 const CAFE24_MALLID = process.env.CAFE24_MALLID;
-const OPEN_URL = process.env.OPEN_URL; // 예: "https://api.openai.com/v1/chat/completions"
-const CAFE24_API_VERSION = process.env.CAFE24_API_VERSION || '2024-06-01';
-const API_KEY = process.env.API_KEY; // OpenAI API 키
-const FINETUNED_MODEL = process.env.FINETUNED_MODEL || "gpt-3.5-turbo"; 
+const OPEN_URL = process.env.OPEN_URL; // OpenAI API URL
 
-// ======== Express 앱 초기화 ========
+// Cafe24 API 버전 (환경변수나 기본값 사용)
+const CAFE24_API_VERSION = process.env.CAFE24_API_VERSION || '2024-06-01';
+
+// Express 앱 초기화
 const app = express();
 app.use(cors());
 app.use(compression());
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-// ======== JSON 파일 로드 (회사 데이터, FAQ 등) ========
-const companyDataPath = path.join(__dirname, "json", "companyData.json");
-const companyData = JSON.parse(fs.readFileSync(companyDataPath, "utf-8"));
-
-// ======== MongoDB 토큰 컬렉션 관련 ========
+// 예제용 JSON 데이터 (필요 시)
+const companyData = JSON.parse(fs.readFileSync("./json/companyData.json", "utf-8"));
+// 컬렉션명을 "tokens"로 사용
 const tokenCollectionName = "tokens";
 
 /**
@@ -46,7 +42,7 @@ function containsOrderNumber(input) {
   return /\d{8}-\d{7}/.test(input);
 }
 
-// ======== MongoDB에서 토큰 불러오기/저장하기 ========
+// MongoDB에서 토큰을 불러오는 함수 (전체 문서를 가져옴)
 async function getTokensFromDB() {
   const client = new MongoClient(MONGODB_URI);
   try {
@@ -69,6 +65,7 @@ async function getTokensFromDB() {
   }
 }
 
+// MongoDB에 토큰을 저장하는 함수
 async function saveTokensToDB(newAccessToken, newRefreshToken) {
   const client = new MongoClient(MONGODB_URI);
   try {
@@ -95,17 +92,18 @@ async function saveTokensToDB(newAccessToken, newRefreshToken) {
 }
 
 /**
- * Access Token 갱신 함수 (401 에러 시 MongoDB에서 최신 토큰 가져옴)
+ * Access Token 갱신 함수 (MongoDB에서 토큰 정보 갱신)
+ * 401 에러 발생 시 MongoDB에서 최신 토큰을 가져옵니다.
  */
 async function refreshAccessToken() {
-  console.log('401 에러 발생: MongoDB에서 토큰 정보 다시 가져오기...');
+  console.log('401 에러 발생: MongoDB에서 토큰 정보 가져오는 중...');
   await getTokensFromDB();
   console.log('MongoDB에서 토큰 갱신 완료:', accessToken, refreshToken);
   return accessToken;
 }
 
 /**
- * Cafe24 API 요청 함수 (자동 토큰 갱신 포함)
+ * API 요청 함수 (자동 토큰 갱신 포함)
  */
 async function apiRequest(method, url, data = {}, params = {}) {
   console.log(`Request: ${method} ${url}`);
@@ -136,7 +134,10 @@ async function apiRequest(method, url, data = {}, params = {}) {
   }
 }
 
-// ======== Cafe24 주문 관련 예시 함수들 ========
+/**
+ * Cafe24 주문 배송 정보 조회 함수 (전체 주문 목록 조회)
+ * 지정된 기간(2024-08-31 ~ 2024-09-31) 내의 주문 정보를 가져옵니다.
+ */
 async function getOrderShippingInfo(memberId) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`;
   const params = {
@@ -147,13 +148,18 @@ async function getOrderShippingInfo(memberId) {
   };
   try {
     const response = await apiRequest("GET", API_URL, {}, params);
-    return response; // 응답 내 orders 배열
+    return response; // 응답 내 orders 배열 포함
   } catch (error) {
     console.error("Error fetching order shipping info:", error.message);
     throw error;
   }
 }
 
+/**
+ * 주문번호에 대한 배송 상세 정보 조회 함수
+ * GET https://{mallid}.cafe24api.com/api/v2/admin/orders/{order_id}/shipments
+ * 해당 URL을 호출하면 shipments 배열이 반환되며, 첫 번째 항목의 정보를 사용합니다.
+ */
 async function getShipmentDetail(orderId) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders/${orderId}/shipments`;
   const params = { shop_no: 1 };
@@ -161,10 +167,12 @@ async function getShipmentDetail(orderId) {
     const response = await apiRequest("GET", API_URL, {}, params);
     if (response.shipments && response.shipments.length > 0) {
       const shipment = response.shipments[0];
-      // 간단한 택배사 코드 매핑 예시
+      
+      // shipping_company_code가 "0019"이면 "롯데 택배"로 매핑
       if (shipment.shipping_company_code === "0019") {
         shipment.shipping_company_name = "롯데 택배";
       } else {
+        // 다른 코드 처리 (예: DB나 매핑 테이블을 사용하거나, 기본적으로 코드만 표시)
         shipment.shipping_company_name = shipment.shipping_company_code || "정보 없음";
       }
       return shipment;
@@ -177,97 +185,451 @@ async function getShipmentDetail(orderId) {
   }
 }
 
-// ======== 유틸 함수들 ========
+/**
+ * 유틸 함수들
+ */
 function normalizeSentence(sentence) {
   return sentence
     .replace(/[?!！？]/g, "")
     .replace(/없나요/g, "없어요")
     .trim();
 }
+//일반 교육 JSON코드 읽어오는 코드
 
-/**
- * companyData.json 내 여러 카테고리(covering, sizeInfo, biz, history, goodsInfo, homePage, washing 등)
- * 질문과 일치하는 항목을 찾는 함수
- */
-function findMatchingAnswer(normalizedUserInput) {
-  // 이 배열에 JSON 파일에 있는 주요 카테고리 키를 추가
-  const categories = ["covering", "sizeInfo", "biz", "history", "goodsInfo", "homePage", "washing"];
+function getAdditionalBizComment() {
+  const comments = [
+    "추가로 궁금하신 사항이 있으시면 언제든 말씀해주세요.",
+    "이 정보가 도움이 되길 바랍니다.",
+    "더 자세한 정보가 필요하시면 문의해 주세요.",
+    "고객님의 선택에 도움이 되었으면 좋겠습니다."
+  ];
+  return comments[Math.floor(Math.random() * comments.length)];
+}
 
-  for (const cat of categories) {
-    const catData = companyData[cat];
-    if (!catData) continue;
+function summarizeHistory(text, maxLength = 300) {
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength) + "...";
+}
 
-    // catData는 예: { "더블 커버링 방법을 알고 싶어": { answer: "...", videoUrl: "..." }, ... }
-    for (const question in catData) {
-      // 단순히 'includes'로 비교 (필요하다면 정교한 매칭 로직을 추가)
-      // normalizeSentence(question)도 적용하면 좋을 수 있음
-      if (normalizedUserInput.includes(question.replace(/[?!！？]/g, ""))) {
-        const data = catData[question];
-        // answer 혹은 description을 우선으로 사용
-        const text = data.answer || data.description || "";
-        const videoUrl = data.videoUrl || "";
-        const imageUrl = data.imageUrl || "";
+// ============ 메인 로직: findAnswer ============
+async function findAnswer(userInput) {
+  const normalizedUserInput = normalizeSentence(userInput);
 
-        // 매칭되면 즉시 결과 반환
-        return { text, videoUrl, imageUrl };
+  // =========================
+  // [A] 커버링 컨텍스트 확인
+  // =========================
+  if (pendingCoveringContext) {
+    const coveringTypes = ["더블", "맥스", "프라임", "슬림", "미디", "미니", "팟", "드롭", "라운저", "피라미드"];
+    if (coveringTypes.includes(normalizedUserInput)) {
+      const key = `${normalizedUserInput} 커버링 방법을 알고 싶어`;
+      if (companyData.covering && companyData.covering[key]) {
+        const videoUrl = companyData.covering[key].videoUrl;
+        pendingCoveringContext = false; // 사용 후 해제
+        return {
+          text: companyData.covering[key].answer,
+          videoHtml: videoUrl
+            ? `<iframe width="100%" height="auto" src="${videoUrl}" frameborder="0" allowfullscreen style="margin-top:20px;"></iframe>`
+            : null,
+          description: null,
+          imageUrl: null
+        };
+      }
+      pendingCoveringContext = false;
+    }
+  }
+
+  // =========================
+  // [B] 세탁(washing) 
+  // =========================
+  if (pendingWashingContext) {
+    // 세탁 종류(키워드) 매핑
+    const washingMap = {
+      "요기보": "요기보 세탁방법을 알고 싶어요",
+      "줄라": "줄라 세탁방법을 알고 싶어요",
+      "럭스": "럭스 세탁방법을 알고 싶어요",
+      "모듀": "모듀 세탁방법을 알고 싶어요"
+    };
+    // 사용자 입력에 위 키워드가 있는지 확인
+    for (let key in washingMap) {
+      if (normalizedUserInput.includes(key)) {
+        const dataKey = washingMap[key];
+        if (companyData.washing && companyData.washing[dataKey]) {
+          pendingWashingContext = false; // 해제
+          return {
+            text: companyData.washing[dataKey].description,
+            videoHtml: null,
+            description: null,
+            imageUrl: null
+          };
+        }
+      }
+    }
+    // 못 찾은 경우
+    pendingWashingContext = false;
+    return {
+      text: "해당 커버 종류를 찾지 못했어요. (요기보, 줄라, 럭스, 모듀, 메이트 중 하나를 입력해주세요.)",
+      videoHtml: null,
+      description: null,
+      imageUrl: null
+    };
+  }
+
+  // =========================
+  // [C] 세탁방법 입력 감지
+  // =========================
+  if (
+    normalizedUserInput.includes("세탁방법") ||
+    (normalizedUserInput.includes("세탁") && normalizedUserInput.includes("방법"))
+  ) {
+    // 세탁 컨텍스트 활성화
+    pendingWashingContext = true;
+    return {
+      text: "어떤 커버(제품) 세탁 방법이 궁금하신가요? (요기보, 줄라, 럭스, 모듀, 메이트 중 택1)",
+      videoHtml: null,
+      description: null,
+      imageUrl: null
+    };
+  }
+
+  // =========================
+  // Step 1: 사이즈 관련
+  // =========================
+  if (
+    normalizedUserInput.includes("소파 사이즈") ||
+    normalizedUserInput.includes("빈백 사이즈") ||
+    normalizedUserInput.includes("상품 사이즈")
+  ) {
+    return {
+      text: "어떤 빈백 사이즈가 궁금하신가요? 예를 들어, 맥스, 더블, 프라임, 피라미드 등 상품명을 입력해주세요.",
+      videoHtml: null,
+      description: null,
+      imageUrl: null
+    };
+  }
+  const sizeTypes = ["더블", "맥스", "프라임", "슬림", "미디", "미니", "팟", "드롭", "라운저", "피라미드"];
+  for (let sizeType of sizeTypes) {
+    // "커버링"이 포함되면 사이즈 로직 건너뛰기
+    if (normalizedUserInput.includes(sizeType) && !normalizedUserInput.includes("커버링")) {
+      const key = sizeType + " 사이즈 또는 크기.";
+      if (companyData.sizeInfo && companyData.sizeInfo[key]) {
+        return {
+          text: companyData.sizeInfo[key].description,
+          videoHtml: null,
+          description: companyData.sizeInfo[key].description,
+          imageUrl: companyData.sizeInfo[key].imageUrl
+        };
       }
     }
   }
 
-  // 여기까지 못 찾으면 null
-  return null;
+  // =========================
+  // Step 2: 제품 커버 관련 조건 (교체/사용 관련)
+  // =========================
+  if (
+    normalizedUserInput.includes("커버") &&
+    normalizedUserInput.includes("교체") &&
+    (normalizedUserInput.includes("사용") || normalizedUserInput.includes("교체해서 사용"))
+  ) {
+    return {
+      text: "해당 제품 전용 커버라면 모두 사용 가능해요. 요기보, 럭스, 믹스, 줄라 등 다양한 커버를 사용해보세요. 예를 들어, 맥스 제품을 사용 중이시라면 요기보 맥스 커버, 럭스 맥스 커버, 믹스 맥스 커버, 줄라 맥스 커버로 교체하여 사용 가능합니다.",
+      videoHtml: null,
+      description: null,
+      imageUrl: null
+    };
+  }
+
+  // =========================
+  // Step 3: 커버링 관련 조건 (확장)
+  // =========================
+  const coveringTypes2 = ["더블", "맥스", "프라임", "슬림", "미디", "미니", "팟", "드롭", "라운저", "피라미드"];
+  if (
+    coveringTypes2.some(type => normalizedUserInput.includes(type)) &&
+    normalizedUserInput.includes("커버링")
+  ) {
+    const foundType = coveringTypes2.find(type => normalizedUserInput.includes(type));
+    const key = `${foundType} 커버링 방법을 알고 싶어`;
+    if (companyData.covering && companyData.covering[key]) {
+      const videoUrl = companyData.covering[key].videoUrl;
+      return {
+        text: companyData.covering[key].answer,
+        videoHtml: videoUrl
+          ? `<iframe width="100%" height="auto" src="${videoUrl}" frameborder="0" allowfullscreen style="margin-top:20px;"></iframe>`
+          : null,
+        description: null,
+        imageUrl: null
+      };
+    }
+  }
+  if (
+    normalizedUserInput.includes("커버링") &&
+    normalizedUserInput.includes("방법") &&
+    !coveringTypes2.some(type => normalizedUserInput.includes(type))
+  ) {
+    pendingCoveringContext = true;
+    return {
+      text: "어떤 커버링인가요? 예를 들어, '맥스', '프라임', '더블', '피라미드' 등을 입력해주세요.",
+      videoHtml: null,
+      description: null,
+      imageUrl: null
+    };
+  }
+  if (normalizedUserInput === "커버링 방법 알려줘") {
+    pendingCoveringContext = true;
+    return {
+      text: "어떤 커버링인가요? 예를 들어, '맥스', '프라임', '더블', '피라미드' 등을 입력해주세요.",
+      videoHtml: null,
+      description: null,
+      imageUrl: null
+    };
+  }
+
+  // =========================
+  // Step 4: 비즈 관련 조건
+  // =========================
+  const bizTypes = ["프리미엄 플러스", "프리미엄", "스탠다드"];
+  if (normalizedUserInput.includes("비즈") && !bizTypes.some((type) => normalizedUserInput.includes(type))) {
+    return {
+      text: "어떤 비즈에 대해 궁금하신가요? 예를 들어, '스탠다드 비즈', '프리미엄 비즈', '프리미엄 플러스 비즈' 등을 입력해주세요.",
+      videoHtml: null,
+      description: null,
+      imageUrl: null
+    };
+  }
+  if (normalizedUserInput === "비즈 알려줘" || normalizedUserInput === "비즈 방법 알려줘") {
+    return {
+      text: "어떤 비즈에 대해 궁금하신가요? 예를 들어, '스탠다드 비즈', '프리미엄 비즈', '프리미엄 플러스 비즈' 등을 입력해주세요.",
+      videoHtml: null,
+      description: null,
+      imageUrl: null
+    };
+  }
+  // 특정 비즈
+  if (bizTypes.includes(normalizedUserInput)) {
+    const key = `${normalizedUserInput} 비즈 에 대해 알고 싶어`;
+    if (companyData.biz && companyData.biz[key]) {
+      return {
+        text: companyData.biz[key].description + " " + getAdditionalBizComment(),
+        videoHtml: null,
+        description: companyData.biz[key].description,
+        imageUrl: null
+      };
+    }
+  }
+  for (let bizType of bizTypes) {
+    if (normalizedUserInput.includes(bizType)) {
+      const key = `${bizType} 비즈 에 대해 알고 싶어`;
+      if (companyData.biz && companyData.biz[key]) {
+        return {
+          text: companyData.biz[key].description + " " + getAdditionalBizComment(),
+          videoHtml: null,
+          description: companyData.biz[key].description,
+          imageUrl: null
+        };
+      }
+    }
+  }
+
+  // =========================
+  // Step 5: 요기보 history
+  // =========================
+  if (
+    normalizedUserInput.includes("요기보") &&
+    (normalizedUserInput.includes("역사") ||
+      normalizedUserInput.includes("알려줘") ||
+      normalizedUserInput.includes("란") ||
+      normalizedUserInput.includes("탄생") ||
+      normalizedUserInput.includes("에 대해"))
+  ) {
+    const key = "요기보 에 대해 알고 싶어";
+    if (companyData.history && companyData.history[key]) {
+      const fullHistory = companyData.history[key].description;
+      const summary = summarizeHistory(fullHistory, 300);
+      return {
+        text: summary,
+        videoHtml: null,
+        description: fullHistory,
+        imageUrl: null
+      };
+    }
+  }
+
+  // =========================
+  // Step 6: goodsInfo (Levenshte인)
+  // =========================
+  let bestGoodsMatch = null;
+  let bestGoodsDistance = Infinity;
+  if (companyData.goodsInfo) {
+    for (let question in companyData.goodsInfo) {
+      const normalizedQuestion = normalizeSentence(question);
+      const distance = levenshtein.get(normalizedUserInput, normalizedQuestion);
+      if (distance < bestGoodsDistance) {
+        bestGoodsDistance = distance;
+        bestGoodsMatch = companyData.goodsInfo[question];
+      }
+    }
+  }
+  const goodsThreshold = 8;
+  if (bestGoodsMatch && bestGoodsDistance <= goodsThreshold) {
+    return {
+      text: bestGoodsMatch.description,
+      videoHtml: null,
+      description: bestGoodsMatch.description,
+      imageUrl: bestGoodsMatch.imageUrl ? bestGoodsMatch.imageUrl : null
+    };
+  }
+
+  // =========================
+  // Step 7: 회원가입 관련 조건
+  // =========================
+  if (
+    normalizedUserInput.includes("회원가입") ||
+    normalizedUserInput.includes("회원 등록") ||
+    normalizedUserInput.includes("가입 방법")
+  ) {
+    const key = "회원 가입 방법";
+    if (companyData.homePage && companyData.homePage[key]) {
+      return {
+        text: companyData.homePage[key].description,
+        videoHtml: null,
+        description: companyData.homePage[key].description,
+        imageUrl: companyData.homePage[key].imageUrl ? companyData.homePage[key].imageUrl : null
+      };
+    }
+  }
+
+  // =========================
+  // Step 8: 배송정보(deliveryInfo) (Levenshte인)
+  // =========================
+  let deliveryPageMatch = null;
+  let deliveryPageDistance = Infinity;
+  if (companyData.deliveryInfo) {
+    for (let question in companyData.deliveryInfo) {
+      const normalizedQuestion = normalizeSentence(question);
+      const distance = levenshtein.get(normalizedUserInput, normalizedQuestion);
+      if (distance < deliveryPageDistance) {
+        deliveryPageDistance = distance;
+        deliveryPageMatch = companyData.deliveryInfo[question];
+      }
+    }
+  }
+  const deliveryPageThreshold = 8;
+  if (deliveryPageMatch && deliveryPageDistance <= deliveryPageThreshold) {
+    return {
+      text: deliveryPageMatch.description,
+      videoHtml: null,
+      description: deliveryPageMatch.description,
+      imageUrl: deliveryPageMatch.imageUrl ? deliveryPageMatch.imageUrl : null
+    };
+  }
+
+  // =========================
+  // Step 9: homePage (Levenshte인)
+  // =========================
+  let homePageMatch = null;
+  let homePageDistance = Infinity;
+  if (companyData.homePage) {
+    for (let question in companyData.homePage) {
+      // "회원 가입 방법"은 위에서 처리
+      if (question.includes("회원 가입 방법")) continue;
+
+      const normalizedQuestion = normalizeSentence(question);
+      const distance = levenshtein.get(normalizedUserInput, normalizedQuestion);
+      if (distance < homePageDistance) {
+        homePageDistance = distance;
+        homePageMatch = companyData.homePage[question];
+      }
+    }
+  }
+  const homePageThreshold = 6;
+  if (homePageMatch && homePageDistance <= homePageThreshold) {
+    return {
+      text: homePageMatch.description,
+      videoHtml: null,
+      description: homePageMatch.description,
+      imageUrl: homePageMatch.imageUrl ? homePageMatch.imageUrl : null
+    };
+  }
+
+  // =========================
+  // Step 10: covering / biz 최종 비교
+  // =========================
+  let bestMatch = null;
+  let bestDistance = Infinity;
+  let bestCategory = null;
+
+  if (companyData.covering) {
+    for (let question in companyData.covering) {
+      const normalizedQuestion = normalizeSentence(question);
+      const distance = levenshtein.get(normalizedUserInput, normalizedQuestion);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestMatch = companyData.covering[question];
+        bestCategory = "covering";
+      }
+    }
+  }
+  if (companyData.biz) {
+    for (let question in companyData.biz) {
+      const normalizedQuestion = normalizeSentence(question);
+      const distance = levenshtein.get(normalizedUserInput, normalizedQuestion);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestMatch = companyData.biz[question];
+        bestCategory = "biz";
+      }
+    }
+  }
+  const finalThreshold = 7;
+  if (bestDistance > finalThreshold) {
+    return {
+      text: "질문을 이해하지 못했어요. 좀더 자세히 입력 해주시겠어요",
+      videoHtml: null,
+      description: null,
+      imageUrl: null
+    };
+  }
+  if (bestCategory === "covering") {
+    const videoUrl = bestMatch.videoUrl ? bestMatch.videoUrl : null;
+    return {
+      text: bestMatch.answer,
+      videoHtml: videoUrl
+        ? `<iframe width="100%" height="auto" src="${videoUrl}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`
+        : null,
+      description: null,
+      imageUrl: null
+    };
+  } else if (bestCategory === "biz") {
+    return {
+      text: bestMatch.description + " " + getAdditionalBizComment(),
+      videoHtml: null,
+      description: bestMatch.description,
+      imageUrl: null
+    };
+  }
+
+  // 기본 fallback
+  return {
+    text: "알 수 없는 오류가 발생했습니다.",
+    videoHtml: null,
+    description: null,
+    imageUrl: null
+  };
 }
 
-// ======== GPT API 연동 (fallback) ========
-async function getGPT3TurboResponse(userInput) {
-  try {
-    const response = await axios.post(
-      OPEN_URL,
-      {
-        model: FINETUNED_MODEL,  // 파인 튜닝 모델명 or 기본 gpt-3.5-turbo
-        messages: [
-          { role: "system", content: "You are a helpful assistant." },
-          { role: "user", content: userInput }
-        ]
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${API_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-    const gptAnswer = response.data.choices[0].message.content;
-    return gptAnswer;
-  } catch (error) {
-    console.error("Error calling OpenAI:", error.message);
-    return "GPT fallback response";
-  }
-}
 
 /**
- * 메인 챗봇 로직
- * 1) companyData.json 매칭
- * 2) Cafe24 주문/배송 로직
- * 3) 매칭 안 되면 GPT fallback
+ * 챗봇 메인 로직 함수 (async)  
+ * 1. 회원 아이디 조회  
+ * 2. "주문번호" → 주문번호 목록  
+ * 3. "배송번호" → 최신 주문의 배송번호  
+ * 4. 주문번호가 포함된 경우 → 해당 주문번호의 배송 상세 정보 조회  
+ * 5. "주문정보 확인" → 주문번호 목록 제공  
+ * 6. "주문상태 확인"/"배송 상태 확인"/"배송정보 확인"(주문번호 미포함) → 최신 주문의 배송 상세 정보 조회  
+ * 7. 그 외 → 기본 응답
  */
 async function findAnswer(userInput, memberId) {
   const normalizedUserInput = normalizeSentence(userInput);
 
-  // A. 먼저 companyData.json 내에서 매칭 시도
-  const matched = findMatchingAnswer(normalizedUserInput);
-  if (matched) {
-    // 동영상 URL이 있으면 iframe HTML을 만들어서 videoHtml 필드로 넘길 수도 있음
-    // 여기서는 예시로 text만 넘기고, videoHtml은 null 처리
-    return {
-      text: matched.text,
-      videoHtml: matched.videoUrl ? `<iframe width="560" height="315" src="${matched.videoUrl}" frameborder="0" allowfullscreen></iframe>` : null,
-      description: null,
-      imageUrl: matched.imageUrl || null
-    };
-  }
-
-  // B. 기존 Cafe24 주문/배송 로직
   // 1. 회원 아이디 조회
   if (
     normalizedUserInput.includes("내 아이디") ||
@@ -292,7 +654,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 2. "주문번호"라고 입력하면 → 해당 멤버의 주문번호 목록
+  // 2. "주문번호"라고 입력하면 → 해당 멤버의 주문번호 목록 제공
   if (normalizedUserInput.includes("주문번호")) {
     if (memberId && memberId !== "null") {
       try {
@@ -316,7 +678,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 3. "배송번호"라고 입력하면 → 최신 주문의 배송번호
+  // 3. "배송번호"라고 입력하면 → 최신 주문의 배송번호 제공
   if (normalizedUserInput.includes("배송번호")) {
     if (memberId && memberId !== "null") {
       try {
@@ -345,7 +707,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 4. 주문번호 패턴(예: 20240920-0000167)이 포함된 경우
+  // 4. 질문에 주문번호(패턴: 20240920-0000167)가 포함된 경우 → 해당 주문번호의 배송 상세 정보 조회
   if (containsOrderNumber(normalizedUserInput)) {
     if (memberId && memberId !== "null") {
       try {
@@ -383,7 +745,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 5. "주문정보 확인"
+  // 5. "주문정보 확인" → 주문번호 목록 제공
   if (normalizedUserInput.includes("주문정보 확인")) {
     if (memberId && memberId !== "null") {
       try {
@@ -402,7 +764,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 6. "주문상태 확인", "배송 상태 확인", "배송정보 확인" (주문번호 미포함)
+  // 6. "주문상태 확인", "배송 상태 확인", 또는 "배송정보 확인"(주문번호 미포함) → 최신 주문의 배송 상세 정보 제공
   if (
     (normalizedUserInput.includes("주문상태 확인") ||
       normalizedUserInput.includes("배송 상태 확인") ||
@@ -440,7 +802,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // C. 모든 조건 미매칭 → GPT fallback
+  // 7. 그 외 → 기본 응답
   return {
     text: "질문을 이해하지 못했어요. 좀더 자세히 입력 해주시겠어요",
     videoHtml: null,
@@ -449,7 +811,36 @@ async function findAnswer(userInput, memberId) {
   };
 }
 
-// ======== Express 라우팅 ========
+// server.js의 getGPT3TurboResponse 예시
+async function getGPT3TurboResponse(userInput) {
+  try {
+    const response = await axios.post(
+      OPEN_URL,
+      {
+        model: process.env.FINETUNED_MODEL || "gpt-3.5-turbo",
+        messages: [
+          { role: "system", content: "You are a helpful assistant." },
+          { role: "user", content: userInput }
+        ]
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${process.env.API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    const gptAnswer = response.data.choices[0].message.content;
+    return gptAnswer;
+  } catch (error) {
+    console.error("Error calling OpenAI:", error.message);
+    return "GPT fallback response";
+  }
+}
+
+/**
+ * Express 라우팅
+ */
 app.post("/chat", async (req, res) => {
   const userInput = req.body.message;
   const memberId = req.body.memberId; // 프론트에서 전달한 회원 ID
@@ -458,7 +849,6 @@ app.post("/chat", async (req, res) => {
   }
   try {
     const answer = await findAnswer(userInput, memberId);
-    // 만약 answer.text가 특정 문구(예: "질문을 이해하지 못했어요")라면, GPT에게 fallback
     if (answer.text === "질문을 이해하지 못했어요. 좀더 자세히 입력 해주시겠어요") {
       const gptResponse = await getGPT3TurboResponse(userInput);
       return res.json({
@@ -468,7 +858,6 @@ app.post("/chat", async (req, res) => {
         imageUrl: null
       });
     }
-    // 매칭되었거나, Cafe24 로직에서 처리된 경우
     return res.json(answer);
   } catch (error) {
     console.error("Error in /chat endpoint:", error.message);
@@ -481,7 +870,7 @@ app.post("/chat", async (req, res) => {
   }
 });
 
-// ======== 서버 시작 전 MongoDB에서 토큰 로드 후 실행 ========
+// 서버 시작 전 MongoDB에서 토큰 로드 후 실행
 (async function initialize() {
   await getTokensFromDB();
   const PORT = process.env.PORT || 5000;

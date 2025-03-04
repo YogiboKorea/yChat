@@ -586,24 +586,24 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 5. "주문정보 확인"
-  if (normalizedUserInput.includes("주문정보 확인")) {
-    if (memberId && memberId !== "null") {
-      try {
-        const orderResult = await getOrderShippingInfo(memberId);
-        if (orderResult.orders && orderResult.orders.length > 0) {
-          const orderNumbers = orderResult.orders.map(o => o.order_id).join(", ");
-          return { text: `고객님의 주문번호는 ${orderNumbers} 입니다.` };
-        } else {
-          return { text: "주문 정보가 없습니다." };
-        }
-      } catch (error) {
-        return { text: "주문 정보를 가져오는 데 오류가 발생했습니다." };
-      }
-    } else {
-      return { text: "회원 정보가 확인되지 않습니다. 로그인 후 다시 시도해주세요." };
-    }
-  }
+  // // 5. "주문정보 확인"
+  // if (normalizedUserInput.includes("주문정보 확인")) {
+  //   if (memberId && memberId !== "null") {
+  //     try {
+  //       const orderResult = await getOrderShippingInfo(memberId);
+  //       if (orderResult.orders && orderResult.orders.length > 0) {
+  //         const orderNumbers = orderResult.orders.map(o => o.order_id).join(", ");
+  //         return { text: `고객님의 주문번호는 ${orderNumbers} 입니다.` };
+  //       } else {
+  //         return { text: "주문 정보가 없습니다." };
+  //       }
+  //     } catch (error) {
+  //       return { text: "주문 정보를 가져오는 데 오류가 발생했습니다." };
+  //     }
+  //   } else {
+  //     return { text: "회원 정보가 확인되지 않습니다. 로그인 후 다시 시도해주세요." };
+  //   }
+  // }
 
   // 6. "주문상태 확인", "배송 상태 확인", "배송정보 확인" (주문번호 미포함)
   if (

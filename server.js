@@ -487,11 +487,10 @@ if (
   return {
     text: `
       상담사와 연결을 도와드릴게요.<br>
-      <a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank" style="color:blue;text-decoration:underline;background:#58b5ca;color:#fff;">
+      <a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank" style="border-radius:10px;float:left; padding-inline:10px;background:#58b5ca;color:#fff;">
         카카오플친 연결하기
       </a>
-      <br>
-      <a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank" style="color:blue;text-decoration:underline;background:#58b5ca;color:#fff;">
+      <a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank" style="border-radius:10px;padding-inline:10px;float:left;background:#58b5ca;color:#fff;">
         네이버톡톡 연결하기
       </a>
     `,

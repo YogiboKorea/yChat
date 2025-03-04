@@ -1,3 +1,4 @@
+// server.js
 const express = require("express");
 const bodyParser = require("body-parser");
 const fs = require("fs");
@@ -174,7 +175,6 @@ async function getShipmentDetail(orderId) {
         // 다른 코드 처리 (예: DB나 매핑 테이블을 사용하거나, 기본적으로 코드만 표시)
         shipment.shipping_company_name = shipment.shipping_company_code || "정보 없음";
       }
-
       return shipment;
     } else {
       throw new Error("배송 정보를 찾을 수 없습니다.");
@@ -212,13 +212,13 @@ function summarizeHistory(text, maxLength = 300) {
 
 /**
  * 챗봇 메인 로직 함수 (async)  
- * 1. 회원 아이디 조회
- * 2. "주문번호" → 주문번호 목록
- * 3. "배송번호" → 최신 주문의 배송번호
- * 4. 주문번호가 포함 → 해당 주문번호의 배송 상세 정보(status, tracking_no, 택배사)
- * 5. "주문정보 확인" → 주문번호 목록
- * 6. "주문상태 확인"/"배송 상태 확인"/"배송정보 확인"(주문번호 미포함) → 최신 주문의 배송 상세 정보
- * 7. 기본 응답
+ * 1. 회원 아이디 조회  
+ * 2. "주문번호" → 주문번호 목록  
+ * 3. "배송번호" → 최신 주문의 배송번호  
+ * 4. 주문번호가 포함된 경우 → 해당 주문번호의 배송 상세 정보 조회  
+ * 5. "주문정보 확인" → 주문번호 목록 제공  
+ * 6. "주문상태 확인"/"배송 상태 확인"/"배송정보 확인"(주문번호 미포함) → 최신 주문의 배송 상세 정보 조회  
+ * 7. 그 외 → 기본 응답
  */
 async function findAnswer(userInput, memberId) {
   const normalizedUserInput = normalizeSentence(userInput);
@@ -247,7 +247,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 2. "주문번호"라고 입력하면 → 해당 멤버의 주문번호 목록
+  // 2. "주문번호"라고 입력하면 → 해당 멤버의 주문번호 목록 제공
   if (normalizedUserInput.includes("주문번호")) {
     if (memberId && memberId !== "null") {
       try {
@@ -271,7 +271,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 3. "배송번호"라고 입력하면 → 최신 주문의 배송번호
+  // 3. "배송번호"라고 입력하면 → 최신 주문의 배송번호 제공
   if (normalizedUserInput.includes("배송번호")) {
     if (memberId && memberId !== "null") {
       try {
@@ -300,7 +300,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 4. 주문번호가 포함된 경우 → 해당 주문번호의 배송 상세 정보 조회
+  // 4. 질문에 주문번호(패턴: 20240920-0000167)가 포함된 경우 → 해당 주문번호의 배송 상세 정보 조회
   if (containsOrderNumber(normalizedUserInput)) {
     if (memberId && memberId !== "null") {
       try {
@@ -357,7 +357,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 6. "주문상태 확인", "배송 상태 확인", 또는 "배송정보 확인" (주문번호 미포함)
+  // 6. "주문상태 확인", "배송 상태 확인", 또는 "배송정보 확인"(주문번호 미포함) → 최신 주문의 배송 상세 정보 제공
   if (
     (normalizedUserInput.includes("주문상태 확인") ||
       normalizedUserInput.includes("배송 상태 확인") ||
@@ -376,9 +376,7 @@ async function findAnswer(userInput, memberId) {
             let trackingNo = shipment.tracking_no || "정보 없음";
             let shippingCompany = shipment.shipping_company_name || "정보 없음";
             return {
-              text: `
-              고객님이 주문하신 상품의 경우 ${shippingCompany} 통해 배송완료 되었으며 ${trackingNo} 운송장 번호로 확인 가능하십니다.
-              `,
+              text: `고객님이 주문하신 상품의 경우 ${shippingCompany}를 통해 배송완료 되었으며, 운송장 번호는 ${trackingNo} 입니다.`,
               videoHtml: null,
               description: null,
               imageUrl: null,
@@ -414,7 +412,7 @@ async function getGPT3TurboResponse(userInput) {
     const response = await axios.post(
       OPEN_URL,
       {
-        model: "gpt-3.5-turbo",
+        model: process.env.FINETUNED_MODEL || "gpt-3.5-turbo",
         messages: [
           { role: "system", content: "You are a helpful assistant." },
           { role: "user", content: userInput }

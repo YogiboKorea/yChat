@@ -143,8 +143,8 @@ async function getOrderShippingInfo(memberId) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`;
   const params = {
     member_id: memberId,
-    start_date: '2024-08-31',
-    end_date: '2024-10-31',
+    start_date: '2025-01-31',
+    end_date: '2025-03-05',
     limit: 10,
   };
   try {

@@ -598,7 +598,7 @@ if (
         const shipment = await getShipmentDetail(targetOrderNumber);
         if (shipment) {
           // shipment.status 값에 따라 문구 매핑 (없으면 기본 shipment.status 또는 "정보 없음")
-          const statusText = orderStatusMap[shipment.status] || shipment.status || "정보 없음";
+          const statusText = orderStatusMap[shipment.status] || shipment.status || "배송 완료";
           const trackingNo = shipment.tracking_no || "정보 없음";
           const shippingCompany = shipment.shipping_company_name || "정보 없음";
           return {
@@ -629,45 +629,54 @@ if (
   }
   
   // 주문번호 없이 주문상태 확인인 경우의 처리
-  if (
-    (normalizedUserInput.includes("주문상태 확인") ||
-      normalizedUserInput.includes("배송 상태 확인") ||
-      normalizedUserInput.includes("상품 배송정보") ||
-      normalizedUserInput.includes("배송상태 확인") ||
-      normalizedUserInput.includes("주문정보 확인") ||
-      normalizedUserInput.includes("배송정보 확인")) &&
-    !containsOrderNumber(normalizedUserInput)
-  ) {
-    if (memberId && memberId !== "null") {
-      try {
-        const orderData = await getOrderShippingInfo(memberId);
-        if (orderData.orders && orderData.orders.length > 0) {
-          const targetOrder = orderData.orders[0];
-          const shipment = await getShipmentDetail(targetOrder.order_id);
-          if (shipment) {
-            const statusText = orderStatusMap[shipment.status] || shipment.status || "정보 없음";
-            const trackingNo = shipment.tracking_no || "정보 없음";
-            const shippingCompany = shipment.shipping_company_name || "정보 없음";
-            return {
-              text: `고객님이 주문하신 상품의 경우 ${shippingCompany}를 통해 ${statusText} 되었으며, 운송장 번호는 ${trackingNo} 입니다.`,
-              videoHtml: null,
-              description: null,
-              imageUrl: null,
-            };
+  // 주문번호 없이 주문상태 확인인 경우의 처리
+if (
+  (normalizedUserInput.includes("주문상태 확인") ||
+    normalizedUserInput.includes("배송 상태 확인") ||
+    normalizedUserInput.includes("상품 배송정보") ||
+    normalizedUserInput.includes("배송상태 확인") ||
+    normalizedUserInput.includes("주문정보 확인") ||
+    normalizedUserInput.includes("배송정보 확인")) &&
+  !containsOrderNumber(normalizedUserInput)
+) {
+  if (memberId && memberId !== "null") {
+    try {
+      const orderData = await getOrderShippingInfo(memberId);
+      if (orderData.orders && orderData.orders.length > 0) {
+        const targetOrder = orderData.orders[0];
+        const shipment = await getShipmentDetail(targetOrder.order_id);
+        if (shipment) {
+          const statusText = orderStatusMap[shipment.status] || shipment.status || "정보 없음";
+          const trackingNo = shipment.tracking_no || "정보 없음";
+          const shippingCompanyName = shipment.shipping_company_name || "정보 없음";
+          // 배송사 URL이 있으면 HTML <a> 태그로 링크 생성
+          let shippingCompanyText;
+          if (shipment.shipping_company_url) {
+            shippingCompanyText = `<a href="${shipment.shipping_company_url}" target="_blank">${shippingCompanyName}</a>`;
           } else {
-            return { text: "해당 주문에 대한 배송 상세 정보를 찾을 수 없습니다." };
+            shippingCompanyText = shippingCompanyName;
           }
-        } else {
-          return { text: "고객님의 주문 정보가 없습니다." };
-        }
-      } catch (error) {
-        return { text: "고객님의 주문 정보를 찾을 수 없습니다. 주문 여부를 확인해주세요." };
-      }
-    } else {
-      return { text: "회원 정보가 확인되지 않습니다. 로그인 후 다시 시도해주세요." };
-    }
-  }
   
+          return {
+            text: `고객님이 주문하신 상품의 경우 ${shippingCompanyText}를 통해 ${statusText} 되었으며, 운송장 번호는 ${trackingNo} 입니다.`,
+            videoHtml: null,
+            description: null,
+            imageUrl: null,
+          };
+        } else {
+          return { text: "해당 주문에 대한 배송 상세 정보를 찾을 수 없습니다." };
+        }
+      } else {
+        return { text: "고객님의 주문 정보가 없습니다." };
+      }
+    } catch (error) {
+      return { text: "고객님의 주문 정보를 찾을 수 없습니다. 주문 여부를 확인해주세요." };
+    }
+  } else {
+    return { text: "회원 정보가 확인되지 않습니다. 로그인 후 다시 시도해주세요." };
+  }
+}
+
 
   /************************************************
    * C. 최종 fallback

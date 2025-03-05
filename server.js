@@ -156,61 +156,6 @@ async function getOrderShippingInfo(memberId) {
   }
 }
 
-const orderStatusMap = {
-  "N00": "입금전",
-  "N10": "상품준비중",
-  "N20": "배송준비중",
-  "N21": "배송대기",
-  "N22": "배송보류",
-  "N30": "배송중",
-  "N40": "배송완료",
-  "N50": "구매확정",
-  "C00": "취소신청",
-  "C10": "취소접수 - 관리자",
-  "C11": "취소접수거부 - 관리자",
-  "C34": "취소처리중 - 환불전",
-  "C35": "취소처리중 - 환불완료",
-  "C36": "취소처리중 - 환불보류",
-  "C40": "취소완료",
-  "C41": "취소 완료 - 환불전",
-  "C42": "취소 완료 - 환불요청중",
-  "C43": "취소 완료 - 환불보류",
-  "C47": "입금전취소 - 구매자",
-  "C48": "입금전취소 - 자동취소",
-  "C49": "입금전취소 - 관리자",
-  "R00": "반품신청",
-  "R10": "반품접수",
-  "R11": "반품 접수 거부",
-  "R12": "반품보류",
-  "R13": "반품접수 - 수거완료(자동)",
-  "R20": "반품 수거 완료",
-  "R30": "반품처리중 - 수거전",
-  "R31": "반품처리중 - 수거완료",
-  "R34": "반품처리중 - 환불전",
-  "R36": "반품처리중 - 환불보류",
-  "R40": "반품완료 - 환불완료",
-  "R41": "반품완료 - 환불전",
-  "R42": "반품완료 - 환불요청중",
-  "R43": "반품완료 - 환불보류",
-  "E00": "교환신청",
-  "E10": "교환접수",
-  "N01": "교환접수 - 교환상품",
-  "N02": "입금전 - 카드결제대기",
-  "N03": "교환접수 - 카드결제대기",
-  "E11": "교환접수거부",
-  "E12": "교환보류",
-  "E13": "교환접수 - 수거완료(자동)",
-  "E20": "교환준비",
-  "E30": "교환처리중 - 수거전",
-  "E31": "교환처리중 - 수거완료",
-  "E32": "교환처리중 - 입금전",
-  "E33": "교환처리중 - 입금완료",
-  "E34": "교환처리중 - 환불전",
-  "E35": "교환처리중 - 환불완료",
-  "E36": "교환처리중 - 환불보류",
-  "E40": "교환완료",
-};
-
 async function getShipmentDetail(orderId) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders/${orderId}/shipments`;
   const params = { shop_no: 1 };
@@ -651,13 +596,13 @@ async function findAnswer(userInput, memberId) {
             let shippingCompany = shipment.shipping_company_name || "정보 없음";
     
             if (shippingCompany === "롯데 택배") {
-              shippingCompany = `<a href="https://www.lotteglogis.com/home/reservation/tracking/index">${shippingCompany}<a>`;
+              shippingCompany = `<a href="https://www.lotteglogis.com/home/reservation/tracking/index">${shippingCompany}</a>`;
             } else if (shippingCompany === "경동 택배") {
               shippingCompany = `<a href="https://kdexp.com/index.do" target="_blank">${shippingCompany}</a>`;
             }
     
             return {
-              text: `고객님이 주문하신 상품의 경우 ${shippingCompany}를 통해 ${statusText} 이며, 운송장 번호는 ${trackingNo} 입니다.`,
+              text: `고객님께서 주문하신 상품은 ${shippingCompany}를 통해 ${statusText} 되었고, 운송장 번호는 ${trackingNo} 입니다. 택배사를 클릭하시면 배송 상세 정보를 확인하실 수 있습니다.`,
               videoHtml: null,
               description: null,
               imageUrl: null,

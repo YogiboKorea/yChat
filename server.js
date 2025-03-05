@@ -146,8 +146,8 @@ async function getOrderShippingInfo(memberId) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`;
   const params = {
     member_id: memberId,
-    start_date: '2025-02-01',
-    end_date: '2025-03-06',
+    start_date: '2024-08-31',
+    end_date: '2024-10-31',
     limit: 10,
   };
   try {
@@ -595,8 +595,8 @@ if (
     normalizedUserInput.includes("아이디 조회") ||
     normalizedUserInput.includes("아이디 알려줘")
   ) {
-    // memberId가 유효한 값이면 그대로 사용하고, 그렇지 않으면 "testid"를 사용합니다.
-    const userId = memberId && memberId !== "null" ? memberId : "eujin60";
+    // memberId가 유효하면 그대로 사용, 그렇지 않으면 "testid다"를 사용합니다.
+    const userId = memberId && memberId !== "null" ? memberId : "testid다";
     return {
       text: `안녕하세요 ${userId} 고객님, 궁금하신 사항을 남겨주세요.`,
       videoHtml: null,
@@ -606,7 +606,6 @@ if (
   }
 
   
-
   // 주문번호가 포함된 경우의 처리
   if (containsOrderNumber(normalizedUserInput)) {
     if (memberId && memberId !== "null") {

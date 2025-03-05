@@ -226,6 +226,9 @@ async function getGPT3TurboResponse(userInput) {
                 The representative product of Yogiibo is the Max
                 Please respond kindly to the customer as a spokesperson for the brand
                 Also, please answer in Korean
+                Brand Identity: "Yogi Bo", "Global", "Innovative", "Brand Story", "Core Values"
+                Product Features: "Bean Bag", "Furniture", "Comfort", "Modern", "Trendy", "Sleek"
+                Experience and Lifestyle: "Relaxation", "Lifestyle", "Customer-Centric", "Sensory", "Practical"
           `
           },
           { role: "user", content: userInput }

@@ -226,6 +226,9 @@ async function getGPT3TurboResponse(userInput) {
                 The representative product of Yogiibo is the Max
                 Please respond kindly to the customer as a spokesperson for the brand
                 Also, please answer in Korean
+                Yogibo is a lifestyle brand specializing in beanbag sofas and living accessories, and is a global 
+                brand that manufactures and sells healing and rest-related products such as body 
+                fillers, cushion accessories, aromatherapy, and character dolls as well as sofas.
                 Brand Identity: "Yogi Bo", "Global", "Innovative", "Brand Story", "Core Values"
                 Product Features: "Bean Bag", "Furniture", "Comfort", "Modern", "Trendy", "Sleek"
                 Experience and Lifestyle: "Relaxation", "Lifestyle", "Customer-Centric", "Sensory", "Practical"

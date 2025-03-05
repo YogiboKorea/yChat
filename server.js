@@ -141,10 +141,20 @@ async function apiRequest(method, url, data = {}, params = {}) {
 // ========== [5] Cafe24 주문/배송 관련 함수 ==========
 async function getOrderShippingInfo(memberId) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`;
+
+  // 오늘 날짜를 종료 날짜(end_date)로 설정 (YYYY-MM-DD 형식)
+  const today = new Date();
+  const end_date = today.toISOString().split('T')[0];
+
+  // 2주 전 날짜를 시작 날짜(start_date)로 설정 (YYYY-MM-DD 형식)
+  const twoWeeksAgo = new Date(today);
+  twoWeeksAgo.setDate(today.getDate() - 14);
+  const start_date = twoWeeksAgo.toISOString().split('T')[0];
+
   const params = {
     member_id: memberId,
-    start_date: '2025-01-31',
-    end_date: '2025-03-05',
+    start_date: start_date,
+    end_date: end_date,
     limit: 10,
   };
   try {

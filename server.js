@@ -645,15 +645,15 @@ if (
           const targetOrder = orderData.orders[0];
           const shipment = await getShipmentDetail(targetOrder.order_id);
           if (shipment) {
-            const statusText = orderStatusMap[shipment.status] || shipment.status || "정보 없음";
+            const statusText = orderStatusMap[shipment.status] || shipment.status || "배송완료";
             const trackingNo = shipment.tracking_no || "정보 없음";
             let shippingCompany = shipment.shipping_company_name || "정보 없음";
   
             // 배송사 이름에 따라 하이퍼링크 적용
             if (shippingCompany === "롯데 택배") {
-              shippingCompany = `<a href="https://www.lotteglogis.com/home/reservation/tracking/index" target="_blank">${shippingCompany}</a>`;
+              shippingCompany = `<div onclick="window.open('https://www.lotteglogis.com/home/reservation/tracking/index')">${shippingCompany}</div>`;
             } else if (shippingCompany === "경동 택배") {
-              shippingCompany = `<a href="https://www.kdexp.com" target="_blank">${shippingCompany}</a>`;
+              shippingCompany = `<a href="https://kdexp.com/index.do" target="_blank">${shippingCompany}</a>`;
             }
   
             return {

@@ -588,45 +588,49 @@ if (
       };
     }
   }
-
-  // 주문번호가 포함된 경우의 처리
-  if (containsOrderNumber(normalizedUserInput)) {
-    if (memberId && memberId !== "null") {
-      try {
-        const match = normalizedUserInput.match(/\d{8}-\d{7}/);
-        const targetOrderNumber = match ? match[0] : "";
-        const shipment = await getShipmentDetail(targetOrderNumber);
-        if (shipment) {
-          // shipment.status 값에 따라 문구 매핑 (없으면 기본 shipment.status 또는 "정보 없음")
-          const statusText = orderStatusMap[shipment.status] || shipment.status || "배송 완료";
-          const trackingNo = shipment.tracking_no || "정보 없음";
-          const shippingCompany = shipment.shipping_company_name || "정보 없음";
-          return {
-            text: `주문번호 ${targetOrderNumber}의 배송 상태는 ${statusText}이며, 송장번호는 ${trackingNo}, 택배사는 ${shippingCompany} 입니다.`,
-            videoHtml: null,
-            description: null,
-            imageUrl: null,
-          };
-        } else {
-          return {
-            text: "해당 주문번호에 대한 배송 정보를 찾을 수 없습니다.",
-            videoHtml: null,
-            description: null,
-            imageUrl: null,
-          };
-        }
-      } catch (error) {
+// 주문번호가 포함된 경우의 처리
+if (containsOrderNumber(normalizedUserInput)) {
+  if (memberId && memberId !== "null") {
+    try {
+      const match = normalizedUserInput.match(/\d{8}-\d{7}/);
+      const targetOrderNumber = match ? match[0] : "";
+      const shipment = await getShipmentDetail(targetOrderNumber);
+      if (shipment) {
+        // shipment 데이터와 상태값을 확인하기 위해 콘솔에 출력
+        console.log("Fetched shipment data:", shipment);
+        console.log("Shipment status:", shipment.status);
+        
+        // shipment.status 값에 따라 문구 매핑 (없으면 기본 shipment.status 또는 "정보 없음")
+        const statusText = orderStatusMap[shipment.status] || shipment.status || "배송 완료";
+        const trackingNo = shipment.tracking_no || "정보 없음";
+        const shippingCompany = shipment.shipping_company_name || "정보 없음";
         return {
-          text: "배송 정보를 확인하는 데 오류가 발생했습니다.",
+          text: `주문번호 ${targetOrderNumber}의 배송 상태는 ${statusText}이며, 송장번호는 ${trackingNo}, 택배사는 ${shippingCompany} 입니다.`,
+          videoHtml: null,
+          description: null,
+          imageUrl: null,
+        };
+      } else {
+        return {
+          text: "해당 주문번호에 대한 배송 정보를 찾을 수 없습니다.",
           videoHtml: null,
           description: null,
           imageUrl: null,
         };
       }
-    } else {
-      return { text: "회원 정보가 확인되지 않습니다. 로그인 후 다시 시도해주세요." };
+    } catch (error) {
+      return {
+        text: "배송 정보를 확인하는 데 오류가 발생했습니다.",
+        videoHtml: null,
+        description: null,
+        imageUrl: null,
+      };
     }
+  } else {
+    return { text: "회원 정보가 확인되지 않습니다. 로그인 후 다시 시도해주세요." };
   }
+}
+
   
   // 주문번호 없이 주문상태 확인인 경우의 처리
   if (
@@ -645,7 +649,7 @@ if (
           const targetOrder = orderData.orders[0];
           const shipment = await getShipmentDetail(targetOrder.order_id);
           if (shipment) {
-            const statusText = orderStatusMap[shipment.status] || shipment.status || "배송완료";
+            const statusText = orderStatusMap[shipment.status] || shipment.status || "";
             const trackingNo = shipment.tracking_no || "정보 없음";
             let shippingCompany = shipment.shipping_company_name || "정보 없음";
   

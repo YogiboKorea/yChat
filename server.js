@@ -145,7 +145,7 @@ async function apiRequest(method, url, data = {}, params = {}) {
 async function getOrderShippingInfo(memberId) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`;
   const params = {
-    member_id: memberId,
+    member_id: 'eujin60' ,
     start_date: '2024-08-31',
     end_date: '2024-10-31',
     limit: 10,
@@ -605,7 +605,7 @@ if (
     };
   }
 
-  
+
   // 주문번호가 포함된 경우의 처리
   if (containsOrderNumber(normalizedUserInput)) {
     if (memberId && memberId !== "null") {

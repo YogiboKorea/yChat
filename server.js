@@ -602,7 +602,7 @@ async function findAnswer(userInput, memberId) {
             }
     
             return {
-              text: `고객님께서 주문하신 상품은 ${shippingCompany}를 통해 ${statusText} 되었고, 운송장 번호는 ${trackingNo} 입니다. 택배사를 클릭하시면 배송 상세 정보를 확인하실 수 있습니다.`,
+              text: `고객님께서 주문하신 상품은 ${shippingCompany}를 통해 ${statusText} 이며, 운송장 번호는 ${trackingNo} 입니다. 택배사를 클릭하시면 배송 상세 정보를 확인하실 수 있습니다.`,
               videoHtml: null,
               description: null,
               imageUrl: null,

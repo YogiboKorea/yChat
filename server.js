@@ -652,7 +652,8 @@ if (containsOrderNumber(normalizedUserInput)) {
             const statusText = orderStatusMap[shipment.status] || shipment.status || "";
             const trackingNo = shipment.tracking_no || "정보 없음";
             let shippingCompany = shipment.shipping_company_name || "정보 없음";
-  
+            console.log("Shipment 전체 데이터:", shipment);
+            console.log("shipment.status 값:", shipment.status);
             // 배송사 이름에 따라 하이퍼링크 적용
             if (shippingCompany === "롯데 택배") {
               shippingCompany = `<a href="https://www.lotteglogis.com/home/reservation/tracking/index" target="_blank">${shippingCompany}</a>`;

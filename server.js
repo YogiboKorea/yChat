@@ -209,6 +209,7 @@ function containsOrderNumber(input) {
   return /\d{8}-\d{7}/.test(input);
 }
 
+
 // ========== [7] OpenAI GPT (fallback) - 맥락(컨텍스트) 주입 ==========
 async function getGPT3TurboResponse(userInput) {
   try {
@@ -220,11 +221,11 @@ async function getGPT3TurboResponse(userInput) {
           {
             role: "system",
             content: `
-              You are a helpful assistant for the "Yogibo" brand.
-              Yogibo is known for comfortable bean bag furniture and accessories.
-              Answer user questions in Korean, specifically about Yogibo products, shipping, and brand information.
-              If you are unsure or the question is out of scope, ask for clarification or provide a fallback response in Korean.
-              If you ask for an answer that goes against the request, you can check it through the customer center
+                You're a spokesperson for the Yogi Bo brand
+                Yogiibo is a brand known for its comfortable beanbag furniture.
+                The representative product of Yogiibo is the Max
+                Please respond kindly to the customer as a spokesperson for the brand
+                Also, please answer in Korean
           `
           },
           { role: "user", content: userInput }

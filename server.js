@@ -317,7 +317,6 @@ async function findAnswer(userInput, memberId) {
       pendingCoveringContext = false;
     }
   }
-
   if (
     normalizedUserInput.includes("커버링") &&
     normalizedUserInput.includes("방법") &&
@@ -326,9 +325,12 @@ async function findAnswer(userInput, memberId) {
     const coveringTypes2 = ["더블", "맥스", "프라임", "슬림", "미디", "미니", "팟", "드롭", "라운저", "피라미드"];
     const foundType = coveringTypes2.find(type => normalizedUserInput.includes(type));
     if (foundType) {
+      // 생성되는 key를 로그로 확인
       const key = `${foundType} 커버링 방법을 알고 싶어`;
+      console.log("커버링 key:", key);
       if (companyData.covering && companyData.covering[key]) {
         const videoUrl = companyData.covering[key].videoUrl;
+        console.log("videoUrl:", videoUrl);
         return {
           text: companyData.covering[key].answer,
           videoHtml: videoUrl
@@ -337,11 +339,13 @@ async function findAnswer(userInput, memberId) {
           description: null,
           imageUrl: null
         };
+      } else {
+        console.warn(`companyData.covering 에 "${key}" 키가 없습니다.`);
       }
     } else {
       pendingCoveringContext = true;
       return {
-        text: "어떤 커버링을 알고 싶으신가요? (맥스, 더블, 프라임, 슬림, 미니, etc.)",
+        text: "어떤 커버링을 알고 싶으신가요? (맥스, 더블, 프라임, 슬림, 미니 등)",
         videoHtml: null,
         description: null,
         imageUrl: null

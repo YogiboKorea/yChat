@@ -596,7 +596,7 @@ if (
     normalizedUserInput.includes("아이디 알려줘")
   ) {
     // memberId가 유효한 값이면 그대로 사용하고, 그렇지 않으면 "testid"를 사용합니다.
-    const userId = memberId && memberId !== "null" ? memberId : "testid";
+    const userId = memberId && memberId !== "null" ? memberId : "eujin60";
     return {
       text: `안녕하세요 ${userId} 고객님, 궁금하신 사항을 남겨주세요.`,
       videoHtml: null,

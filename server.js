@@ -632,54 +632,63 @@ if (containsOrderNumber(normalizedUserInput)) {
 }
 
   
-  // 주문번호 없이 주문상태 확인인 경우의 처리
-  if (
-    (normalizedUserInput.includes("주문상태 확인") ||
-      normalizedUserInput.includes("배송 상태 확인") ||
-      normalizedUserInput.includes("상품 배송정보") ||
-      normalizedUserInput.includes("배송상태 확인") ||
-      normalizedUserInput.includes("주문정보 확인") ||
-      normalizedUserInput.includes("배송정보 확인")) &&
-    !containsOrderNumber(normalizedUserInput)
-  ) {
-    if (memberId && memberId !== "null") {
-      try {
-        const orderData = await getOrderShippingInfo(memberId);
-        if (orderData.orders && orderData.orders.length > 0) {
-          const targetOrder = orderData.orders[0];
-          const shipment = await getShipmentDetail(targetOrder.order_id);
-          if (shipment) {
-            const statusText = orderStatusMap[shipment.status] || shipment.status || "";
-            const trackingNo = shipment.tracking_no || "정보 없음";
-            let shippingCompany = shipment.shipping_company_name || "정보 없음";
-            console.log("Shipment 전체 데이터:", shipment);
-            console.log("shipment.status 값:", shipment.status);
-            // 배송사 이름에 따라 하이퍼링크 적용
-            if (shippingCompany === "롯데 택배") {
-              shippingCompany = `<a href="https://www.lotteglogis.com/home/reservation/tracking/index" target="_blank">${shippingCompany}</a>`;
-            } else if (shippingCompany === "경동 택배") {
-              shippingCompany = `<a href="https://kdexp.com/index.do" target="_blank">${shippingCompany}</a>`;
-            }
-  
-            return {
-              text: `고객님이 주문하신 상품의 경우 ${shippingCompany}를 통해 ${statusText} 되었으며, 운송장 번호는 ${trackingNo} 입니다.`,
-              videoHtml: null,
-              description: null,
-              imageUrl: null,
-            };
-          } else {
-            return { text: "해당 주문에 대한 배송 상세 정보를 찾을 수 없습니다." };
-          }
-        } else {
-          return { text: "고객님의 주문 정보가 없습니다." };
-        }
-      } catch (error) {
-        return { text: "고객님의 주문 정보를 찾을 수 없습니다. 주문 여부를 확인해주세요." };
+ // 주문번호가 포함된 경우의 처리
+if (containsOrderNumber(normalizedUserInput)) {
+  if (memberId && memberId !== "null") {
+    try {
+      const match = normalizedUserInput.match(/\d{8}-\d{7}/);
+      const targetOrderNumber = match ? match[0] : "";
+      const shipment = await getShipmentDetail(targetOrderNumber);
+      if (shipment) {
+        // shipment 데이터 전체와 status 확인
+        console.log("Shipment 전체 데이터:", shipment);
+        console.log("shipment.status 값:", shipment.status);
+        console.log("shipment.items 값:", shipment.items);
+
+        // shipment.status가 없으면, items 배열의 첫 번째 객체의 status를 사용
+        const shipmentStatus =
+          shipment.status ||
+          (shipment.items && shipment.items.length > 0
+            ? shipment.items[0].status
+            : undefined);
+
+        // 새 매핑: standby -> 배송대기, shipping -> 배송중, shipped -> 배송완료
+        const itemStatusMap = {
+          standby: "배송대기",
+          shipping: "배송중",
+          shipped: "배송완료"
+        };
+
+        const statusText = itemStatusMap[shipmentStatus] || shipmentStatus || "배송 완료";
+        const trackingNo = shipment.tracking_no || "정보 없음";
+        const shippingCompany = shipment.shipping_company_name || "정보 없음";
+        return {
+          text: `주문번호 ${targetOrderNumber}의 배송 상태는 ${statusText}이며, 송장번호는 ${trackingNo}, 택배사는 ${shippingCompany} 입니다.`,
+          videoHtml: null,
+          description: null,
+          imageUrl: null,
+        };
+      } else {
+        return {
+          text: "해당 주문번호에 대한 배송 정보를 찾을 수 없습니다.",
+          videoHtml: null,
+          description: null,
+          imageUrl: null,
+        };
       }
-    } else {
-      return { text: "회원 정보가 확인되지 않습니다. 로그인 후 다시 시도해주세요." };
+    } catch (error) {
+      return {
+        text: "배송 정보를 확인하는 데 오류가 발생했습니다.",
+        videoHtml: null,
+        description: null,
+        imageUrl: null,
+      };
     }
+  } else {
+    return { text: "회원 정보가 확인되지 않습니다. 로그인 후 다시 시도해주세요." };
   }
+}
+
   
   
 

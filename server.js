@@ -146,8 +146,8 @@ async function getOrderShippingInfo(memberId) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`;
   const params = {
     member_id: memberId,
-    start_date: '2024-08-31',
-    end_date: '2024-10-31',
+    start_date: '2025-02-01',
+    end_date: '2025-03-06',
     limit: 10,
   };
   try {
@@ -566,28 +566,46 @@ if (
    ************************************************/
 
   // 1. 회원 아이디 조회
+  // if (
+  //   normalizedUserInput.includes("내 아이디") ||
+  //   normalizedUserInput.includes("나의 아이디") ||
+  //   normalizedUserInput.includes("아이디 조회") ||
+  //   normalizedUserInput.includes("아이디 알려줘")
+  // ) {
+  //   if (memberId && memberId !== "null") {
+  //     return {
+  //       text: `안녕하세요 ${memberId} 고객님, 궁금하신 사항을 남겨주세요.`,
+  //       videoHtml: null,
+  //       description: null,
+  //       imageUrl: null,
+  //     };
+  //   } else {
+  //     return {
+  //       text: "안녕하세요 고객님, 궁금하신 사항을 남겨주세요.",
+  //       videoHtml: null,
+  //       description: null,
+  //       imageUrl: null,
+  //     };
+  //   }
+  // }
+
   if (
     normalizedUserInput.includes("내 아이디") ||
     normalizedUserInput.includes("나의 아이디") ||
     normalizedUserInput.includes("아이디 조회") ||
     normalizedUserInput.includes("아이디 알려줘")
   ) {
-    if (memberId && memberId !== "eujin60") {
-      return {
-        text: `안녕하세요 ${memberId} 고객님, 궁금하신 사항을 남겨주세요.`,
-        videoHtml: null,
-        description: null,
-        imageUrl: null,
-      };
-    } else {
-      return {
-        text: "안녕하세요 고객님, 궁금하신 사항을 남겨주세요.",
-        videoHtml: null,
-        description: null,
-        imageUrl: null,
-      };
-    }
+    // memberId가 유효한 값이면 그대로 사용하고, 그렇지 않으면 "testid"를 사용합니다.
+    const userId = memberId && memberId !== "null" ? memberId : "testid";
+    return {
+      text: `안녕하세요 ${userId} 고객님, 궁금하신 사항을 남겨주세요.`,
+      videoHtml: null,
+      description: null,
+      imageUrl: null,
+    };
   }
+
+  
 
   // 주문번호가 포함된 경우의 처리
   if (containsOrderNumber(normalizedUserInput)) {
@@ -651,7 +669,7 @@ if (
   
             // 배송사 이름에 따라 하이퍼링크 적용
             if (shippingCompany === "롯데 택배") {
-              shippingCompany = `<div onclick="window.open('https://www.lotteglogis.com/home/reservation/tracking/index')">${shippingCompany}</div>`;
+              shippingCompany = `<div onclick="window.open('https://www.lotteglogis.com/home/reservation/tracking/index')">${shippingCompany}<div>`;
             } else if (shippingCompany === "경동 택배") {
               shippingCompany = `<a href="https://kdexp.com/index.do" target="_blank">${shippingCompany}</a>`;
             }

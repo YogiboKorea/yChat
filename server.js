@@ -589,11 +589,12 @@ async function findAnswer(userInput, memberId) {
             const itemStatusMap = {
               standby: "배송대기",
               shipping: "배송중",
-              shipped: "배송완료"
+              shipped: "배송완료",
+              shipready:"배송준비중",
             };
             const statusText = itemStatusMap[shipmentStatus] || shipmentStatus || "배송완료";
-            const trackingNo = shipment.tracking_no || "정보 없음";
-            let shippingCompany = shipment.shipping_company_name || "정보 없음";
+            const trackingNo = shipment.tracking_no || "등록전";
+            let shippingCompany = shipment.shipping_company_name || "등록전";
     
             if (shippingCompany === "롯데 택배") {
               shippingCompany = `<a href="https://www.lotteglogis.com/home/reservation/tracking/index">${shippingCompany}</a>`;
@@ -602,7 +603,7 @@ async function findAnswer(userInput, memberId) {
             }
     
             return {
-              text: `고객님께서 주문하신 상품은 ${shippingCompany}를 통해 ${statusText} 이며, 운송장 번호는 ${trackingNo} 입니다. 택배사를 클릭하시면 배송 상세 정보를 확인하실 수 있습니다.`,
+              text: `고객님께서 주문하신 상품은 ${shippingCompany}를 통해 ${statusText} 이며, 운송장 번호는 ${trackingNo} 입니다.`,
               videoHtml: null,
               description: null,
               imageUrl: null,

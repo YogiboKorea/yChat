@@ -628,7 +628,7 @@ async function findAnswer(userInput, memberId) {
             return { text: "해당 주문에 대한 배송 상세 정보를 찾을 수 없습니다." };
           }
         } else {
-          return { text: "고객님의 주문 정보가 없습니다." };
+          return { text: " 고객님께서 주문하신 내역을 현재 확인할 수 없습니다. 번거로우시겠지만, 자세한 확인을 원하시면 고객센터로 문의해 주시면 신속하게 도와드리겠습니다." };
         }
       } catch (error) {
         return { text: "고객님의 주문 정보를 찾을 수 없습니다. 주문 여부를 확인해주세요." };

@@ -651,7 +651,7 @@ if (
   
             // 배송사 이름에 따라 하이퍼링크 적용
             if (shippingCompany === "롯데 택배") {
-              shippingCompany = `<div onclick="window.open('https://www.lotteglogis.com/home/reservation/tracking/index')">${shippingCompany}<div>`;
+              shippingCompany = `<a href="https://www.lotteglogis.com/home/reservation/tracking/index" target="_blank">${shippingCompany}</a>`;
             } else if (shippingCompany === "경동 택배") {
               shippingCompany = `<a href="https://kdexp.com/index.do" target="_blank">${shippingCompany}</a>`;
             }

@@ -535,7 +535,8 @@ async function findAnswer(userInput, memberId) {
           const itemStatusMap = {
             standby: "배송대기",
             shipping: "배송중",
-            shipped: "배송완료"
+            shipped: "배송완료",
+            shipready:"배송준비중" 
           };
           const statusText = itemStatusMap[shipmentStatus] || shipmentStatus || "배송 완료";
           const trackingNo = shipment.tracking_no || "정보 없음";

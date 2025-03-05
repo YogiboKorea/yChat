@@ -572,7 +572,7 @@ if (
     normalizedUserInput.includes("아이디 조회") ||
     normalizedUserInput.includes("아이디 알려줘")
   ) {
-    if (memberId && memberId !== "null") {
+    if (memberId && memberId !== "eujin60") {
       return {
         text: `안녕하세요 ${memberId} 고객님, 궁금하신 사항을 남겨주세요.`,
         videoHtml: null,

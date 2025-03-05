@@ -651,13 +651,13 @@ async function findAnswer(userInput, memberId) {
             let shippingCompany = shipment.shipping_company_name || "정보 없음";
     
             if (shippingCompany === "롯데 택배") {
-              shippingCompany = `<div onclick="window.open('https://www.lotteglogis.com/home/reservation/tracking/index')">${shippingCompany}<div>`;
+              shippingCompany = `<a href="https://www.lotteglogis.com/home/reservation/tracking/index">${shippingCompany}<a>`;
             } else if (shippingCompany === "경동 택배") {
               shippingCompany = `<a href="https://kdexp.com/index.do" target="_blank">${shippingCompany}</a>`;
             }
     
             return {
-              text: `고객님이 주문하신 상품의 경우 ${shippingCompany}를 통해 ${statusText} 되었으며, 운송장 번호는 ${trackingNo} 입니다.`,
+              text: `고객님이 주문하신 상품의 경우 ${shippingCompany}를 통해 ${statusText} 이며, 운송장 번호는 ${trackingNo} 입니다.`,
               videoHtml: null,
               description: null,
               imageUrl: null,

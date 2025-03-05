@@ -43,7 +43,6 @@ app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "public")));
 
 // ========== [2] JSON 데이터 로드 (FAQ/제품 안내 등) ==========
-// companyData.json 파일에 covering, washing, sizeInfo, biz, goodsInfo 등 추가 가능
 const companyDataPath = path.join(__dirname, "json", "companyData.json");
 const companyData = JSON.parse(fs.readFileSync(companyDataPath, "utf-8"));
 
@@ -110,7 +109,6 @@ async function refreshAccessToken() {
 }
 
 // ========== [4] Cafe24 API 요청 함수 ==========
-
 async function apiRequest(method, url, data = {}, params = {}) {
   console.log(`Request: ${method} ${url}`);
   console.log("Params:", params);
@@ -141,13 +139,12 @@ async function apiRequest(method, url, data = {}, params = {}) {
 }
 
 // ========== [5] Cafe24 주문/배송 관련 함수 ==========
-
 async function getOrderShippingInfo(memberId) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`;
   const params = {
     member_id: memberId,
-    start_date: '2025-02-01',
-    end_date: '2025-03-05',
+    start_date: '2024-08-31',
+    end_date: '2024-10-31',
     limit: 10,
   };
   try {
@@ -158,6 +155,7 @@ async function getOrderShippingInfo(memberId) {
     throw error;
   }
 }
+
 const orderStatusMap = {
   "N00": "입금전",
   "N10": "상품준비중",
@@ -245,7 +243,6 @@ async function getShipmentDetail(orderId) {
 }
 
 // ========== [6] 기타 유틸 함수 ==========
-
 function normalizeSentence(sentence) {
   return sentence
     .replace(/[?!！？]/g, "")
@@ -263,13 +260,11 @@ function getAdditionalBizComment() {
   return comments[Math.floor(Math.random() * comments.length)];
 }
 
-
 function containsOrderNumber(input) {
   return /\d{8}-\d{7}/.test(input);
 }
 
 // ========== [7] OpenAI GPT (fallback) - 맥락(컨텍스트) 주입 ==========
-
 async function getGPT3TurboResponse(userInput) {
   try {
     const response = await axios.post(
@@ -301,13 +296,11 @@ async function getGPT3TurboResponse(userInput) {
     return gptAnswer;
   } catch (error) {
     console.error("Error calling OpenAI:", error.message);
-    // 에러 시에도 한국어 메시지
     return "요기보 챗봇 오류가 발생했습니다. 다시 시도 부탁드립니다.";
   }
 }
 
 // ========== [8] 메인 로직: findAnswer ==========
-
 async function findAnswer(userInput, memberId) {
   const normalizedUserInput = normalizeSentence(userInput);
 
@@ -435,15 +428,11 @@ async function findAnswer(userInput, memberId) {
   // (4) 비즈 안내
   const bizKeywords = ["스탠다드", "프리미엄", "프리미엄 플러스", "비즈"];
   if (bizKeywords.some(bw => normalizedUserInput.includes(bw))) {
-    // 어떤 비즈인지 구분
-    // "스탠다드" / "프리미엄" / "프리미엄 플러스" 중 어떤 단어가 들어있는지 확인
     let matchedType = null;
     if (normalizedUserInput.includes("스탠다드")) matchedType = "스탠다드";
     else if (normalizedUserInput.includes("프리미엄 플러스")) matchedType = "프리미엄 플러스";
     else if (normalizedUserInput.includes("프리미엄")) matchedType = "프리미엄";
-    // 만약 "비즈"만 포함하고 구체적 타입은 없을 수도 있으니 처리
     if (matchedType) {
-      // "스탠다드 비즈 에 대해 알고 싶어" 같은 JSON 키
       const key = `${matchedType} 비즈 에 대해 알고 싶어`;
       if (companyData.biz && companyData.biz[key]) {
         return {
@@ -453,7 +442,6 @@ async function findAnswer(userInput, memberId) {
           imageUrl: null
         };
       } else {
-        // JSON에 해당 키가 없으면 fallback
         return {
           text: `${matchedType} 비즈 정보가 없습니다. (JSON에 등록되어 있는지 확인해주세요)`,
           videoHtml: null,
@@ -462,7 +450,6 @@ async function findAnswer(userInput, memberId) {
         };
       }
     } else {
-      // "비즈"라는 단어만 포함되었을 때
       return {
         text: "어떤 비즈가 궁금하신가요? (스탠다드, 프리미엄, 프리미엄 플러스 등)",
         videoHtml: null,
@@ -471,7 +458,6 @@ async function findAnswer(userInput, memberId) {
       };
     }
   }
-
 
   // (6) goodsInfo (유사도 매칭)
   if (companyData.goodsInfo) {
@@ -517,33 +503,33 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
- // (8) asInfo 정보
-if (companyData.asInfoList) {
-  let asInfoMatch = null;
-  let asInfoDist = Infinity;
-  for (let question in companyData.asInfo) {
-    const distance = levenshtein.get(normalizedUserInput, normalizeSentence(question));
-    if (distance < asInfoDist) {
-      asInfoDist = distance;
-      asInfoMatch = companyData.asInfo[question];
+  // (8) asInfo 정보
+  if (companyData.asInfoList) {
+    let asInfoMatch = null;
+    let asInfoDist = Infinity;
+    for (let question in companyData.asInfo) {
+      const distance = levenshtein.get(normalizedUserInput, normalizeSentence(question));
+      if (distance < asInfoDist) {
+        asInfoDist = distance;
+        asInfoMatch = companyData.asInfo[question];
+      }
+    }
+    if (asInfoDist < 8 && asInfoMatch) {
+      return {
+        text: asInfoMatch.description,
+        videoHtml: null,
+        description: null,
+        imageUrl: null
+      };
     }
   }
-  if (asInfoDist < 8 && asInfoMatch) {
-    return {
-      text: asInfoMatch.description,
-      videoHtml: null,
-      description: null,
-      imageUrl: null
-    };
-  }
-}
 
-if (
-  normalizedUserInput.includes("상담사 연결") ||
-  normalizedUserInput.includes("상담원 연결")
-) {
-  return {
-    text: `
+  if (
+    normalizedUserInput.includes("상담사 연결") ||
+    normalizedUserInput.includes("상담원 연결")
+  ) {
+    return {
+      text: `
       상담사와 연결을 도와드릴게요.<br>
       <a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank" style="border-radius:10px;float:left; padding-inline:10px;background:#58b5ca;color:#fff;line-height:7px;">
         카카오플친 연결하기
@@ -551,16 +537,13 @@ if (
       <a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank" style="border-radius:10px;padding-inline:10px;float:left;background:#58b5ca;color:#fff;">
         네이버톡톡 연결하기
       </a>
-    `,
-    videoHtml: null,
-    description: null,
-    imageUrl: null
-  };
-}
+      `,
+      videoHtml: null,
+      description: null,
+      imageUrl: null
+    };
+  }
 
-
-
-    
   /************************************************
    * B. Café24 주문/배송 로직
    ************************************************/
@@ -589,8 +572,6 @@ if (
     }
   }
 
- 
-  
   // 주문번호가 포함된 경우의 처리
   if (containsOrderNumber(normalizedUserInput)) {
     if (memberId && memberId !== "null") {
@@ -599,25 +580,18 @@ if (
         const targetOrderNumber = match ? match[0] : "";
         const shipment = await getShipmentDetail(targetOrderNumber);
         if (shipment) {
-          // shipment 데이터 전체와 status 확인
           console.log("Shipment 전체 데이터:", shipment);
           console.log("shipment.status 값:", shipment.status);
           console.log("shipment.items 값:", shipment.items);
-
-          // shipment.status가 없으면, items 배열의 첫 번째 객체의 status를 사용
+          // shipment.status 값이 없다면, items 배열의 첫 번째 요소의 status 값을 사용
           const shipmentStatus =
-            shipment.status ||
-            (shipment.items && shipment.items.length > 0
-              ? shipment.items[0].status
-              : undefined);
-
-          // 새 매핑: standby -> 배송대기, shipping -> 배송중, shipped -> 배송완료
+            shipment.status || (shipment.items && shipment.items.length > 0 ? shipment.items[0].status : undefined);
+          // standby: 배송대기, shipping: 배송중, shipped: 배송완료
           const itemStatusMap = {
             standby: "배송대기",
             shipping: "배송중",
             shipped: "배송완료"
           };
-
           const statusText = itemStatusMap[shipmentStatus] || shipmentStatus || "배송 완료";
           const trackingNo = shipment.tracking_no || "정보 없음";
           const shippingCompany = shipment.shipping_company_name || "정보 없음";
@@ -647,7 +621,6 @@ if (
       return { text: "회원 정보가 확인되지 않습니다. 로그인 후 다시 시도해주세요." };
     }
   }
-
   
   // 주문번호 없이 주문상태 확인인 경우의 처리
   if (
@@ -666,17 +639,23 @@ if (
           const targetOrder = orderData.orders[0];
           const shipment = await getShipmentDetail(targetOrder.order_id);
           if (shipment) {
-            const statusText = orderStatusMap[shipment.status] || shipment.status || "";
+            const shipmentStatus =
+              shipment.status || (shipment.items && shipment.items.length > 0 ? shipment.items[0].status : undefined);
+            const itemStatusMap = {
+              standby: "배송대기",
+              shipping: "배송중",
+              shipped: "배송완료"
+            };
+            const statusText = itemStatusMap[shipmentStatus] || shipmentStatus || "배송완료";
             const trackingNo = shipment.tracking_no || "정보 없음";
             let shippingCompany = shipment.shipping_company_name || "정보 없음";
-  
-            // 배송사 이름에 따라 하이퍼링크 적용
+    
             if (shippingCompany === "롯데 택배") {
-              shippingCompany = `<a href="https://www.lotteglogis.com/home/reservation/tracking/index" target="_blank">${shippingCompany}</a>`;
+              shippingCompany = `<div onclick="window.open('https://www.lotteglogis.com/home/reservation/tracking/index')">${shippingCompany}<div>`;
             } else if (shippingCompany === "경동 택배") {
               shippingCompany = `<a href="https://kdexp.com/index.do" target="_blank">${shippingCompany}</a>`;
             }
-  
+    
             return {
               text: `고객님이 주문하신 상품의 경우 ${shippingCompany}를 통해 ${statusText} 되었으며, 운송장 번호는 ${trackingNo} 입니다.`,
               videoHtml: null,
@@ -697,8 +676,6 @@ if (
     }
   }
   
-  
-
   /************************************************
    * C. 최종 fallback
    ************************************************/
@@ -711,7 +688,6 @@ if (
 }
 
 // ========== [9] /chat 라우팅 ==========
-
 app.post("/chat", async (req, res) => {
   const userInput = req.body.message;
   const memberId = req.body.memberId; // 프론트에서 전달한 회원 ID
@@ -743,7 +719,6 @@ app.post("/chat", async (req, res) => {
 });
 
 // ========== [10] 서버 시작 ==========
-
 (async function initialize() {
   await getTokensFromDB();  // MongoDB에서 토큰 불러오기
   const PORT = process.env.PORT || 5000;

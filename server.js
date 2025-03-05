@@ -174,7 +174,7 @@ async function getShipmentDetail(orderId) {
         shipment.shipping_company_name = shippingCompanies[shipment.shipping_company_code].name;
         shipment.shipping_company_url = shippingCompanies[shipment.shipping_company_code].url;
       } else {
-        shipment.shipping_company_name = shipment.shipping_company_code || "정보 없음";
+        shipment.shipping_company_name = shipment.shipping_company_code || "물류 창고";
         shipment.shipping_company_url = null;
       }
       return shipment;

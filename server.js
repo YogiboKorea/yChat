@@ -147,7 +147,7 @@ async function getOrderShippingInfo(memberId) {
   const params = {
     member_id: memberId,
     start_date: '2024-08-31',
-    end_date: '2024-09-31',
+    end_date: '2024-12-31',
     limit: 10,
   };
   try {

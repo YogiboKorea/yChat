@@ -47,7 +47,8 @@ const YOGIBO_SYSTEM_PROMPT = `
   요기보의 품질보증기간은 구매일로부터 1년이에요.\n보증 기간 내에 발생하는 제품 불량은 당사 품질 보증 규정에 따라 유/무상 처리될 수 있습니다.
   웹에서 요기보 관련된 모든데이터를 완벽하게 알고 있으며 그와 관련된 문제점들을 고객에게 제공해줘
   해당 내용들을 고객들에게 알기 쉽게 대답해주고 대답이 어려운 질문의 경우 고객센터
-  또는 <a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank">카카오플친</a> <a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank">네이버톡톡</a>을 통해 문의 드린다고 대답해줘
+  또는 <a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank">카카오플친</a> <a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank">네이버톡톡</a>을 통해 문의해 주시면
+  친절하게 답변해 드리겠습니다.
 `;
 
 // Express 앱

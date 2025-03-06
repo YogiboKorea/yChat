@@ -602,6 +602,7 @@ async function findAnswer(userInput, memberId) {
   // (11) 주문번호 없이 주문상태 확인 처리
   if (
     (normalizedUserInput.includes("주문상태 확인") ||
+      normalizedUserInput.includes("배송") ||
       normalizedUserInput.includes("배송 상태 확인") ||
       normalizedUserInput.includes("상품 배송정보") ||
       normalizedUserInput.includes("배송상태 확인") ||
@@ -701,7 +702,7 @@ app.post("/chat", async (req, res) => {
   }
 });
 
-
+//대화 내용 적용 로직
 app.get('/chatConnet', async (req, res) => {
   const client = new MongoClient(MONGODB_URI);
   try {
@@ -712,13 +713,13 @@ app.get('/chatConnet', async (req, res) => {
 
     // 새로운 Excel 워크북과 워크시트 생성
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Conversation Logs');
+    const worksheet = workbook.addWorksheet('ConversationList');
 
     // 워크시트 컬럼 헤더 설정
     worksheet.columns = [
-      { header: 'Member ID', key: 'memberId', width: 15 },
-      { header: 'Date', key: 'date', width: 15 },
-      { header: 'Conversation', key: 'conversation', width: 50 },
+      { header: '회원아이디', key: 'memberId', width: 15 },
+      { header: '날짜', key: 'date', width: 15 },
+      { header: '대화내용', key: 'conversation', width: 50 },
     ];
 
     // 각 문서마다 한 행씩 추가 (conversation 배열은 JSON 문자열로 변환)

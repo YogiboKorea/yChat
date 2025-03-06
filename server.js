@@ -14,7 +14,6 @@ const levenshtein = require("fast-levenshtein");
 require("dotenv").config();
 
 // ========== [1] 환경변수 및 기본 설정 ==========
-
 let accessToken = process.env.ACCESS_TOKEN || 'pPhbiZ29IZ9kuJmZ3jr15C';
 let refreshToken = process.env.REFRESH_TOKEN || 'CMLScZx0Bh3sIxlFTHDeMD';
 const CAFE24_CLIENT_ID = process.env.CAFE24_CLIENT_ID;
@@ -29,10 +28,52 @@ const CAFE24_API_VERSION = process.env.CAFE24_API_VERSION || '2024-06-01';
 
 // **Yogibo 브랜드 맥락(시스템 프롬프트)**
 const YOGIBO_SYSTEM_PROMPT = `
-You are a helpful assistant for the "Yogibo" brand.
-Yogibo is known for comfortable bean bag furniture and accessories.
-Answer user questions specifically about Yogibo products, shipping, and brand information.
-If you are unsure or the question is out of scope, ask for clarification or provide a fallback response.
+당신은 [요기보]의 공식 고객 지원 챗봇입니다.  
+당신의 역할은 고객이 자주 묻는 질문(FAQ)에 대해 친절하고 정확한 답변을 제공하는 것입니다.  
+**중요:** FAQ 관련 질문에 대해서는 JSON 코드에 등록된 데이터를 우선적으로 반영하여 응답해 주세요.
+
+### ✅ [응답 스타일 및 규칙]
+1. **명확하고 간결한 답변 제공**:  
+   - 불필요한 정보를 줄이고, 핵심 내용만 전달하세요.  
+   - 고객이 추가 질문을 할 수 있도록 유도하는 문장을 사용할 수 있습니다.  
+   - 필요한 경우 관련된 링크를 제공하세요.  
+
+2. **친절하고 공손한 어조 유지**:  
+   - 고객의 감정을 고려하여 예의 바른 표현을 사용하세요.  
+   - 예시: "도와드리겠습니다!" / "이런 문제를 겪으셨군요. 해결 방법을 안내해 드릴게요."  
+
+3. **기업의 정책 준수**:  
+   - 반품, 교환, 배송, 회원가입 등의 공식 정책을 기반으로 답변하세요.  
+   - 잘못된 정보를 줄 경우, 정확한 내용을 전달하고 필요 시 고객센터 문의를 유도하세요.  
+
+4. **일관된 응답 패턴 유지**:  
+   - 예를 들어,  
+     **고객 질문**: "배송은 얼마나 걸리나요?"  
+     **챗봇 응답**: "보통 2~3일 정도 소요됩니다. 보다 정확한 배송 일정은 주문 조회 페이지에서 확인하실 수 있습니다. [주문 조회하기](링크)"  
+
+5. **FAQ 우선 처리**:  
+   - 고객의 질문이 FAQ에 해당하면, 먼저 JSON 코드에 등록된 데이터를 참조하여 답변하세요.  
+   - 등록된 JSON 데이터가 없을 경우에만 다른 로직이나 GPT 기반 응답을 사용하세요.
+
+6. **FAQ 외 질문 처리**:  
+   - FAQ에 포함되지 않는 질문의 경우, "더 궁금한 사항은 고객센터(📞 1234-5678)로 문의해 주세요!" 와 같이 안내하세요.  
+
+7. **부적절한 요청 대응**:  
+   - 제공할 수 없는 정보나 비속어 사용 시, 정중하게 안내하고 대화를 종료하세요.  
+   - 예시: "죄송합니다. 해당 요청은 도와드릴 수 없습니다. 다른 문의사항이 있으시면 고객센터로 연락해 주세요."  
+
+### 📌 [특정 FAQ 예시]
+1. **배송 관련**:  
+   - "배송은 평균적으로 2~3일 소요됩니다. 배송 상태는 [주문 조회하기](링크)에서 확인하세요."  
+
+2. **환불 및 교환**:  
+   - "반품은 제품 수령 후 7일 이내 가능합니다. 자세한 절차는 [반품 안내](링크)를 참고해 주세요."  
+
+3. **회원가입 및 계정**:  
+   - "비밀번호를 잊으셨나요? [비밀번호 재설정하기](링크)에서 쉽게 변경하실 수 있습니다."  
+
+4. **기타 문의**:  
+   - "더 궁금한 사항이 있으시면 고객센터(📞 1234-5678)로 문의해 주세요!"  
 `;
 
 // Express 앱
@@ -141,16 +182,11 @@ async function apiRequest(method, url, data = {}, params = {}) {
 // ========== [5] Cafe24 주문/배송 관련 함수 ==========
 async function getOrderShippingInfo(memberId) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`;
-
-  // 오늘 날짜를 종료 날짜(end_date)로 설정 (YYYY-MM-DD 형식)
   const today = new Date();
   const end_date = today.toISOString().split('T')[0];
-
-  // 2주 전 날짜를 시작 날짜(start_date)로 설정 (YYYY-MM-DD 형식)
   const twoWeeksAgo = new Date(today);
   twoWeeksAgo.setDate(today.getDate() - 14);
   const start_date = twoWeeksAgo.toISOString().split('T')[0];
-
   const params = {
     member_id: memberId,
     start_date: start_date,
@@ -173,13 +209,11 @@ async function getShipmentDetail(orderId) {
     const response = await apiRequest("GET", API_URL, {}, params);
     if (response.shipments && response.shipments.length > 0) {
       const shipment = response.shipments[0];
-
       // 배송사 코드에 따른 이름과 링크 매핑
       const shippingCompanies = {
         "0019": { name: "롯데 택배", url: "https://www.lotteglogis.com/home/reservation/tracking/index" },
         "0039": { name: "경동 택배", url: "https://kdexp.com/index.do" }
       };
-
       if (shippingCompanies[shipment.shipping_company_code]) {
         shipment.shipping_company_name = shippingCompanies[shipment.shipping_company_code].name;
         shipment.shipping_company_url = shippingCompanies[shipment.shipping_company_code].url;
@@ -205,22 +239,50 @@ function normalizeSentence(sentence) {
     .trim();
 }
 
-function getAdditionalBizComment() {
-  const comments = [
-    "추가로 궁금하신 사항이 있으시면 언제든 말씀해주세요.",
-    "이 정보가 도움이 되길 바랍니다.",
-    "더 자세한 정보가 필요하시면 문의해 주세요.",
-    "고객님의 선택에 도움이 되었으면 좋겠습니다."
-  ];
-  return comments[Math.floor(Math.random() * comments.length)];
-}
-
 function containsOrderNumber(input) {
   return /\d{8}-\d{7}/.test(input);
 }
 
+// 유사도 매칭 함수 (FAQ, homePage, asInfo 등)
+function fuzzyMatch(data, input, threshold) {
+  let bestMatch = null;
+  let bestDist = Infinity;
+  for (let question in data) {
+    const dist = levenshtein.get(input, normalizeSentence(question));
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestMatch = data[question];
+    }
+  }
+  return bestDist < threshold ? bestMatch : null;
+}
 
-// ========== [7] OpenAI GPT (fallback) - 맥락(컨텍스트) 주입 ==========
+// 배송 정보 메시지 포맷 함수
+function formatShipmentMessage(shipment, orderNumber = null) {
+  const shipmentStatus = shipment.status || (shipment.items && shipment.items.length > 0 ? shipment.items[0].status : undefined);
+  const itemStatusMap = {
+    standby: "배송대기",
+    shipping: "배송중",
+    shipped: "배송완료",
+    shipready: "배송준비중"
+  };
+  const statusText = itemStatusMap[shipmentStatus] || shipmentStatus || "배송 완료";
+  const trackingNo = shipment.tracking_no || "정보 없음";
+  let shippingCompany = shipment.shipping_company_name || "정보 없음";
+  shippingCompany = formatShippingCompany(shippingCompany);
+  return orderNumber
+    ? `주문번호 ${orderNumber}의 배송 상태는 ${statusText}이며, 송장번호는 ${trackingNo}, 택배사는 ${shippingCompany} 입니다.`
+    : `고객님께서 주문하신 상품은 ${shippingCompany}를 통해 ${statusText} 이며, 운송장 번호는 ${trackingNo} 입니다.`;
+}
+
+function formatShippingCompany(company) {
+  if (company === "롯데 택배") {
+    return `<a href="https://www.lotteglogis.com/home/reservation/tracking/index">${company}</a>`;
+  } else if (company === "경동 택배") {
+    return `<a href="https://kdexp.com/index.do" target="_blank">${company}</a>`;
+  }
+  return company;
+}
 async function getGPT3TurboResponse(userInput) {
   try {
     const response = await axios.post(
@@ -228,17 +290,7 @@ async function getGPT3TurboResponse(userInput) {
       {
         model: FINETUNED_MODEL,
         messages: [
-          {
-            role: "system",
-            content: `
-              You are an expert specializing in the Yogiibo brand and have all 
-              the information about Yogiibo. Yogiibo is a beanbag company and if
-              you have any questions that are difficult for you to answer, please connect me to the customer center
-              The representative product is 맥스 Max and it's a global brand company. 
-              It sells sofa/body pillow products, and its flagship products include Max and Support
-              Please answer the information in Korean
-          `
-          },
+          { role: "system", content: YOGIBO_SYSTEM_PROMPT },
           { role: "user", content: userInput }
         ]
       },
@@ -275,16 +327,14 @@ async function findAnswer(userInput, memberId) {
       "메이트": "메이트"
     };
     for (let key in washingMap) {
-      if (normalizedUserInput.includes(key)) {
-        if (companyData.washing && companyData.washing[key]) {
-          pendingWashingContext = false;
-          return {
-            text: companyData.washing[key].description,
-            videoHtml: null,
-            description: null,
-            imageUrl: null
-          };
-        }
+      if (normalizedUserInput.includes(key) && companyData.washing && companyData.washing[key]) {
+        pendingWashingContext = false;
+        return {
+          text: companyData.washing[key].description,
+          videoHtml: null,
+          description: null,
+          imageUrl: null
+        };
       }
     }
     pendingWashingContext = false;
@@ -295,11 +345,7 @@ async function findAnswer(userInput, memberId) {
       imageUrl: null
     };
   }
-
-  if (
-    normalizedUserInput.includes("세탁방법") ||
-    (normalizedUserInput.includes("세탁") && normalizedUserInput.includes("방법"))
-  ) {
+  if (normalizedUserInput.includes("세탁방법") || (normalizedUserInput.includes("세탁") && normalizedUserInput.includes("방법"))) {
     pendingWashingContext = true;
     return {
       text: "어떤 커버(제품) 세탁 방법이 궁금하신가요? (요기보, 줄라, 럭스, 모듀, 메이트 등)",
@@ -309,45 +355,18 @@ async function findAnswer(userInput, memberId) {
     };
   }
 
-  // (2) 커버링 방법 맥락 처리
-  if (pendingCoveringContext) {
+  // (2) 커버링 방법 처리 (pendingCoveringContext 및 "커버링" 키워드)
+  if (pendingCoveringContext || (normalizedUserInput.includes("커버링") && normalizedUserInput.includes("방법") && !normalizedUserInput.includes("주문"))) {
     const coveringTypes = ["더블", "맥스", "프라임", "슬림", "미디", "미니", "팟", "드롭", "라운저", "피라미드"];
-    if (coveringTypes.includes(normalizedUserInput)) {
-      const key = `${normalizedUserInput} 커버링 방법을 알고 싶어`;
+    const foundType = coveringTypes.find(type => normalizedUserInput.includes(type));
+    if (foundType) {
+      const key = `${foundType} 커버링 방법을 알고 싶어`;
       if (companyData.covering && companyData.covering[key]) {
         const videoUrl = companyData.covering[key].videoUrl;
         pendingCoveringContext = false;
         return {
           text: companyData.covering[key].answer,
-          videoHtml: videoUrl
-            ? `<iframe width="100%" height="auto" src="${videoUrl}" frameborder="0" allowfullscreen></iframe>`
-            : null,
-          description: null,
-          imageUrl: null
-        };
-      }
-      pendingCoveringContext = false;
-    }
-  }
-  if (
-    normalizedUserInput.includes("커버링") &&
-    normalizedUserInput.includes("방법") &&
-    !normalizedUserInput.includes("주문")
-  ) {
-    const coveringTypes2 = ["더블", "맥스", "프라임", "슬림", "미디", "미니", "팟", "드롭", "라운저", "피라미드"];
-    const foundType = coveringTypes2.find(type => normalizedUserInput.includes(type));
-    if (foundType) {
-      // 생성되는 key를 로그로 확인
-      const key = `${foundType} 커버링 방법을 알고 싶어`;
-      console.log("커버링 key:", key);
-      if (companyData.covering && companyData.covering[key]) {
-        const videoUrl = companyData.covering[key].videoUrl;
-        console.log("videoUrl:", videoUrl);
-        return {
-          text: companyData.covering[key].answer,
-          videoHtml: videoUrl
-            ? `<iframe width="100%" height="auto" src="${videoUrl}" frameborder="0" allowfullscreen></iframe>`
-            : null,
+          videoHtml: videoUrl ? `<iframe width="100%" height="auto" src="${videoUrl}" frameborder="0" allowfullscreen></iframe>` : null,
           description: null,
           imageUrl: null
         };
@@ -367,10 +386,7 @@ async function findAnswer(userInput, memberId) {
 
   // (3) 사이즈 안내
   const sizeTypes = ["더블", "맥스", "프라임", "슬림", "미디", "미니", "팟", "드롭", "라운저", "피라미드"];
-  if (
-    normalizedUserInput.includes("사이즈") ||
-    normalizedUserInput.includes("크기")
-  ) {
+  if (normalizedUserInput.includes("사이즈") || normalizedUserInput.includes("크기")) {
     for (let sizeType of sizeTypes) {
       if (normalizedUserInput.includes(sizeType)) {
         const key = sizeType + " 사이즈 또는 크기.";
@@ -420,43 +436,27 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // (6) goodsInfo (유사도 매칭)
+  // (5) goodsInfo 유사도 매칭
   if (companyData.goodsInfo) {
-    let bestGoodsMatch = null;
-    let bestGoodsDistance = Infinity;
-    for (let question in companyData.goodsInfo) {
-      const distance = levenshtein.get(normalizedUserInput, normalizeSentence(question));
-      if (distance < bestGoodsDistance) {
-        bestGoodsDistance = distance;
-        bestGoodsMatch = companyData.goodsInfo[question];
-      }
-    }
-    if (bestGoodsDistance < 6 && bestGoodsMatch) {
+    const goodsMatch = fuzzyMatch(companyData.goodsInfo, normalizedUserInput, 6);
+    if (goodsMatch) {
       return {
-        text: Array.isArray(bestGoodsMatch.description)
-          ? bestGoodsMatch.description.join("\n")
-          : bestGoodsMatch.description,
+        text: Array.isArray(goodsMatch.description)
+          ? goodsMatch.description.join("\n")
+          : goodsMatch.description,
         videoHtml: null,
         description: null,
-        imageUrl: bestGoodsMatch.imageUrl || null
+        imageUrl: goodsMatch.imageUrl || null
       };
     }
   }
 
-  // (7) homePage 등
+  // (6) homePage 유사도 매칭
   if (companyData.homePage) {
-    let bestHomeMatch = null;
-    let bestHomeDist = Infinity;
-    for (let question in companyData.homePage) {
-      const distance = levenshtein.get(normalizedUserInput, normalizeSentence(question));
-      if (distance < bestHomeDist) {
-        bestHomeDist = distance;
-        bestHomeMatch = companyData.homePage[question];
-      }
-    }
-    if (bestHomeDist < 5 && bestHomeMatch) {
+    const homeMatch = fuzzyMatch(companyData.homePage, normalizedUserInput, 5);
+    if (homeMatch) {
       return {
-        text: bestHomeMatch.description,
+        text: homeMatch.description,
         videoHtml: null,
         description: null,
         imageUrl: null
@@ -464,20 +464,12 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // (8) asInfo 정보
-  if (companyData.asInfoList) {
-    let asInfoMatch = null;
-    let asInfoDist = Infinity;
-    for (let question in companyData.asInfo) {
-      const distance = levenshtein.get(normalizedUserInput, normalizeSentence(question));
-      if (distance < asInfoDist) {
-        asInfoDist = distance;
-        asInfoMatch = companyData.asInfo[question];
-      }
-    }
-    if (asInfoDist < 8 && asInfoMatch) {
+  // (7) asInfo 유사도 매칭
+  if (companyData.asInfo) {
+    const asMatch = fuzzyMatch(companyData.asInfo, normalizedUserInput, 8);
+    if (asMatch) {
       return {
-        text: asInfoMatch.description,
+        text: asMatch.description,
         videoHtml: null,
         description: null,
         imageUrl: null
@@ -485,17 +477,15 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  if (
-    normalizedUserInput.includes("상담사 연결") ||
-    normalizedUserInput.includes("상담원 연결")
-  ) {
+  // (8) 상담사 연결
+  if (normalizedUserInput.includes("상담사 연결") || normalizedUserInput.includes("상담원 연결")) {
     return {
       text: `
       상담사와 연결을 도와드릴게요.<br>
-      <a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank" style="border-radius:10px;float:left; padding-inline:10px;background:#58b5ca;color:#fff;line-height:7px;">
+      <a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank" style="border-radius:10px; float:left; padding-inline:10px; background:#58b5ca; color:#fff; line-height:7px;">
         카카오플친 연결하기
       </a>
-      <a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank" style="border-radius:10px;padding-inline:10px;float:left;background:#58b5ca;color:#fff;">
+      <a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank" style="border-radius:10px; padding-inline:10px; float:left; background:#58b5ca; color:#fff;">
         네이버톡톡 연결하기
       </a>
       `,
@@ -509,31 +499,20 @@ async function findAnswer(userInput, memberId) {
    * B. Café24 주문/배송 로직
    ************************************************/
 
-  // 1. 회원 아이디 조회
-  if (
-    normalizedUserInput.includes("내 아이디") ||
-    normalizedUserInput.includes("나의 아이디") ||
-    normalizedUserInput.includes("아이디 조회") ||
-    normalizedUserInput.includes("아이디 알려줘")
-  ) {
-    if (memberId && memberId !== "null") {
-      return {
-        text: `안녕하세요 ${memberId} 고객님, 궁금하신 사항을 남겨주세요.`,
-        videoHtml: null,
-        description: null,
-        imageUrl: null,
-      };
-    } else {
-      return {
-        text: "안녕하세요 고객님, 궁금하신 사항을 남겨주세요.",
-        videoHtml: null,
-        description: null,
-        imageUrl: null,
-      };
-    }
+  // (9) 회원 아이디 조회
+  if (normalizedUserInput.includes("내 아이디") || normalizedUserInput.includes("나의 아이디") ||
+      normalizedUserInput.includes("아이디 조회") || normalizedUserInput.includes("아이디 알려줘")) {
+    return {
+      text: memberId && memberId !== "null"
+              ? `안녕하세요 ${memberId} 고객님, 궁금하신 사항을 남겨주세요.`
+              : "안녕하세요 고객님, 궁금하신 사항을 남겨주세요.",
+      videoHtml: null,
+      description: null,
+      imageUrl: null
+    };
   }
 
-  // 주문번호가 포함된 경우의 처리
+  // (10) 주문번호 포함 처리
   if (containsOrderNumber(normalizedUserInput)) {
     if (memberId && memberId !== "null") {
       try {
@@ -541,24 +520,8 @@ async function findAnswer(userInput, memberId) {
         const targetOrderNumber = match ? match[0] : "";
         const shipment = await getShipmentDetail(targetOrderNumber);
         if (shipment) {
-          console.log("Shipment 전체 데이터:", shipment);
-          console.log("shipment.status 값:", shipment.status);
-          console.log("shipment.items 값:", shipment.items);
-          // shipment.status 값이 없다면, items 배열의 첫 번째 요소의 status 값을 사용
-          const shipmentStatus =
-            shipment.status || (shipment.items && shipment.items.length > 0 ? shipment.items[0].status : undefined);
-          // standby: 배송대기, shipping: 배송중, shipped: 배송완료
-          const itemStatusMap = {
-            standby: "배송대기",
-            shipping: "배송중",
-            shipped: "배송완료",
-            shipready:"배송준비중" 
-          };
-          const statusText = itemStatusMap[shipmentStatus] || shipmentStatus || "배송 완료";
-          const trackingNo = shipment.tracking_no || "정보 없음";
-          const shippingCompany = shipment.shipping_company_name || "정보 없음";
           return {
-            text: `주문번호 ${targetOrderNumber}의 배송 상태는 ${statusText}이며, 송장번호는 ${trackingNo}, 택배사는 ${shippingCompany} 입니다.`,
+            text: formatShipmentMessage(shipment, targetOrderNumber),
             videoHtml: null,
             description: null,
             imageUrl: null,
@@ -584,16 +547,13 @@ async function findAnswer(userInput, memberId) {
     }
   }
   
-  // 주문번호 없이 주문상태 확인인 경우의 처리
-  if (
-    (normalizedUserInput.includes("주문상태 확인") ||
-      normalizedUserInput.includes("배송 상태 확인") ||
-      normalizedUserInput.includes("상품 배송정보") ||
-      normalizedUserInput.includes("배송상태 확인") ||
-      normalizedUserInput.includes("주문정보 확인") ||
-      normalizedUserInput.includes("배송정보 확인")) &&
-    !containsOrderNumber(normalizedUserInput)
-  ) {
+  // (11) 주문번호 없이 주문 상태 확인 처리
+  if ((normalizedUserInput.includes("주문상태 확인") ||
+       normalizedUserInput.includes("배송 상태 확인") ||
+       normalizedUserInput.includes("상품 배송정보") ||
+       normalizedUserInput.includes("배송상태 확인") ||
+       normalizedUserInput.includes("주문정보 확인") ||
+       normalizedUserInput.includes("배송정보 확인")) && !containsOrderNumber(normalizedUserInput)) {
     if (memberId && memberId !== "null") {
       try {
         const orderData = await getOrderShippingInfo(memberId);
@@ -601,26 +561,8 @@ async function findAnswer(userInput, memberId) {
           const targetOrder = orderData.orders[0];
           const shipment = await getShipmentDetail(targetOrder.order_id);
           if (shipment) {
-            const shipmentStatus =
-              shipment.status || (shipment.items && shipment.items.length > 0 ? shipment.items[0].status : undefined);
-            const itemStatusMap = {
-              standby: "배송대기",
-              shipping: "배송중",
-              shipped: "배송완료",
-              shipready:"배송준비중",
-            };
-            const statusText = itemStatusMap[shipmentStatus] || shipmentStatus || "배송완료";
-            const trackingNo = shipment.tracking_no || "등록전";
-            let shippingCompany = shipment.shipping_company_name || "등록전";
-    
-            if (shippingCompany === "롯데 택배") {
-              shippingCompany = `<a href="https://www.lotteglogis.com/home/reservation/tracking/index">${shippingCompany}</a>`;
-            } else if (shippingCompany === "경동 택배") {
-              shippingCompany = `<a href="https://kdexp.com/index.do" target="_blank">${shippingCompany}</a>`;
-            }
-    
             return {
-              text: `고객님께서 주문하신 상품은 ${shippingCompany}를 통해 ${statusText} 이며, 운송장 번호는 ${trackingNo} 입니다.`,
+              text: formatShipmentMessage(shipment),
               videoHtml: null,
               description: null,
               imageUrl: null,
@@ -629,7 +571,7 @@ async function findAnswer(userInput, memberId) {
             return { text: "해당 주문에 대한 배송 상세 정보를 찾을 수 없습니다." };
           }
         } else {
-          return { text: " 고객님께서 주문하신 내역을 현재 확인할 수 없습니다. 번거로우시겠지만, 자세한 확인을 원하시면 고객센터로 문의해 주시면 신속하게 도와드리겠습니다." };
+          return { text: "고객님께서 주문하신 내역을 현재 확인할 수 없습니다. 자세한 확인은 고객센터로 문의해 주세요." };
         }
       } catch (error) {
         return { text: "고객님의 주문 정보를 찾을 수 없습니다. 주문 여부를 확인해주세요." };
@@ -657,7 +599,6 @@ app.post("/chat", async (req, res) => {
   if (!userInput) {
     return res.status(400).json({ error: "Message is required" });
   }
-
   try {
     const answer = await findAnswer(userInput, memberId);
     if (answer.text === "질문을 이해하지 못했어요. 좀더 자세히 입력 해주시겠어요") {

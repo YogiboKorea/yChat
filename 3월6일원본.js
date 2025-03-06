@@ -1,5 +1,5 @@
 /******************************************************
- * server.js - JSON FAQ + 주문배송 로직 + ChatGPT fallback + 대화 로그 저장
+ * server.js - JSON FAQ + 주문배송 로직 + ChatGPT fallback
  ******************************************************/
 
 const express = require("express");
@@ -14,6 +14,7 @@ const levenshtein = require("fast-levenshtein");
 require("dotenv").config();
 
 // ========== [1] 환경변수 및 기본 설정 ==========
+
 let accessToken = process.env.ACCESS_TOKEN || 'pPhbiZ29IZ9kuJmZ3jr15C';
 let refreshToken = process.env.REFRESH_TOKEN || 'CMLScZx0Bh3sIxlFTHDeMD';
 const CAFE24_CLIENT_ID = process.env.CAFE24_CLIENT_ID;
@@ -39,10 +40,13 @@ Yogibo(요기보)는 글로벌 라이프스타일 브랜드로, 빈백 소파 �
 착석감, 내구성, 복원력, 탄성 등에서 차이를 보이며, 수십만에서 수십억 개의 비즈가 사용되어 고객의 몸에 꼭 맞게 편안함을 제공해. 요기보는 국내 생산된 항균 비즈를 사용하여 유해세균 번식을 억제하고 있어.
 요기보 코리아는 2016년 11월에 한국에 공식 런칭하였으며, 현재 20개의 매장을 운영 중이고 국내 주요 백화점 및 복합쇼핑몰에 입점해 있어.
 제품의 품질보증기간은 구매일로부터 1년이며, 보증 기간 내 발생하는 제품 불량은 요기보의 품질보증 규정에 따라 유/무상으로 처리될 수 있어.
-웹상의 모든 요기보 관련 데이터를 완벽히 숙지하고 있으므로, 고객의 문의에 대해 정확하고 이해하기 쉽게 답변해줘. 
-만약 대답하기 어려운 질문이 있거나 추가 정보가 필요한 경우, 고객에게 <a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank">카카오플친</a> 또는 
-<a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank">네이버톡톡</a>을 통해 문의해달라고 안내해줘.
+웹상의 모든 요기보 관련 데이터를 완벽히 숙지하고 있으므로, 고객의 문의에 대해 정확하고 이해하기 쉽게 답변해줘. 만약 대답하기 어려운 질문이 
+있거나 추가 정보가 필요한 경우, 고객에게 <a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank">카카오플친</a> 또는 
+// <a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank">네이버톡톡</a>을 통해 문의해달라고 안내해줘.
+
 `;
+
+
 
 // Express 앱
 const app = express();
@@ -150,11 +154,16 @@ async function apiRequest(method, url, data = {}, params = {}) {
 // ========== [5] Cafe24 주문/배송 관련 함수 ==========
 async function getOrderShippingInfo(memberId) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`;
+
+  // 오늘 날짜를 종료 날짜(end_date)로 설정 (YYYY-MM-DD 형식)
   const today = new Date();
   const end_date = today.toISOString().split('T')[0];
+
+  // 2주 전 날짜를 시작 날짜(start_date)로 설정 (YYYY-MM-DD 형식)
   const twoWeeksAgo = new Date(today);
   twoWeeksAgo.setDate(today.getDate() - 14);
   const start_date = twoWeeksAgo.toISOString().split('T')[0];
+
   const params = {
     member_id: memberId,
     start_date: start_date,
@@ -177,11 +186,13 @@ async function getShipmentDetail(orderId) {
     const response = await apiRequest("GET", API_URL, {}, params);
     if (response.shipments && response.shipments.length > 0) {
       const shipment = response.shipments[0];
+
       // 배송사 코드에 따른 이름과 링크 매핑
       const shippingCompanies = {
         "0019": { name: "롯데 택배", url: "https://www.lotteglogis.com/home/reservation/tracking/index" },
         "0039": { name: "경동 택배", url: "https://kdexp.com/index.do" }
       };
+
       if (shippingCompanies[shipment.shipping_company_code]) {
         shipment.shipping_company_name = shippingCompanies[shipment.shipping_company_code].name;
         shipment.shipping_company_url = shippingCompanies[shipment.shipping_company_code].url;
@@ -207,9 +218,11 @@ function normalizeSentence(sentence) {
     .trim();
 }
 
+
 function containsOrderNumber(input) {
   return /\d{8}-\d{7}/.test(input);
 }
+
 
 // ========== [7] OpenAI GPT (fallback) - 맥락(컨텍스트) 주입 ==========
 async function getGPT3TurboResponse(userInput) {
@@ -238,35 +251,15 @@ async function getGPT3TurboResponse(userInput) {
   }
 }
 
-// ========== [8] 대화 로그 저장 함수 ==========
-async function saveConversationLog(memberId, userMessage, botResponse) {
-  const client = new MongoClient(MONGODB_URI);
-  try {
-    await client.connect();
-    const db = client.db(DB_NAME);
-    // conversationLogs 컬렉션에 대화 내용 저장 (날짜별 타임스탬프 포함)
-    const collection = db.collection("ChatbootConversationLogs");
-    await collection.insertOne({
-      memberId: (memberId && memberId !== "null") ? memberId : null,
-      userMessage,
-      botResponse,
-      createdAt: new Date()
-    });
-    console.log("대화 로그 저장 성공");
-  } catch (error) {
-    console.error("대화 로그 저장 중 오류:", error.message);
-  } finally {
-    await client.close();
-  }
-}
 
-// ========== [9] 메인 로직: findAnswer ==========
+// ========== [8] 메인 로직: findAnswer ==========
 async function findAnswer(userInput, memberId) {
   const normalizedUserInput = normalizeSentence(userInput);
 
   /************************************************
    * A. JSON 기반 FAQ / 제품 안내 로직
    ************************************************/
+
   // (1) 세탁 방법 맥락 처리
   if (pendingWashingContext) {
     const washingMap = {
@@ -297,6 +290,7 @@ async function findAnswer(userInput, memberId) {
       imageUrl: null
     };
   }
+
   if (
     normalizedUserInput.includes("세탁방법") ||
     (normalizedUserInput.includes("세탁") && normalizedUserInput.includes("방법"))
@@ -338,6 +332,7 @@ async function findAnswer(userInput, memberId) {
     const coveringTypes2 = ["더블", "맥스", "프라임", "슬림", "미디", "미니", "팟", "드롭", "라운저", "피라미드"];
     const foundType = coveringTypes2.find(type => normalizedUserInput.includes(type));
     if (foundType) {
+      // 생성되는 key를 로그로 확인
       const key = `${foundType} 커버링 방법을 알고 싶어`;
       console.log("커버링 key:", key);
       if (companyData.covering && companyData.covering[key]) {
@@ -443,7 +438,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // (7) homePage 유사도 매칭
+  // (7) homePage 등
   if (companyData.homePage) {
     let bestHomeMatch = null;
     let bestHomeDist = Infinity;
@@ -508,7 +503,8 @@ async function findAnswer(userInput, memberId) {
   /************************************************
    * B. Café24 주문/배송 로직
    ************************************************/
-  // (9) 회원 아이디 조회
+
+  // 1. 회원 아이디 조회
   if (
     normalizedUserInput.includes("내 아이디") ||
     normalizedUserInput.includes("나의 아이디") ||
@@ -532,7 +528,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // (10) 주문번호가 포함된 경우 처리
+  // 주문번호가 포함된 경우의 처리
   if (containsOrderNumber(normalizedUserInput)) {
     if (memberId && memberId !== "null") {
       try {
@@ -543,8 +539,10 @@ async function findAnswer(userInput, memberId) {
           console.log("Shipment 전체 데이터:", shipment);
           console.log("shipment.status 값:", shipment.status);
           console.log("shipment.items 값:", shipment.items);
+          // shipment.status 값이 없다면, items 배열의 첫 번째 요소의 status 값을 사용
           const shipmentStatus =
             shipment.status || (shipment.items && shipment.items.length > 0 ? shipment.items[0].status : undefined);
+          // standby: 배송대기, shipping: 배송중, shipped: 배송완료
           const itemStatusMap = {
             standby: "배송대기",
             shipping: "배송중",
@@ -581,7 +579,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
   
-  // (11) 주문번호 없이 주문상태 확인 처리
+  // 주문번호 없이 주문상태 확인인 경우의 처리
   if (
     (normalizedUserInput.includes("주문상태 확인") ||
       normalizedUserInput.includes("배송 상태 확인") ||
@@ -626,7 +624,7 @@ async function findAnswer(userInput, memberId) {
             return { text: "해당 주문에 대한 배송 상세 정보를 찾을 수 없습니다." };
           }
         } else {
-          return { text: " 고객님께서 주문하신 내역을 현재 확인할 수 없습니다. 번거로우시겠지만, 자세한 확인은 고객센터로 문의해 주세요." };
+          return { text: " 고객님께서 주문하신 내역을 현재 확인할 수 없습니다. 번거로우시겠지만, 자세한 확인을 원하시면 고객센터로 문의해 주시면 신속하게 도와드리겠습니다." };
         }
       } catch (error) {
         return { text: "고객님의 주문 정보를 찾을 수 없습니다. 주문 여부를 확인해주세요." };
@@ -647,7 +645,7 @@ async function findAnswer(userInput, memberId) {
   };
 }
 
-// ========== [12] /chat 라우팅 ==========
+// ========== [9] /chat 라우팅 ==========
 app.post("/chat", async (req, res) => {
   const userInput = req.body.message;
   const memberId = req.body.memberId; // 프론트에서 전달한 회원 ID
@@ -657,19 +655,16 @@ app.post("/chat", async (req, res) => {
 
   try {
     const answer = await findAnswer(userInput, memberId);
-    let finalAnswer = answer;
     if (answer.text === "질문을 이해하지 못했어요. 좀더 자세히 입력 해주시겠어요") {
       const gptResponse = await getGPT3TurboResponse(userInput);
-      finalAnswer = {
+      return res.json({
         text: gptResponse,
         videoHtml: null,
         description: null,
         imageUrl: null
-      };
+      });
     }
-    // 대화 로그 저장 (memberId가 없으면 null로 저장)
-    await saveConversationLog(memberId, userInput, finalAnswer.text);
-    return res.json(finalAnswer);
+    return res.json(answer);
   } catch (error) {
     console.error("Error in /chat endpoint:", error.message);
     return res.status(500).json({
@@ -681,7 +676,7 @@ app.post("/chat", async (req, res) => {
   }
 });
 
-// ========== [13] 서버 시작 ==========
+// ========== [10] 서버 시작 ==========
 (async function initialize() {
   await getTokensFromDB();  // MongoDB에서 토큰 불러오기
   const PORT = process.env.PORT || 5000;

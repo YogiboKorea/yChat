@@ -685,7 +685,7 @@ app.post("/chat", async (req, res) => {
       };
     }
     // "내아이디" 검색어인 경우에는 로그 저장을 건너뜁니다.
-    if (normalizeSentence(userInput) !== "내아이디") {
+    if (normalizeSentence(userInput) !== "내 아이디") {
       await saveConversationLog(memberId, userInput, finalAnswer.text);
     }
     return res.json(finalAnswer);

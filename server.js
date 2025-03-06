@@ -1,5 +1,5 @@
 /******************************************************
- * server.js - JSON FAQ + 주문배송 로직 + ChatGPT fallback + 대화 로그 저장
+ * server.js - JSON FAQ + 주문배송 로직 + ChatGPT fallback + 대화 로그 저장 (당일 대화 배열 업데이트)
  ******************************************************/
 
 const express = require("express");
@@ -238,21 +238,38 @@ async function getGPT3TurboResponse(userInput) {
   }
 }
 
-// ========== [8] 대화 로그 저장 함수 ==========
+// ========== [8] 대화 로그 저장 함수 (당일 동일 아이디 대화는 배열로 업데이트) ==========
 async function saveConversationLog(memberId, userMessage, botResponse) {
   const client = new MongoClient(MONGODB_URI);
   try {
     await client.connect();
     const db = client.db(DB_NAME);
-    // conversationLogs 컬렉션에 대화 내용 저장 (날짜별 타임스탬프 포함)
-    const collection = db.collection("ChatbootConversationLogs");
-    await collection.insertOne({
+    const collection = db.collection("conversationLogs");
+    // 오늘 날짜 (YYYY-MM-DD)
+    const today = new Date().toISOString().split("T")[0];
+    const query = {
       memberId: (memberId && memberId !== "null") ? memberId : null,
+      date: today
+    };
+    const existingLog = await collection.findOne(query);
+    const logEntry = {
       userMessage,
       botResponse,
       createdAt: new Date()
-    });
-    console.log("대화 로그 저장 성공");
+    };
+    if (existingLog) {
+      // 이미 당일 대화가 있으면 conversation 배열에 새 항목 추가
+      await collection.updateOne(query, { $push: { conversation: logEntry } });
+      console.log("대화 로그 업데이트 성공");
+    } else {
+      // 당일 대화가 없으면 새 문서 생성
+      await collection.insertOne({
+        memberId: (memberId && memberId !== "null") ? memberId : null,
+        date: today,
+        conversation: [logEntry]
+      });
+      console.log("새 대화 로그 생성 및 저장 성공");
+    }
   } catch (error) {
     console.error("대화 로그 저장 중 오류:", error.message);
   } finally {
@@ -667,7 +684,7 @@ app.post("/chat", async (req, res) => {
         imageUrl: null
       };
     }
-    // 대화 로그 저장 (memberId가 없으면 null로 저장)
+    // 대화 로그 저장 (당일 동일 회원 대화는 conversation 배열로 업데이트)
     await saveConversationLog(memberId, userInput, finalAnswer.text);
     return res.json(finalAnswer);
   } catch (error) {

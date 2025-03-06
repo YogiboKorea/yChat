@@ -11,6 +11,7 @@ const compression = require("compression");
 const axios = require("axios");
 const { MongoClient } = require("mongodb");
 const levenshtein = require("fast-levenshtein");
+const ExcelJS = require('exceljs');
 require("dotenv").config();
 
 // ========== [1] 환경변수 및 기본 설정 ==========
@@ -699,6 +700,53 @@ app.post("/chat", async (req, res) => {
     });
   }
 });
+
+
+app.get('/chatConnet', async (req, res) => {
+  const client = new MongoClient(MONGODB_URI);
+  try {
+    await client.connect();
+    const db = client.db(DB_NAME);
+    const collection = db.collection("conversationLogs");
+    const data = await collection.find({}).toArray();
+
+    // 새로운 Excel 워크북과 워크시트 생성
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Conversation Logs');
+
+    // 워크시트 컬럼 헤더 설정
+    worksheet.columns = [
+      { header: 'Member ID', key: 'memberId', width: 15 },
+      { header: 'Date', key: 'date', width: 15 },
+      { header: 'Conversation', key: 'conversation', width: 50 },
+    ];
+
+    // 각 문서마다 한 행씩 추가 (conversation 배열은 JSON 문자열로 변환)
+    data.forEach(doc => {
+      worksheet.addRow({
+        memberId: doc.memberId || '비회원',
+        date: doc.date,
+        conversation: JSON.stringify(doc.conversation, null, 2)
+      });
+    });
+
+    // 응답 헤더 설정 후 워크북을 스트림으로 전송 (Excel 다운로드)
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader("Content-Disposition", "attachment; filename=conversationLogs.xlsx");
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.error("Excel 파일 생성 중 오류:", error.message);
+    res.status(500).send("Excel 파일 생성 중 오류가 발생했습니다.");
+  } finally {
+    await client.close();
+  }
+});
+
 // ========== [13] 서버 시작 ==========
 (async function initialize() {
   await getTokensFromDB();  // MongoDB에서 토큰 불러오기

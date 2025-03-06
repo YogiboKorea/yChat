@@ -684,8 +684,10 @@ app.post("/chat", async (req, res) => {
         imageUrl: null
       };
     }
-    // 대화 로그 저장 (당일 동일 회원 대화는 conversation 배열로 업데이트)
-    await saveConversationLog(memberId, userInput, finalAnswer.text);
+    // "내아이디" 검색어인 경우에는 로그 저장을 건너뜁니다.
+    if (normalizeSentence(userInput) !== "내아이디") {
+      await saveConversationLog(memberId, userInput, finalAnswer.text);
+    }
     return res.json(finalAnswer);
   } catch (error) {
     console.error("Error in /chat endpoint:", error.message);
@@ -697,7 +699,6 @@ app.post("/chat", async (req, res) => {
     });
   }
 });
-
 // ========== [13] 서버 시작 ==========
 (async function initialize() {
   await getTokensFromDB();  // MongoDB에서 토큰 불러오기

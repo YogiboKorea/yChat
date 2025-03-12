@@ -539,7 +539,7 @@ async function findAnswer(userInput, memberId) {
       };
     } else {
       return {
-        text: `안녕하세요 고객님 회원가입을 통해 요기보의 다양한 이벤트 혜택을 만나보실수 있어요! <a href="/member/login.html">회원가입 페이지 이동</a>`,
+        text: `안녕하세요 고객님 회원가입을 통해 요기보의 다양한 이벤트 혜택을 만나보실수 있어요! <a href="/member/login.html">회원가입 하러가기</a>`,
         videoHtml: null,
         description: null,
         imageUrl: null,

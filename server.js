@@ -29,7 +29,7 @@ const CAFE24_API_VERSION = process.env.CAFE24_API_VERSION || '2024-06-01';
 
 // **Yogibo 브랜드 맥락(시스템 프롬프트)**
 const YOGIBO_SYSTEM_PROMPT = `
-너는 요기보 브랜드에 대한 전문 지식을 가진 전문가야. 고객에게 존대말을 사용하며 공손한 말투를 끝까지 고객을 대해줘 또한 이모티콘을 활용하여 대화를 진행해주고 문단이 끝날때마다 문단 띄어쓰기를 통해 가독성을 높여줘. 
+너는 요기보 브랜드에 대한 전문 지식을 가진 전문가야. 고객에게 존대말을 사용하며 공손한 말투를 끝까지 고객을 대해줘 또한 이모티콘을 활용하여 대화를 진행해주고 문단이 끝날때마다 문단 띄어쓰기를 통해 가독성을 높여줘.  
 제품별로 사이즈 정보에대해 공유해줄께 맥스 사이즈 경우 높이 170cm에 넓이 70cm 더블 사이즈 경우 높이 170cm에 넓이 140cm 이며 프라임 사이즈 경우 높이 145cm 넓이는 65cm 미니 사이즈 경우 높이 90cm 넓이 70cm 드롭과 팟의 경우  사이즈 경우 높이 75cm 넓이 85cm 원형모양제품이야  라운저는 높이 60cm 넓이 65cm이며 피라미드의 경우 삼각형 모양의 빈백소파로 높이 95cm 넓이 85cm 제품이야 어린아이들에게 추천해줄만한 상품이야 허기보의 경우 요기보의 대표 캐릭터 상품으로 사람을 안고 있는 듯한 느낌의 빈백소파야
 Yogibo(요기보)는 글로벌 라이프스타일 브랜드로, 빈백 소파 및 리빙 액세서리를 전문으로 해. 주요 제품으로는 요기보 맥스, 미디, 팟, 
 서포트, 카터필러롤, 트레이보X 등이 있으며, 이 제품들은 3인용 소파, 의자, 리클라이너, 침대로도 활용 가능해. 또한, 최근에는 요기보 슬림, 드롭, 라운저, 소형 소파인 요기보 미니와 피라미드도 출시되었어.요기보의 대표 커버는 부드럽고 신축성 있는 특수소재로 제작되어, 고무보다 3~4배 더 단단한 내구성을 자랑하며, 수십 가지 이상의 컬러
@@ -230,11 +230,18 @@ async function getGPT3TurboResponse(userInput) {
       }
     );
     const gptAnswer = response.data.choices[0].message.content;
-    return gptAnswer;
+    // GPT 응답에 자동 띄어쓰기 적용
+    const formattedAnswer = addSpaceAfterPeriod(gptAnswer);
+    return formattedAnswer;
   } catch (error) {
     console.error("Error calling OpenAI:", error.message);
     return "요기보 챗봇 오류가 발생했습니다. 다시 시도 부탁드립니다.";
   }
+}
+
+// 점(.) 뒤에 공백이 없는 경우 자동 추가하는 함수
+function addSpaceAfterPeriod(text) {
+  return text.replace(/\.([^\s])/g, '. $1');
 }
 
 // ========== [8] 대화 로그 저장 함수 (당일 동일 아이디 대화는 배열로 업데이트) ==========

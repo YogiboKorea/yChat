@@ -1052,9 +1052,7 @@ app.get("/postIt", async (req, res) => {
       .skip(skipCount)
       .limit(PAGE_SIZE)
       .toArray();
-      notes.forEach(doc => {
-        doc._id = doc._id.toString();
-      });
+
     await client.close();
 
     return res.json({

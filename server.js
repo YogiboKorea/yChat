@@ -1071,7 +1071,7 @@ async function getAllPostItQA() {
 app.get("/postIt", async (req, res) => {
   // page 쿼리 파라미터 (기본 1페이지)
   const page = parseInt(req.query.page) || 1;
-  const PAGE_SIZE = 10;
+  const PAGE_SIZE = 9;
 
   try {
     const client = new MongoClient(MONGODB_URI);

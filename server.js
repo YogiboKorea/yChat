@@ -1052,7 +1052,10 @@ app.get("/postIt", async (req, res) => {
       .skip(skipCount)
       .limit(PAGE_SIZE)
       .toArray();
-
+    // 각 문서의 _id를 문자열로 변환
+    notes.forEach(doc => {
+      doc._id = doc._id.toString();
+    });
     await client.close();
 
     return res.json({

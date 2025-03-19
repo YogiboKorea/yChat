@@ -1009,6 +1009,170 @@ app.get('/chatConnet', async (req, res) => {
     await client.close();
   }
 });
+//채팅 응답 답변에 대한 데이터 추가 
+/******************************************************
+ * server.js - 기존 코드 + 포스트잇(질문/답변) 저장 로직
+ ******************************************************/
+
+// ... 기존 import, 환경변수, MongoClient, Express 설정 등...
+
+// 새로 추가할 collection 이름
+const postItCollectionName = "postItNotes";
+
+// [A] 포스트잇 노트 조회 (페이징)
+app.get("/postIt", async (req, res) => {
+  // page 쿼리 파라미터 (기본 1페이지)
+  const page = parseInt(req.query.page) || 1;
+  const PAGE_SIZE = 10;
+
+  try {
+    const client = new MongoClient(MONGODB_URI);
+    await client.connect();
+    const db = client.db(DB_NAME);
+    const collection = db.collection(postItCollectionName);
+
+    // 전체 문서 수
+    const totalCount = await collection.countDocuments({});
+    // 총 페이지 수
+    const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+
+    // 페이지 범위 보정
+    let currentPage = page;
+    if (currentPage < 1) currentPage = 1;
+    if (totalPages > 0 && currentPage > totalPages) currentPage = totalPages;
+
+    // 스킵/리밋
+    const skipCount = (currentPage - 1) * PAGE_SIZE;
+
+    // 최신 등록이 맨 위에 오도록 정렬(descending)
+    const notes = await collection
+      .find({})
+      .sort({ _id: -1 })
+      .skip(skipCount)
+      .limit(PAGE_SIZE)
+      .toArray();
+
+    await client.close();
+
+    return res.json({
+      notes,            // 현재 페이지 노트 목록
+      currentPage,      // 현재 페이지
+      totalPages,       // 총 페이지 수
+      totalCount,       // 전체 노트 개수
+      pageSize: PAGE_SIZE
+    });
+  } catch (error) {
+    console.error("GET /postIt 오류:", error.message);
+    return res.status(500).json({ error: "포스트잇 목록 조회 중 오류가 발생했습니다." });
+  }
+});
+
+// [B] 포스트잇 노트 등록
+app.post("/postIt", async (req, res) => {
+  const { question, answer } = req.body;
+  if (!question && !answer) {
+    return res.status(400).json({ error: "질문 또는 답변이 비어있습니다." });
+  }
+
+  try {
+    const client = new MongoClient(MONGODB_URI);
+    await client.connect();
+    const db = client.db(DB_NAME);
+    const collection = db.collection(postItCollectionName);
+
+    // DB에 저장할 문서
+    const newNote = {
+      question,
+      answer,
+      createdAt: new Date()
+      // 필요하다면 color 등 필드 추가 가능
+    };
+
+    const result = await collection.insertOne(newNote);
+    await client.close();
+
+    // 성공 시 새로 등록된 문서 반환
+    return res.json({
+      message: "포스트잇 등록 성공",
+      note: newNote
+    });
+  } catch (error) {
+    console.error("POST /postIt 오류:", error.message);
+    return res.status(500).json({ error: "포스트잇 등록 중 오류가 발생했습니다." });
+  }
+});
+
+// [C] 포스트잇 노트 수정
+app.put("/postIt/:id", async (req, res) => {
+  const noteId = req.params.id; // MongoDB _id (문자열)
+  const { question, answer } = req.body;
+
+  try {
+    const client = new MongoClient(MONGODB_URI);
+    await client.connect();
+    const db = client.db(DB_NAME);
+    const collection = db.collection(postItCollectionName);
+
+    // _id가 ObjectId 형태이므로 변환
+    const { ObjectId } = require("mongodb");
+    const filter = { _id: new ObjectId(noteId) };
+
+    const updateData = {
+      ...(question && { question }),
+      ...(answer && { answer }),
+      updatedAt: new Date()
+    };
+
+    const result = await collection.findOneAndUpdate(
+      filter,
+      { $set: updateData },
+      { returnDocument: "after" }
+    );
+
+    await client.close();
+
+    if (!result.value) {
+      return res.status(404).json({ error: "해당 포스트잇을 찾을 수 없습니다." });
+    }
+
+    return res.json({
+      message: "포스트잇 수정 성공",
+      note: result.value
+    });
+  } catch (error) {
+    console.error("PUT /postIt 오류:", error.message);
+    return res.status(500).json({ error: "포스트잇 수정 중 오류가 발생했습니다." });
+  }
+});
+
+// [D] 포스트잇 노트 삭제
+app.delete("/postIt/:id", async (req, res) => {
+  const noteId = req.params.id;
+
+  try {
+    const client = new MongoClient(MONGODB_URI);
+    await client.connect();
+    const db = client.db(DB_NAME);
+    const collection = db.collection(postItCollectionName);
+
+    const { ObjectId } = require("mongodb");
+    const filter = { _id: new ObjectId(noteId) };
+
+    const result = await collection.deleteOne(filter);
+    await client.close();
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: "삭제할 포스트잇을 찾지 못했습니다." });
+    }
+
+    return res.json({ message: "포스트잇 삭제 성공" });
+  } catch (error) {
+    console.error("DELETE /postIt 오류:", error.message);
+    return res.status(500).json({ error: "포스트잇 삭제 중 오류가 발생했습니다." });
+  }
+});
+
+
 
 // ========== [13] 서버 시작 ==========
 (async function initialize() {

@@ -1014,8 +1014,9 @@ app.get('/chatConnet', async (req, res) => {
 /******************************************************
  * server.js - 기존 코드 + 포스트잇(질문/답변) 저장 로직
  ******************************************************/
-
-// ... 기존 import, 환경변수, MongoClient, Express 설정 등...
+/******************************************************
+ * server.js - 기존 코드 + 포스트잇(질문/답변) 저장 로직
+ ******************************************************/
 
 // 새로 추가할 collection 이름
 const postItCollectionName = "postItNotes";
@@ -1052,10 +1053,12 @@ app.get("/postIt", async (req, res) => {
       .skip(skipCount)
       .limit(PAGE_SIZE)
       .toArray();
-    // 각 문서의 _id를 문자열로 변환
+
+    // 각 문서의 _id를 문자열로 변환 (프론트에서 편하게 사용하기 위함)
     notes.forEach(doc => {
       doc._id = doc._id.toString();
     });
+
     await client.close();
 
     return res.json({
@@ -1108,29 +1111,44 @@ app.post("/postIt", async (req, res) => {
 
 // [C] 포스트잇 노트 수정
 app.put("/postIt/:id", async (req, res) => {
-  const noteId = req.params.id; // "67da59b150ced6a3e03b57b5" (문자열)
-  const { question, answer } = req.body;
-  const { ObjectId } = require("mongodb");
+  try {
+    const noteId = req.params.id; // "67da59b150ced6a3e03b57b5" (문자열)
+    const { question, answer } = req.body;
+    const { ObjectId } = require("mongodb");
 
-  const filter = { _id: new ObjectId(noteId) };
-  const updateData = { question, answer, updatedAt: new Date() };
+    const client = new MongoClient(MONGODB_URI);
+    await client.connect();
+    const db = client.db(DB_NAME);
+    const collection = db.collection(postItCollectionName);
 
-  const result = await collection.findOneAndUpdate(
-    filter,
-    { $set: updateData },
-    { returnDocument: "after" }
-  );
+    const filter = { _id: new ObjectId(noteId) };
+    const updateData = {
+      ...(question && { question }),
+      ...(answer && { answer }),
+      updatedAt: new Date()
+    };
 
-  if (!result.value) {
-    return res.status(404).json({ error: "해당 포스트잇을 찾을 수 없습니다." });
+    const result = await collection.findOneAndUpdate(
+      filter,
+      { $set: updateData },
+      { returnDocument: "after" }
+    );
+
+    await client.close();
+
+    if (!result.value) {
+      return res.status(404).json({ error: "해당 포스트잇을 찾을 수 없습니다." });
+    }
+
+    return res.json({
+      message: "포스트잇 수정 성공",
+      note: result.value
+    });
+  } catch (error) {
+    console.error("PUT /postIt 오류:", error.message);
+    return res.status(500).json({ error: "포스트잇 수정 중 오류가 발생했습니다." });
   }
-
-  return res.json({
-    message: "포스트잇 수정 성공",
-    note: result.value
-  });
 });
-
 
 // [D] 포스트잇 노트 삭제
 app.delete("/postIt/:id", async (req, res) => {
@@ -1158,6 +1176,7 @@ app.delete("/postIt/:id", async (req, res) => {
     return res.status(500).json({ error: "포스트잇 삭제 중 오류가 발생했습니다." });
   }
 });
+
 
 
 

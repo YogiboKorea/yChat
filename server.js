@@ -1021,31 +1021,18 @@ app.get('/chatConnet', async (req, res) => {
 const postItCollectionName = "postItNotes";
 
 // [A] 포스트잇 노트 조회 (페이징)
+// 예: GET /postIt?page=1
 app.get("/postIt", async (req, res) => {
-  // page 쿼리 파라미터 (기본 1페이지)
   const page = parseInt(req.query.page) || 1;
   const PAGE_SIZE = 10;
+  const skipCount = (page - 1) * PAGE_SIZE;
 
   try {
-    const client = new MongoClient(MONGODB_URI);
     await client.connect();
     const db = client.db(DB_NAME);
-    const collection = db.collection(postItCollectionName);
+    const collection = db.collection("postItNotes");
 
-    // 전체 문서 수
-    const totalCount = await collection.countDocuments({});
-    // 총 페이지 수
-    const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-
-    // 페이지 범위 보정
-    let currentPage = page;
-    if (currentPage < 1) currentPage = 1;
-    if (totalPages > 0 && currentPage > totalPages) currentPage = totalPages;
-
-    // 스킵/리밋
-    const skipCount = (currentPage - 1) * PAGE_SIZE;
-
-    // 최신 등록이 맨 위에 오도록 정렬(descending)
+    // 최신순 정렬 후 페이징
     const notes = await collection
       .find({})
       .sort({ _id: -1 })
@@ -1053,20 +1040,30 @@ app.get("/postIt", async (req, res) => {
       .limit(PAGE_SIZE)
       .toArray();
 
-    await client.close();
+    // 각 문서의 _id를 문자열로 변환
+    notes.forEach(doc => {
+      doc._id = doc._id.toString();
+    });
+
+    // 전체 문서 수
+    const totalCount = await collection.countDocuments({});
+    const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
     return res.json({
-      notes,            // 현재 페이지 노트 목록
-      currentPage,      // 현재 페이지
-      totalPages,       // 총 페이지 수
-      totalCount,       // 전체 노트 개수
+      notes,         // [{ _id: "67da59b150ced6a3e03b57b5", question: "...", answer: "..." }, ...]
+      currentPage: page,
+      totalPages,
+      totalCount,
       pageSize: PAGE_SIZE
     });
   } catch (error) {
-    console.error("GET /postIt 오류:", error.message);
-    return res.status(500).json({ error: "포스트잇 목록 조회 중 오류가 발생했습니다." });
+    console.error("목록 조회 오류:", error.message);
+    return res.status(500).json({ error: "서버 오류" });
+  } finally {
+    await client.close();
   }
 });
+
 
 // [B] 포스트잇 노트 등록
 app.post("/postIt", async (req, res) => {

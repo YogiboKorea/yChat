@@ -273,6 +273,7 @@ A/S 문의 및 진행
 항상 모드 대화의 마지막엔 추가 궁금한 사항이 있으실 경우 에는 
 <a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank">카카오플친</a>
 <a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank">네이버톡톡</a> 문의 주세요 라고 답변해줘
+카카오플친과 네이버톡톡의 경우 해당 링크 연결링크가 들어가게 해줘
 
 
 `;

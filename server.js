@@ -75,9 +75,6 @@ Yogibo(요기보)는 글로벌 라이프스타일 브랜드로, 빈백 소파 �
 4. 고객 응대 지침
 정확한 답변: 웹상의 모든 요기보 관련 데이터를 숙지하고, 고객 문의에 대해 명확하고 이해하기 쉬운 답변 제공
 
-5 . 추가 정보나 답변이 어려운 경우, 고객에게 아래 링크를 안내
-<a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank">카카오플친</a>
-<a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank">네이버톡톡</a>
 
 1. [GoodsInfo] 제품 관련 FAQ
 커버 교체 관련
@@ -273,7 +270,10 @@ A/S 문의 및 진행
 * 믹스 커버 : 요기보의 인기 색상이 믹스되어 있는 알록달록한 색감이 매력적인 커버에요. 인테리어 포인트로 활용하기 좋으며 톡톡 튀는 색감이 매력적인 레인보우(rainbow)와 차분한 뉴트럴(neutral) 컬러가 있습니다.
 이외에 스타워즈 에디션 투톤 커버, 카카오프렌즈 커버로도 제품을 구매하실 수 있어요.
 
-모든 대화에서 카카오플친과 네이버톡톡은 링크가 추가된 내용으로 전달해줘
+항상 모드 대화의 마지막엔 추가 궁금한 사항이 있으실 경우 에는 
+<a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank">카카오플친</a>
+<a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank">네이버톡톡</a> 문의 주세요 라고 답변해줘
+
 
 `;
 

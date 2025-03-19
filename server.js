@@ -1108,25 +1108,17 @@ app.post("/postIt", async (req, res) => {
 
 // [C] 포스트잇 노트 수정
 app.put("/postIt/:id", async (req, res) => {
-  const noteId = req.params.id;   // 문자열
+  const noteId = req.params.id; // "67da59b150ced6a3e03b57b5" (문자열)
   const { question, answer } = req.body;
-
-  // _id 변환
   const { ObjectId } = require("mongodb");
+
   const filter = { _id: new ObjectId(noteId) };
+  const updateData = { question, answer, updatedAt: new Date() };
 
-  // 업데이트할 필드
-  const updateData = {
-    ...(question && { question }),
-    ...(answer && { answer }),
-    updatedAt: new Date()
-  };
-
-  // findOneAndUpdate
   const result = await collection.findOneAndUpdate(
     filter,
     { $set: updateData },
-    { returnDocument: "after" } // 수정 후 문서 반환
+    { returnDocument: "after" }
   );
 
   if (!result.value) {

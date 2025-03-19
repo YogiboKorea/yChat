@@ -100,10 +100,11 @@ Yogibo(요기보)는 글로벌 라이프스타일 브랜드로, 빈백 소파 �
 
 질문: "바디필로우의 종류나 스팩에 대해 알고 싶어."
 답변: 바디필로우 스팩 확인하기
+
 질문: "소파의 종류 나 스팩에 대해 알고 싶어."
 답변: 소파 스팩 확인하기
-제품명 확인 방법
 
+제품명 확인 방법
 질문: "제품명은 어디서 확인할 수 있나요? 현재 사용 중인 제품 이름을 알고 싶어 "
 답변: 사용 중인 제품의 이름을 확인하길 원하신다면 제품의 커버(외피) 
 지퍼를 열어주세요. 
@@ -1104,46 +1105,37 @@ app.post("/postIt", async (req, res) => {
 
 // [C] 포스트잇 노트 수정
 app.put("/postIt/:id", async (req, res) => {
-  const noteId = req.params.id; // MongoDB _id (문자열)
+  const noteId = req.params.id;   // 문자열
   const { question, answer } = req.body;
 
-  try {
-    const client = new MongoClient(MONGODB_URI);
-    await client.connect();
-    const db = client.db(DB_NAME);
-    const collection = db.collection(postItCollectionName);
+  // _id 변환
+  const { ObjectId } = require("mongodb");
+  const filter = { _id: new ObjectId(noteId) };
 
-    // _id가 ObjectId 형태이므로 변환
-    const { ObjectId } = require("mongodb");
-    const filter = { _id: new ObjectId(noteId) };
+  // 업데이트할 필드
+  const updateData = {
+    ...(question && { question }),
+    ...(answer && { answer }),
+    updatedAt: new Date()
+  };
 
-    const updateData = {
-      ...(question && { question }),
-      ...(answer && { answer }),
-      updatedAt: new Date()
-    };
+  // findOneAndUpdate
+  const result = await collection.findOneAndUpdate(
+    filter,
+    { $set: updateData },
+    { returnDocument: "after" } // 수정 후 문서 반환
+  );
 
-    const result = await collection.findOneAndUpdate(
-      filter,
-      { $set: updateData },
-      { returnDocument: "after" }
-    );
-
-    await client.close();
-
-    if (!result.value) {
-      return res.status(404).json({ error: "해당 포스트잇을 찾을 수 없습니다." });
-    }
-
-    return res.json({
-      message: "포스트잇 수정 성공",
-      note: result.value
-    });
-  } catch (error) {
-    console.error("PUT /postIt 오류:", error.message);
-    return res.status(500).json({ error: "포스트잇 수정 중 오류가 발생했습니다." });
+  if (!result.value) {
+    return res.status(404).json({ error: "해당 포스트잇을 찾을 수 없습니다." });
   }
+
+  return res.json({
+    message: "포스트잇 수정 성공",
+    note: result.value
+  });
 });
+
 
 // [D] 포스트잇 노트 삭제
 app.delete("/postIt/:id", async (req, res) => {

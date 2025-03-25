@@ -1033,20 +1033,15 @@ app.get('/chatConnet', async (req, res) => {
   } finally {
     await client.close();
   }
-});
-//채팅 응답 답변에 대한 데이터 추가 
+});// 채팅 응답 답변에 대한 데이터 추가 
 /******************************************************
- * server.js - 기존 코드 + 포스트잇(질문/답변) 저장 로직
+ * server.js - 기존 코드 + 포스트잇(질문/답변/카테고리) 저장 로직
  ******************************************************/
-/******************************************************
- * server.js - 기존 코드 + 포스트잇(질문/답변) 저장 로직
- ******************************************************/
-
 
 // 새로 추가할 collection 이름
 const postItCollectionName = "postItNotes";
 
-//포스팃 데이터 프롬포트 저장함수
+// 포스트잇 데이터 저장 함수
 async function getAllPostItQA() {
   const client = new MongoClient(MONGODB_URI);
   try {
@@ -1066,12 +1061,13 @@ async function getAllPostItQA() {
   }
 }
 
-
 // [A] 포스트잇 노트 조회 (페이징)
+// 선택적으로 ?category= 를 사용해 특정 카테고리만 필터링할 수 있음
 app.get("/postIt", async (req, res) => {
-  // page 쿼리 파라미터 (기본 1페이지)
   const page = parseInt(req.query.page) || 1;
   const PAGE_SIZE = 9;
+  const category = req.query.category; // optional query param
+  const queryFilter = category ? { category } : {};
 
   try {
     const client = new MongoClient(MONGODB_URI);
@@ -1079,22 +1075,19 @@ app.get("/postIt", async (req, res) => {
     const db = client.db(DB_NAME);
     const collection = db.collection(postItCollectionName);
 
-    // 전체 문서 수
-    const totalCount = await collection.countDocuments({});
-    // 총 페이지 수
+    // 전체 문서 수 (필터 적용)
+    const totalCount = await collection.countDocuments(queryFilter);
     const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
-    // 페이지 범위 보정
     let currentPage = page;
     if (currentPage < 1) currentPage = 1;
     if (totalPages > 0 && currentPage > totalPages) currentPage = totalPages;
 
-    // 스킵/리밋
     const skipCount = (currentPage - 1) * PAGE_SIZE;
 
-    // 최신 등록이 맨 위에 오도록 정렬(descending)
+    // 최신 등록이 맨 위에 오도록 정렬 (desc)
     const notes = await collection
-      .find({})
+      .find(queryFilter)
       .sort({ _id: -1 })
       .skip(skipCount)
       .limit(PAGE_SIZE)
@@ -1108,10 +1101,10 @@ app.get("/postIt", async (req, res) => {
     await client.close();
 
     return res.json({
-      notes,            // 현재 페이지 노트 목록
-      currentPage,      // 현재 페이지
-      totalPages,       // 총 페이지 수
-      totalCount,       // 전체 노트 개수
+      notes,           // 현재 페이지 노트 목록
+      currentPage,     // 현재 페이지
+      totalPages,      // 총 페이지 수
+      totalCount,      // 전체 노트 개수
       pageSize: PAGE_SIZE
     });
   } catch (error) {
@@ -1120,9 +1113,9 @@ app.get("/postIt", async (req, res) => {
   }
 });
 
-// [B] 포스트잇 노트 등록
+// [B] 포스트잇 노트 등록 (카테고리 추가)
 app.post("/postIt", async (req, res) => {
-  const { question, answer } = req.body;
+  const { question, answer, category } = req.body;
   if (!question && !answer) {
     return res.status(400).json({ error: "질문 또는 답변이 비어있습니다." });
   }
@@ -1133,12 +1126,13 @@ app.post("/postIt", async (req, res) => {
     const db = client.db(DB_NAME);
     const collection = db.collection(postItCollectionName);
 
-    // DB에 저장할 문서
+    // DB에 저장할 문서 (category 필드 추가)
     const newNote = {
       question,
       answer,
+      category: category || "uncategorized", // 기본값 설정 가능
       createdAt: new Date()
-      // 필요하다면 color 등 필드 추가 가능
+      // 필요하다면 color 등 다른 필드 추가 가능
     };
 
     const result = await collection.insertOne(newNote);
@@ -1155,11 +1149,11 @@ app.post("/postIt", async (req, res) => {
   }
 });
 
-// [C] 포스트잇 노트 수정
+// [C] 포스트잇 노트 수정 (카테고리 업데이트 옵션 포함)
 app.put("/postIt/:id", async (req, res) => {
   try {
     const noteId = req.params.id; 
-    const { question, answer } = req.body;
+    const { question, answer, category } = req.body;
     const { ObjectId } = require("mongodb");
 
     const client = new MongoClient(MONGODB_URI);
@@ -1171,6 +1165,7 @@ app.put("/postIt/:id", async (req, res) => {
     const updateData = {
       ...(question && { question }),
       ...(answer && { answer }),
+      ...(category && { category }),
       updatedAt: new Date()
     };
 
@@ -1222,7 +1217,6 @@ app.delete("/postIt/:id", async (req, res) => {
     return res.status(500).json({ error: "포스트잇 삭제 중 오류가 발생했습니다." });
   }
 });
-
 
 
 

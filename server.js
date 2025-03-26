@@ -1043,12 +1043,14 @@ const postItCollectionName = "postItNotes";
 
 function convertHashtagsToLinks(text) {
   const hashtagLinks = {
-    '홈페이지': 'https://yourdomain.com/homepage',
-    '매장': 'https://yourdomain.com/store'
+    '홈페이지': 'https://yogibo.kr/',
+    '매장': 'https://yogibo.kr/why/store.html',
+    '카카오플친':'http://pf.kakao.com/_lxmZsxj/chat',
+    '네이버톡톡':'https://talk.naver.com/ct/wc4u67?frm=psf'
   };
   return text.replace(/@([\w가-힣]+)/g, (match, keyword) => {
     const url = hashtagLinks[keyword];
-    // 반환 시 keyword만 사용하여 '#' 제거
+    // 반환 시 keyword만 사용하여 '@' 제거
     return `<a href="${url}" target="_blank">${keyword}</a>`;
   });
 }

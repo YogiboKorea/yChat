@@ -52,6 +52,7 @@ Yogibo(요기보)는 글로벌 라이프스타일 브랜드로, 빈백 소파 �
 주요 제품: 요기보 맥스, 미디, 팟, 서포트, 카터필러롤, 트레이보X 등
 다용도로 사용 가능 (소파, 의자, 리클라이너, 침대 등)
 커버 및 소재:
+
 대표 커버는 부드럽고 신축성이 있는 특수소재로 제작되어 내구성이 뛰어납니다.
 다양한 컬러 옵션으로 계절 및 인테리어에 맞춤 활용 가능
 커버는 분리하여 세탁할 수 있어 관리가 용이합니다.
@@ -1039,6 +1040,18 @@ app.get('/chatConnet', async (req, res) => {
 
 // 새로 추가할 collection 이름
 const postItCollectionName = "postItNotes";
+
+function convertHashtagsToLinks(text) {
+  const hashtagLinks = {
+    '홈페이지': 'https://yourdomain.com/homepage',
+    '매장': 'https://yourdomain.com/store'
+  };
+  return text.replace(/#([\w가-힣]+)/g, (match, keyword) => {
+    const url = hashtagLinks[keyword] || `https://example.com/hashtag/${keyword}`;
+    return `<a href="${url}" target="_blank">${match}</a>`;
+  });
+}
+
 
 // 포스트잇 데이터 저장 함수
 async function getAllPostItQA() {

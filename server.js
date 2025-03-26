@@ -1138,6 +1138,8 @@ app.post("/postIt", async (req, res) => {
     const db = client.db(DB_NAME);
     const collection = db.collection(postItCollectionName);
 
+    const convertedAnswer = answer ? convertHashtagsToLinks(answer) : answer;
+
     // DB에 저장할 문서 (category 필드 추가)
     const newNote = {
       question,
@@ -1176,7 +1178,7 @@ app.put("/postIt/:id", async (req, res) => {
     const filter = { _id: new ObjectId(noteId) };
     const updateData = {
       ...(question && { question }),
-      ...(answer && { answer }),
+      ...(answer && { answer: convertHashtagsToLinks(answer) }),
       ...(category && { category }),
       updatedAt: new Date()
     };

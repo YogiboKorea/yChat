@@ -1046,12 +1046,12 @@ function convertHashtagsToLinks(text) {
     '홈페이지': 'https://yourdomain.com/homepage',
     '매장': 'https://yourdomain.com/store'
   };
-  return text.replace(/#([\w가-힣]+)/g, (match, keyword) => {
+  return text.replace(/@([\w가-힣]+)/g, (match, keyword) => {
     const url = hashtagLinks[keyword];
-    return `<a href="${url}" target="_blank">${match}</a>`;
+    // 반환 시 keyword만 사용하여 '#' 제거
+    return `<a href="${url}" target="_blank">${keyword}</a>`;
   });
 }
-
 
 // 포스트잇 데이터 저장 함수
 async function getAllPostItQA() {

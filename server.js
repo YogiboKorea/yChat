@@ -1047,7 +1047,7 @@ function convertHashtagsToLinks(text) {
     '매장': 'https://yourdomain.com/store'
   };
   return text.replace(/#([\w가-힣]+)/g, (match, keyword) => {
-    const url = hashtagLinks[keyword] || `https://example.com/hashtag/${keyword}`;
+    const url = hashtagLinks[keyword];
     return `<a href="${url}" target="_blank">${match}</a>`;
   });
 }
@@ -1143,7 +1143,7 @@ app.post("/postIt", async (req, res) => {
     // DB에 저장할 문서 (category 필드 추가)
     const newNote = {
       question,
-      answer,
+      answer: convertedAnswer,
       category: category || "uncategorized", // 기본값 설정 가능
       createdAt: new Date()
       // 필요하다면 color 등 다른 필드 추가 가능

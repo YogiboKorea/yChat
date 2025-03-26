@@ -51,8 +51,8 @@ const YOGIBO_SYSTEM_PROMPT = `
 Yogibo(요기보)는 글로벌 라이프스타일 브랜드로, 빈백 소파 및 리빙 액세서리를 전문으로 합니다.
 주요 제품: 요기보 맥스, 미디, 팟, 서포트, 카터필러롤, 트레이보X 등
 다용도로 사용 가능 (소파, 의자, 리클라이너, 침대 등)
-커버 및 소재:
 
+커버 및 소재:
 대표 커버는 부드럽고 신축성이 있는 특수소재로 제작되어 내구성이 뛰어납니다.
 다양한 컬러 옵션으로 계절 및 인테리어에 맞춤 활용 가능
 커버는 분리하여 세탁할 수 있어 관리가 용이합니다.
@@ -78,7 +78,6 @@ Yogibo(요기보)는 글로벌 라이프스타일 브랜드로, 빈백 소파 �
 
 1. [GoodsInfo] 제품 관련 FAQ
 커버 교체 관련
-
 질문: "커버만 구매해서 교체 사용해도 되나요?"
 답변: 제품 전용 커버라면 요기보, 럭스, 믹스, 줄라 등 다양한 커버를 맥스 제품에도 교체하여 사용 가능합니다.
 이너 지퍼 손잡이
@@ -1041,6 +1040,21 @@ app.get('/chatConnet', async (req, res) => {
 // 새로 추가할 collection 이름
 const postItCollectionName = "postItNotes";
 
+// JSON 파싱 미들웨어
+app.use(express.json());
+
+// 해시태그 변환 함수 (해시태그를 링크로 변경)
+function convertHashtagsToLinks(text) {
+  const hashtagLinks = {
+    '홈페이지': 'https://yourdomain.com/homepage',
+    '매장': 'https://yourdomain.com/store'
+  };
+  return text.replace(/#([\w가-힣]+)/g, (match, keyword) => {
+    const url = hashtagLinks[keyword] || `https://example.com/hashtag/${keyword}`;
+    return `<a href="${url}" target="_blank">${match}</a>`;
+  });
+}
+
 // 포스트잇 데이터 저장 함수
 async function getAllPostItQA() {
   const client = new MongoClient(MONGODB_URI);
@@ -1126,10 +1140,13 @@ app.post("/postIt", async (req, res) => {
     const db = client.db(DB_NAME);
     const collection = db.collection(postItCollectionName);
 
+    // 해시태그 변환 적용 (answer가 있을 경우)
+    const convertedAnswer = answer ? convertHashtagsToLinks(answer) : answer;
+
     // DB에 저장할 문서 (category 필드 추가)
     const newNote = {
       question,
-      answer,
+      answer: convertedAnswer,
       category: category || "uncategorized", // 기본값 설정 가능
       createdAt: new Date()
       // 필요하다면 color 등 다른 필드 추가 가능
@@ -1154,7 +1171,6 @@ app.put("/postIt/:id", async (req, res) => {
   try {
     const noteId = req.params.id; 
     const { question, answer, category } = req.body;
-    const { ObjectId } = require("mongodb");
 
     const client = new MongoClient(MONGODB_URI);
     await client.connect();
@@ -1164,7 +1180,8 @@ app.put("/postIt/:id", async (req, res) => {
     const filter = { _id: new ObjectId(noteId) };
     const updateData = {
       ...(question && { question }),
-      ...(answer && { answer }),
+      // answer가 있으면 해시태그 변환 적용
+      ...(answer && { answer: convertHashtagsToLinks(answer) }),
       ...(category && { category }),
       updatedAt: new Date()
     };
@@ -1201,7 +1218,6 @@ app.delete("/postIt/:id", async (req, res) => {
     const db = client.db(DB_NAME);
     const collection = db.collection(postItCollectionName);
 
-    const { ObjectId } = require("mongodb");
     const filter = { _id: new ObjectId(noteId) };
 
     const result = await collection.deleteOne(filter);

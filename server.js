@@ -1038,7 +1038,7 @@ app.get('/chatConnet', async (req, res) => {
  ******************************************************/
 
 // 새로 추가할 collection 이름
-const postItCollectionName = "postItNotes";
+const postItCollectionName = "postIt";
 
 // JSON 파싱 미들웨어
 app.use(express.json());
@@ -1233,8 +1233,6 @@ app.delete("/postIt/:id", async (req, res) => {
     return res.status(500).json({ error: "포스트잇 삭제 중 오류가 발생했습니다." });
   }
 });
-
-
 
 // ========== [13] 서버 시작 ==========
 (async function initialize() {

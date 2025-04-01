@@ -548,47 +548,47 @@ async function findAnswer(userInput, memberId) {
    * A. JSON 기반 FAQ / 제품 안내 로직
    ************************************************/
   // (1) 세탁 방법 맥락 처리
-  if (pendingWashingContext) {
-    const washingMap = {
-      "요기보": "요기보",
-      "줄라": "줄라",
-      "럭스": "럭스",
-      "모듀": "모듀",
-      "메이트": "메이트"
-    };
-    for (let key in washingMap) {
-      if (normalizedUserInput.includes(key)) {
-        if (companyData.washing && companyData.washing[key]) {
-          pendingWashingContext = false;
-          return {
-            text: companyData.washing[key].description,
-            videoHtml: null,
-            description: null,
-            imageUrl: null
-          };
-        }
-      }
-    }
-    pendingWashingContext = false;
-    return {
-      text: "해당 커버 종류를 찾지 못했어요. (요기보, 줄라, 럭스, 모듀, 메이트 중 하나를 입력해주세요.)",
-      videoHtml: null,
-      description: null,
-      imageUrl: null
-    };
-  }
-  if (
-    normalizedUserInput.includes("세탁방법") ||
-    (normalizedUserInput.includes("세탁") && normalizedUserInput.includes("방법"))
-  ) {
-    pendingWashingContext = true;
-    return {
-      text: "어떤 커버(제품) 세탁 방법이 궁금하신가요? (요기보, 줄라, 럭스, 모듀, 메이트 등)",
-      videoHtml: null,
-      description: null,
-      imageUrl: null
-    };
-  }
+  // if (pendingWashingContext) {
+  //   const washingMap = {
+  //     "요기보": "요기보",
+  //     "줄라": "줄라",
+  //     "럭스": "럭스",
+  //     "모듀": "모듀",
+  //     "메이트": "메이트"
+  //   };
+  //   for (let key in washingMap) {
+  //     if (normalizedUserInput.includes(key)) {
+  //       if (companyData.washing && companyData.washing[key]) {
+  //         pendingWashingContext = false;
+  //         return {
+  //           text: companyData.washing[key].description,
+  //           videoHtml: null,
+  //           description: null,
+  //           imageUrl: null
+  //         };
+  //       }
+  //     }
+  //   }
+  //   pendingWashingContext = false;
+  //   return {
+  //     text: "해당 커버 종류를 찾지 못했어요. (요기보, 줄라, 럭스, 모듀, 메이트 중 하나를 입력해주세요.)",
+  //     videoHtml: null,
+  //     description: null,
+  //     imageUrl: null
+  //   };
+  // }
+  // if (
+  //   normalizedUserInput.includes("세탁방법") ||
+  //   (normalizedUserInput.includes("세탁") && normalizedUserInput.includes("방법"))
+  // ) {
+  //   pendingWashingContext = true;
+  //   return {
+  //     text: "어떤 커버(제품) 세탁 방법이 궁금하신가요? (요기보, 줄라, 럭스, 모듀, 메이트 등)",
+  //     videoHtml: null,
+  //     description: null,
+  //     imageUrl: null
+  //   };
+  // }
 
   // (2) 커버링 방법 맥락 처리
   if (pendingCoveringContext) {

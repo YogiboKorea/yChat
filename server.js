@@ -1079,7 +1079,7 @@ async function getAllPostItQA() {
 // 선택적으로 ?category= 를 사용해 특정 카테고리만 필터링할 수 있음
 app.get("/postIt", async (req, res) => {
   const page = parseInt(req.query.page) || 1;
-  const PAGE_SIZE = 100;
+  const PAGE_SIZE = 50;
   const category = req.query.category; // optional query param
   const queryFilter = category ? { category } : {};
 

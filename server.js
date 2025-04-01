@@ -1079,7 +1079,7 @@ async function getAllPostItQA() {
 // 선택적으로 ?category= 를 사용해 특정 카테고리만 필터링할 수 있음
 app.get("/postIt", async (req, res) => {
   const page = parseInt(req.query.page) || 1;
-  const PAGE_SIZE = 9;
+  const PAGE_SIZE = 100;
   const category = req.query.category; // optional query param
   const queryFilter = category ? { category } : {};
 
@@ -1233,9 +1233,6 @@ app.delete("/postIt/:id", async (req, res) => {
     return res.status(500).json({ error: "포스트잇 삭제 중 오류가 발생했습니다." });
   }
 });
-
-
-
 // ========== [13] 서버 시작 ==========
 (async function initialize() {
   await getTokensFromDB();  // MongoDB에서 토큰 불러오기

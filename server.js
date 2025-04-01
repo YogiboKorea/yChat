@@ -1110,7 +1110,7 @@ app.get("/postIt", async (req, res) => {
     // 각 문서의 _id를 문자열로 변환 (프론트에서 편하게 사용하기 위함)
     notes.forEach(doc => {
       doc._id = doc._id.toString();
-    });
+    });//업데이트 진행중
 
     await client.close();
 

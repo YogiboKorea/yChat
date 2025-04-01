@@ -451,15 +451,20 @@ async function getGPT3TurboResponse(userInput) {
     // (1) DB에서 포스트잇 Q/A 불러오기
     const allNotes = await getAllPostItQA();
 
-    // (2) 포스트잇 Q/A를 하나의 문자열로 합치기
-    //     예: "Q1: 질문... A1: 답변...\nQ2: 질문... A2: 답변...\n"
+    // (2) 포스트잇 Q/A를 하나의 문자열로 합치기 (최대 10개 노트만 사용)
     let postItContext = "\n아래는 참고할 포스트잇 질문/답변입니다:\n";
-    allNotes.forEach((note, i) => {
-      postItContext += `\nQ${i+1}: ${note.question}\nA${i+1}: ${note.answer}\n`;
+    const maxNotes = 10;
+    const notesToInclude = allNotes.slice(0, maxNotes);
+    notesToInclude.forEach((note, i) => {
+      // question과 answer가 모두 있는 경우에만 추가
+      if (note.question && note.answer) {
+        postItContext += `\nQ${i + 1}: ${note.question}\nA${i + 1}: ${note.answer}\n`;
+      }
     });
 
     // (3) 기존 YOGIBO_SYSTEM_PROMPT 뒤에 포스트잇 Q/A 추가
     const finalSystemPrompt = YOGIBO_SYSTEM_PROMPT + postItContext;
+    console.log("Final system prompt length:", finalSystemPrompt.length); // 프롬프트 길이 확인
 
     // (4) GPT API 호출
     const response = await axios.post(
@@ -489,6 +494,7 @@ async function getGPT3TurboResponse(userInput) {
     return "요기보 챗봇 오류가 발생했습니다. 다시 시도 부탁드립니다.";
   }
 }
+
 
 // 점(.) 뒤에 공백이 없는 경우 자동 추가하는 함수
 function addSpaceAfterPeriod(text) {

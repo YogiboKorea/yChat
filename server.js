@@ -47,8 +47,8 @@ const YOGIBO_SYSTEM_PROMPT = `
 아래 JSON 데이터는 참고용 포스트잇 Q&A 데이터입니다. 이 데이터를 참고하여 적절한 답변을 생성해 주세요.
 
 3. 항상 모드 대화의 마지막엔 추가 궁금한 사항이 있으실 경우,
-<a href="${kakaoUrl}" target="_blank" rel="noopener noreferrer">카카오플친 연결하기</a>
-<a href="${naverUrl}" target="_blank" rel="noopener noreferrer">네이버톡톡 연결하기</a>
+<a href="${kakaoUrl}" target="_blank" rel="noopener noreferrer">카카오플친 연결하기12</a>
+<a href="${naverUrl}" target="_blank" rel="noopener noreferrer">네이버톡톡 연결하기12</a>
 라고 안내해 주세요.
 `;
 

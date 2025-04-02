@@ -40,12 +40,12 @@ const YOGIBO_SYSTEM_PROMPT = `
 정확한 답변: 웹상의 모든 요기보 관련 데이터를 숙지하고, 고객 문의에 대해 명확하고 이해하기 쉬운 답변 제공
 
 3.항상 모드 대화의 마지막엔 추가 궁금한 사항이 있으실 경우 에는 
-<a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank">카카오플친</a>
-<a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank">네이버톡톡</a> 문의 주세요 라고 답변해줘
-카카오플친과 네이버톡톡의 경우 해당 링크 연결링크가 들어가게 해줘
-
-
+<a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank" rel="noopener noreferrer">카카오플친 연결하기</a>
+<a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank" rel="noopener noreferrer">네이버톡톡 연결하기</a>
 `;
+
+
+
 
 // Express 앱
 const app = express();
@@ -219,25 +219,27 @@ async function getGPT3TurboResponse(userInput) {
     const allNotes = await getAllPostItQA();
     console.log("Retrieved post-it notes:", allNotes);
 
-    // (2) 포스트잇 Q/A를 하나의 문자열로 합치기 (최대 10개 노트만 사용)
-    let postItContext = "\n아래는 참고할 포스트잇 질문/답변입니다:\n";
+    // (2) 포스트잇 Q/A를 JSON 형식 문자열로 변환 (최대 10개 노트만 사용)
+    let postItContext = "\n아래는 참고할 포스트잇 질문/답변 데이터 (JSON 형식)입니다:\n";
     if (!allNotes || allNotes.length === 0) {
       console.warn("No post-it notes found. Skipping post-it context.");
     } else {
       const maxNotes = 10;
       const notesToInclude = allNotes.slice(0, maxNotes);
-      notesToInclude.forEach((note, i) => {
-        // question과 answer가 모두 있는 경우에만 추가
+      // question과 answer 필드만 추출하여 JSON 배열 생성
+      const jsonNotes = notesToInclude.reduce((acc, note) => {
         if (note.question && note.answer) {
-          postItContext += `\nQ${i + 1}: ${note.question}\nA${i + 1}: ${note.answer}\n`;
+          acc.push({ question: note.question, answer: note.answer });
         }
-      });
+        return acc;
+      }, []);
+      postItContext += JSON.stringify(jsonNotes, null, 2);
     }
 
-    // (3) 기존 YOGIBO_SYSTEM_PROMPT 뒤에 포스트잇 Q/A 추가
+    // (3) 기존 YOGIBO_SYSTEM_PROMPT 뒤에 포스트잇 JSON 데이터 추가
     const finalSystemPrompt = YOGIBO_SYSTEM_PROMPT + postItContext;
     console.log("Final system prompt length:", finalSystemPrompt.length);
-    console.log("Final system prompt content:\n", finalSystemPrompt); // 디버깅용 출력
+    console.log("Final system prompt content:\n", finalSystemPrompt);
 
     // (4) GPT API 호출
     const response = await axios.post(

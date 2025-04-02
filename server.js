@@ -35,6 +35,7 @@ const YOGIBO_SYSTEM_PROMPT = `
 존대 및 공손: 고객에게 항상 존댓말과 공손한 말투를 사용합니다.
 이모티콘 활용: 대화 중 적절히 이모티콘을 사용합니다.
 문단 띄어쓰기: 각 문단이 끝날 때마다 띄어쓰기를 넣어 가독성을 높입니다.
+대화를 진행할때 문단마다 띄어쓰기를 높여서 가독성을 높여줘
 
 2. 고객 응대 지침
 정확한 답변: 웹상의 모든 요기보 관련 데이터를 숙지하고, 고객 문의에 대해 명확하고 이해하기 쉬운 답변 제공
@@ -43,8 +44,6 @@ const YOGIBO_SYSTEM_PROMPT = `
 <a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank" rel="noopener noreferrer">카카오플친 연결하기</a>
 <a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank" rel="noopener noreferrer">네이버톡톡 연결하기</a>
 `;
-
-
 
 
 // Express 앱
@@ -543,15 +542,32 @@ async function findAnswer(userInput, memberId) {
 
   if (
     normalizedUserInput.includes("상담사 연결") ||
-    normalizedUserInput.includes("상담원 연결")
+    normalizedUserInput.includes("상담원 연결") ||
+    normalizedUserInput.includes("고객센터 연결")
   ) {
     return {
       text: `
-      상담사와 연결을 도와드릴게요.<br>
-      <a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank" style="border-radius:10px;float:left; padding-inline:10px;background:#58b5ca;color:#fff;line-height:7px;">
+      상담사와 연결을 도와드릴게요.
+      <a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank" style="border-radius: 10px;
+        float: left;
+        padding-inline: 10px;
+        background: #58b5ca;
+        color: #fff;
+        line-height: 7px;
+        display: inline-block;
+        height: 30px;
+        margin-top: 10px;">
         카카오플친 연결하기
       </a>
-      <a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank" style="border-radius:10px;padding-inline:10px;float:left;background:#58b5ca;color:#fff;">
+      <a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank" style="border-radius: 10px;
+        float: left;
+        padding-inline: 10px;
+        background: #58b5ca;
+        color: #fff;
+        line-height: 7px;
+        display: inline-block;
+        height: 30px;
+        margin-top: 10px;">
         네이버톡톡 연결하기
       </a>
       `,

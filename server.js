@@ -27,19 +27,14 @@ const API_KEY = process.env.API_KEY;    // OpenAI API 키
 const FINETUNED_MODEL = process.env.FINETUNED_MODEL || "gpt-3.5-turbo";
 const CAFE24_API_VERSION = process.env.CAFE24_API_VERSION || '2024-06-01';
 
-// 원본 URL 문자열 (이미 "%20" 포함)
-const rawKakaoUrl = "http://pf. kakao. com/_lxmZsxj/chat";
-const rawNaverUrl = "https://talk. naver. com/ct/wc4u67?frm=psf";
+// **Yogibo 브랜드 맥락(시스템 프롬프트)**
+function convertPromptLinks(promptText) {
+  return promptText
+    .replace(/\[카카오플친 연결하기\]/g, '<a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank" rel="noopener noreferrer">카카오플친 연결하기</a>')
+    .replace(/\[네이버톡톡 연결하기\]/g, '<a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank" rel="noopener noreferrer">네이버톡톡 연결하기</a>');
+}
 
-// "%20" 문자열을 제거하여 올바른 URL로 변경
-const kakaoUrl = rawKakaoUrl.replace(/%20/g, "");
-const naverUrl = rawNaverUrl.replace(/%20/g, "");
-
-console.log(kakaoUrl); // "http://pf.kakao.com/_lxmZsxj/chat"
-console.log(naverUrl); // "https://talk.naver.com/ct/wc4u67?frm=psf"
-
-// 이후 시스템 프롬프트에 이 URL을 사용
-const YOGIBO_SYSTEM_PROMPT = `
+const rawSystemPrompt = `
 
 1. 역할 및 말투  
 전문가 역할: 요기보 브랜드에 대한 전문 지식을 가진 전문가로 행동합니다.  
@@ -52,11 +47,12 @@ const YOGIBO_SYSTEM_PROMPT = `
 아래 JSON 데이터는 참고용 포스트잇 Q&A 데이터입니다. 이 데이터를 참고하여 적절한 답변을 생성해 주세요.
 
 3. 항상 모드 대화의 마지막엔 추가 궁금한 사항이 있으실 경우,  
-<a href="${kakaoUrl}" target="_blank" rel="noopener noreferrer">카카오플친 연결하기</a>  
-<a href="${naverUrl}" target="_blank" rel="noopener noreferrer">네이버톡톡 연결하기</a>  
+[카카오플친 연결하기]  
+[네이버톡톡 연결하기]  
 라고 안내해 주세요.
 `;
 
+const YOGIBO_SYSTEM_PROMPT = convertPromptLinks(rawSystemPrompt);
 console.log(YOGIBO_SYSTEM_PROMPT);
 
 
@@ -229,11 +225,11 @@ function containsOrderNumber(input) {
 }
 async function getGPT3TurboResponse(userInput) {
   try {
-    // (1) DB에서 포스트잇 Q/A 불러오기
+    // (1) DB에서 포스트잇 Q&A 불러오기
     const allNotes = await getAllPostItQA();
     console.log("Retrieved post-it notes:", allNotes);
 
-    // (2) 포스트잇 Q/A를 평문 텍스트 형식으로 변환 (최대 10개 노트만 사용)
+    // (2) 포스트잇 Q&A를 평문 텍스트 형식으로 변환 (최대 10개 노트만 사용)
     let postItContext = "\n아래는 참고용 포스트잇 질문/답변 데이터입니다:\n";
     if (!allNotes || allNotes.length === 0) {
       console.warn("No post-it notes found. Skipping post-it context.");
@@ -241,14 +237,13 @@ async function getGPT3TurboResponse(userInput) {
       const maxNotes = 10;
       const notesToInclude = allNotes.slice(0, maxNotes);
       notesToInclude.forEach((note, i) => {
-        // question과 answer가 모두 있는 경우에만 추가
         if (note.question && note.answer) {
           postItContext += `\nQ${i + 1}: ${note.question}\nA${i + 1}: ${note.answer}\n`;
         }
       });
     }
 
-    // (3) 기존 YOGIBO_SYSTEM_PROMPT 뒤에 포스트잇 텍스트 데이터 추가
+    // (3) 기존 시스템 프롬프트에 포스트잇 텍스트 데이터를 추가
     const finalSystemPrompt = YOGIBO_SYSTEM_PROMPT + postItContext;
     console.log("Final system prompt length:", finalSystemPrompt.length);
     console.log("Final system prompt content:\n", finalSystemPrompt);

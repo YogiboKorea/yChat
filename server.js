@@ -28,8 +28,8 @@ const FINETUNED_MODEL = process.env.FINETUNED_MODEL || "gpt-3.5-turbo";
 const CAFE24_API_VERSION = process.env.CAFE24_API_VERSION || '2024-06-01';
 
 // 원본 URL 문자열 (의도치 않은 공백이 포함되어 있음)
-const rawKakaoUrl = "http://pf.kakao.com/_lxmZsxj/chat";
-const rawNaverUrl = "https://talk.naver.com/ct/wc4u67?frm=psf";
+const rawKakaoUrl = "http://pf. kakao. com/_lxmZsxj/chat";
+const rawNaverUrl = "https://talk. naver. com/ct/wc4u67?frm=psf";
 
 // 모든 공백(및 %20) 제거
 const kakaoUrl = rawKakaoUrl.replace(/\s+/g, "");
@@ -54,7 +54,6 @@ const YOGIBO_SYSTEM_PROMPT = `
 라고 안내해 주세요.
 `;
 
-console.log(YOGIBO_SYSTEM_PROMPT);
 
 
 // Express 앱

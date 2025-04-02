@@ -55,8 +55,7 @@ const rawSystemPrompt = `
 const YOGIBO_SYSTEM_PROMPT = convertPromptLinks(rawSystemPrompt);
 console.log(YOGIBO_SYSTEM_PROMPT);
 
-// 전역 변수: 최초 서버 시작 시 한 번만 postIt 데이터를 포함한 시스템 프롬프트를 구성
-let combinedSystemPrompt = null;
+// 전역 변수: 한 번만 초기화할 combinedSystemPrompt
 
 // Express 앱
 const app = express();
@@ -242,7 +241,7 @@ async function getAllPostItQA() {
   }
 }
 
-// initializeChatPrompt 함수: postIt의 질문/답변 텍스트만 추출하여 시스템 프롬프트에 추가
+// initializeChatPrompt: postIt의 질문/답변 텍스트만 추출하여 시스템 프롬프트에 추가
 async function initializeChatPrompt() {
   try {
     const allNotes = await getAllPostItQA();
@@ -250,7 +249,7 @@ async function initializeChatPrompt() {
 
     let postItContext = "\n아래는 참고용 포스트잇 Q&A 데이터입니다:\n";
     if (allNotes && allNotes.length > 0) {
-      const maxNotes = 300;  // 최대 100개 노트 포함
+      const maxNotes = 100;  // 최대 100개 노트 포함
       const notesToInclude = allNotes.slice(0, maxNotes);
       notesToInclude.forEach((note, i) => {
         if (note.question && note.answer) {
@@ -268,7 +267,7 @@ async function initializeChatPrompt() {
 }
 
 // Global variable for combined system prompt (한번만 초기화)
-//let combinedSystemPrompt = null;
+let combinedSystemPrompt = null;
 
 // ========== [8] getGPT3TurboResponse 함수 ==========
 async function getGPT3TurboResponse(userInput) {

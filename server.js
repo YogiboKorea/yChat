@@ -27,6 +27,23 @@ const API_KEY = process.env.API_KEY;    // OpenAI API 키
 const FINETUNED_MODEL = process.env.FINETUNED_MODEL || "gpt-3.5-turbo";
 const CAFE24_API_VERSION = process.env.CAFE24_API_VERSION || '2024-06-01';
 
+
+// 원본 URL 문자열 (이미 "%20" 포함)
+const rawKakaoUrl = "http://pf.%20kakao.%20com/_lxmZsxj/chat";
+const rawNaverUrl = "https://talk.%20naver.%20com/ct/wc4u67?frm=psf";
+
+// 먼저 decodeURIComponent를 이용해 URL 인코딩된 부분을 일반 문자로 변환
+const decodedKakaoUrl = decodeURIComponent(rawKakaoUrl); // "http://pf. kakao. com/_lxmZsxj/chat"
+const decodedNaverUrl = decodeURIComponent(rawNaverUrl); // "https://talk. naver. com/ct/wc4u67?frm=psf"
+
+// 변환된 문자열에서 모든 공백을 제거
+const kakaoUrl = decodedKakaoUrl.replace(/\s+/g, "");
+const naverUrl = decodedNaverUrl.replace(/\s+/g, "");
+
+console.log(kakaoUrl); // "http://pf.kakao.com/_lxmZsxj/chat"
+console.log(naverUrl); // "https://talk.naver.com/ct/wc4u67?frm=psf"
+
+
 // **Yogibo 브랜드 맥락(시스템 프롬프트)**
 function convertPromptLinks(promptText) {
   return promptText

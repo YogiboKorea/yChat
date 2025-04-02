@@ -237,7 +237,7 @@ async function getGPT3TurboResponse(userInput) {
     // (3) 기존 YOGIBO_SYSTEM_PROMPT 뒤에 포스트잇 Q/A 추가
     const finalSystemPrompt = YOGIBO_SYSTEM_PROMPT + postItContext;
     console.log("Final system prompt length:", finalSystemPrompt.length);
-    console.log("Final system prompt:", finalSystemPrompt); // (디버깅용, 민감 정보 주의)
+    console.log("Final system prompt content:\n", finalSystemPrompt); // 디버깅용 출력
 
     // (4) GPT API 호출
     const response = await axios.post(
@@ -267,6 +267,7 @@ async function getGPT3TurboResponse(userInput) {
     return "요기보 챗봇 오류가 발생했습니다. 다시 시도 부탁드립니다.";
   }
 }
+
 
 
 // 점(.) 뒤에 공백이 없는 경우 자동 추가하는 함수

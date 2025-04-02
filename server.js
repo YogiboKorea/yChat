@@ -222,7 +222,7 @@ function containsOrderNumber(input) {
   return /\d{8}-\d{7}/.test(input);
 }
 
-// postIt 데이터를 MongoDB에서 불러와 질문/답변 텍스트만 추출하는 함수
+// ========== postIt 데이터 관련 함수 ==========
 async function getAllPostItQA() {
   const client = new MongoClient(MONGODB_URI);
   try {
@@ -242,14 +242,14 @@ async function getAllPostItQA() {
 // getGPT3TurboResponse 함수 수정: postIt의 질문/답변 텍스트만 추출하여 시스템 프롬프트에 추가
 async function getGPT3TurboResponse(userInput) {
   try {
-    // MongoDB에서 postIt Q&A 데이터를 불러옴
+    // MongoDB에서 postItNotes 데이터를 불러옴
     const allNotes = await getAllPostItQA();
     console.log("Retrieved post-it notes:", allNotes);
 
-    // 질문과 답변 텍스트만 추출하여 평문으로 구성 (최대 10개)
+    // 질문과 답변 텍스트만 추출하여 평문 형식으로 구성 (최대 100개)
     let postItContext = "\n아래는 참고용 포스트잇 Q&A 데이터입니다:\n";
     if (allNotes && allNotes.length > 0) {
-      const maxNotes = 10;
+      const maxNotes = 100;  // 최대 100개 노트 포함
       const notesToInclude = allNotes.slice(0, maxNotes);
       notesToInclude.forEach((note, i) => {
         if (note.question && note.answer) {
@@ -293,7 +293,7 @@ async function getGPT3TurboResponse(userInput) {
   }
 }
 
-// 점(.) 뒤에 공백이 없는 경우 자동 추가하는 함수
+// ========== [7] 점(.) 뒤에 공백 자동 추가 함수 ==========
 function addSpaceAfterPeriod(text) {
   return text.replace(/\.([^\s])/g, '. $1');
 }
@@ -344,7 +344,7 @@ async function findAnswer(userInput, memberId) {
    ************************************************/
   // (2) 커버링 방법 맥락 처리
   if (pendingCoveringContext) {
-    const coveringTypes = ["더블", "맥스", "프라임", "슬림", "미디", "미니", "팟", "드롭", "라운저", "피라미드"];
+    const coveringTypes = ["더블", "맥스", "프리미엄", "슬림", "미디", "미니", "팟", "드롭", "라운저", "피라미드"];
     if (coveringTypes.includes(normalizedUserInput)) {
       const key = `${normalizedUserInput} 커버링 방법을 알고 싶어`;
       if (companyData.covering && companyData.covering[key]) {
@@ -367,7 +367,7 @@ async function findAnswer(userInput, memberId) {
     normalizedUserInput.includes("방법") &&
     !normalizedUserInput.includes("주문")
   ) {
-    const coveringTypes2 = ["더블", "맥스", "프라임", "슬림", "미디", "미니", "팟", "드롭", "라운저", "피라미드"];
+    const coveringTypes2 = ["더블", "맥스", "프리미엄", "슬림", "미디", "미니", "팟", "드롭", "라운저", "피라미드"];
     const foundType = coveringTypes2.find(type => normalizedUserInput.includes(type));
     if (foundType) {
       const key = `${foundType} 커버링 방법을 알고 싶어`;
@@ -621,7 +621,7 @@ async function findAnswer(userInput, memberId) {
       };
     }
   }
-  
+
   // (10) 주문번호 없이 주문상태 확인 처리
   if (
     (normalizedUserInput.includes("주문상태 확인") ||
@@ -714,59 +714,40 @@ async function findAnswer(userInput, memberId) {
 }
 
 // ========== [12] /chat 라우팅 ==========
-async function getGPT3TurboResponse(userInput) {
-  try {
-    // MongoDB에서 postItNotes 데이터를 불러옴
-    const allNotes = await getAllPostItQA();
-    console.log("Retrieved post-it notes:", allNotes);
-
-    // 질문과 답변 텍스트만 추출하여 평문 형식으로 구성 (최대 100개 노트)
-    let postItContext = "\n아래는 참고용 포스트잇 Q&A 데이터입니다:\n";
-    if (allNotes && allNotes.length > 0) {
-      const maxNotes = 300;  // 변경: 최대 100개 노트 포함
-      const notesToInclude = allNotes.slice(0, maxNotes);
-      notesToInclude.forEach((note, i) => {
-        if (note.question && note.answer) {
-          postItContext += `\nQ${i + 1}: ${note.question}\nA${i + 1}: ${note.answer}\n`;
-        }
-      });
-    } else {
-      console.warn("No post-it notes found.");
-    }
-
-    // 기존 시스템 프롬프트에 postIt 데이터를 추가하여 최종 프롬프트 구성
-    const finalSystemPrompt = YOGIBO_SYSTEM_PROMPT + postItContext;
-    console.log("Final system prompt length:", finalSystemPrompt.length);
-    console.log("Final system prompt content:\n", finalSystemPrompt);
-
-    // GPT API 호출
-    const response = await axios.post(
-      OPEN_URL,
-      {
-        model: FINETUNED_MODEL,
-        messages: [
-          { role: "system", content: finalSystemPrompt },
-          { role: "user", content: userInput }
-        ]
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${API_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-
-    const gptAnswer = response.data.choices[0].message.content;
-    const formattedAnswer = addSpaceAfterPeriod(gptAnswer);
-    return formattedAnswer;
-
-  } catch (error) {
-    console.error("Error calling OpenAI:", error.message);
-    return "요기보 챗봇 오류가 발생했습니다. 다시 시도 부탁드립니다.";
+app.post("/chat", async (req, res) => {
+  const userInput = req.body.message;
+  const memberId = req.body.memberId; // 프론트에서 전달한 회원 ID
+  if (!userInput) {
+    return res.status(400).json({ error: "Message is required" });
   }
-}
 
+  try {
+    const answer = await findAnswer(userInput, memberId);
+    let finalAnswer = answer;
+    if (answer.text === "질문을 이해하지 못했어요. 좀더 자세히 입력 해주시겠어요") {
+      const gptResponse = await getGPT3TurboResponse(userInput);
+      finalAnswer = {
+        text: gptResponse,
+        videoHtml: null,
+        description: null,
+        imageUrl: null
+      };
+    }
+    // "내아이디" 검색어인 경우에는 로그 저장을 건너뜁니다.
+    if (normalizeSentence(userInput) !== "내 아이디") {
+      await saveConversationLog(memberId, userInput, finalAnswer.text);
+    }
+    return res.json(finalAnswer);
+  } catch (error) {
+    console.error("Error in /chat endpoint:", error.message);
+    return res.status(500).json({
+      text: "질문을 이해하지 못했어요. 좀더 자세히 입력 해주시겠어요",
+      videoHtml: null,
+      description: null,
+      imageUrl: null
+    });
+  }
+});
 
 // 대화 내용 Excel 다운로드 라우팅
 app.get('/chatConnet', async (req, res) => {
@@ -814,7 +795,146 @@ app.get('/chatConnet', async (req, res) => {
   }
 });
 
-// ========== [13] 서버 시작 ==========
+// ========== [13] 포스트잇 노트 CRUD ==========
+function convertHashtagsToLinks(text) {
+  const hashtagLinks = {
+    '홈페이지': 'https://yogibo.kr/',
+    '매장': 'https://yogibo.kr/why/store.html',
+    '카카오플친':'http://pf.kakao.com/_lxmZsxj/chat',
+    '네이버톡톡':'https://talk.naver.com/ct/wc4u67?frm=psf'
+  };
+  return text.replace(/@([\w가-힣]+)/g, (match, keyword) => {
+    const url = hashtagLinks[keyword];
+    return `<a href="${url}" target="_blank">${keyword}</a>`;
+  });
+}
+
+app.get("/postIt", async (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const PAGE_SIZE = 300;
+  const category = req.query.category;
+  const queryFilter = category ? { category } : {};
+
+  try {
+    const client = new MongoClient(MONGODB_URI);
+    await client.connect();
+    const db = client.db(DB_NAME);
+    const collection = db.collection("postItNotes");
+    const totalCount = await collection.countDocuments(queryFilter);
+    const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+    let currentPage = page;
+    if (currentPage < 1) currentPage = 1;
+    if (totalPages > 0 && currentPage > totalPages) currentPage = totalPages;
+    const skipCount = (currentPage - 1) * PAGE_SIZE;
+    const notes = await collection
+      .find(queryFilter)
+      .sort({ _id: -1 })
+      .skip(skipCount)
+      .limit(PAGE_SIZE)
+      .toArray();
+    notes.forEach(doc => {
+      doc._id = doc._id.toString();
+    });
+    await client.close();
+    return res.json({
+      notes,
+      currentPage,
+      totalPages,
+      totalCount,
+      pageSize: PAGE_SIZE
+    });
+  } catch (error) {
+    console.error("GET /postIt 오류:", error.message);
+    return res.status(500).json({ error: "포스트잇 목록 조회 중 오류가 발생했습니다." });
+  }
+});
+
+app.post("/postIt", async (req, res) => {
+  const { question, answer, category } = req.body;
+  if (!question && !answer) {
+    return res.status(400).json({ error: "질문 또는 답변이 비어있습니다." });
+  }
+  try {
+    const client = new MongoClient(MONGODB_URI);
+    await client.connect();
+    const db = client.db(DB_NAME);
+    const collection = db.collection("postItNotes");
+    const convertedAnswer = answer ? convertHashtagsToLinks(answer) : answer;
+    const newNote = {
+      question,
+      answer: convertedAnswer,
+      category: category || "uncategorized",
+      createdAt: new Date()
+    };
+    const result = await collection.insertOne(newNote);
+    await client.close();
+    return res.json({
+      message: "포스트잇 등록 성공",
+      note: newNote
+    });
+  } catch (error) {
+    console.error("POST /postIt 오류:", error.message);
+    return res.status(500).json({ error: "포스트잇 등록 중 오류가 발생했습니다." });
+  }
+});
+
+app.put("/postIt/:id", async (req, res) => {
+  try {
+    const noteId = req.params.id; 
+    const { question, answer, category } = req.body;
+    const { ObjectId } = require("mongodb");
+    const client = new MongoClient(MONGODB_URI);
+    await client.connect();
+    const db = client.db(DB_NAME);
+    const collection = db.collection("postItNotes");
+    const filter = { _id: new ObjectId(noteId) };
+    const updateData = {
+      ...(question && { question }),
+      ...(answer && { answer: convertHashtagsToLinks(answer) }),
+      ...(category && { category }),
+      updatedAt: new Date()
+    };
+    const result = await collection.findOneAndUpdate(
+      filter,
+      { $set: updateData },
+      { returnDocument: "after" }
+    );
+    await client.close();
+    if (!result.value) {
+      return res.status(404).json({ error: "해당 포스트잇을 찾을 수 없습니다." });
+    }
+    return res.json({
+      message: "포스트잇 수정 성공",
+      note: result.value
+    });
+  } catch (error) {
+    console.error("PUT /postIt 오류:", error.message);
+    return res.status(500).json({ error: "포스트잇 수정 중 오류가 발생했습니다." });
+  }
+});
+
+app.delete("/postIt/:id", async (req, res) => {
+  const noteId = req.params.id;
+  try {
+    const client = new MongoClient(MONGODB_URI);
+    await client.connect();
+    const db = client.db(DB_NAME);
+    const collection = db.collection("postItNotes");
+    const { ObjectId } = require("mongodb");
+    const filter = { _id: new ObjectId(noteId) };
+    const result = await collection.deleteOne(filter);
+    await client.close();
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: "삭제할 포스트잇을 찾지 못했습니다." });
+    }
+    return res.json({ message: "포스트잇 삭제 성공" });
+  } catch (error) {
+    console.error("DELETE /postIt 오류:", error.message);
+    return res.status(500).json({ error: "포스트잇 삭제 중 오류가 발생했습니다." });
+  }
+});
+
+// ========== [14] 서버 시작 ==========
 (async function initialize() {
   await getTokensFromDB();  // MongoDB에서 토큰 불러오기
   const PORT = process.env.PORT || 5000;

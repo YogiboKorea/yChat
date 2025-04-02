@@ -229,8 +229,8 @@ async function getGPT3TurboResponse(userInput) {
     const allNotes = await getAllPostItQA();
     console.log("Retrieved post-it notes:", allNotes);
 
-    // (2) 포스트잇 Q&A를 평문 텍스트 형식으로 변환 (최대 10개 노트만 사용)
-    let postItContext = "\n아래는 참고용 포스트잇 질문/답변 데이터입니다:\n";
+    // (2) 질문과 답변만 평문 텍스트로 추출 (최대 10개 노트)
+    let postItContext = "\n아래는 참고용 포스트잇 Q&A 데이터입니다:\n";
     if (!allNotes || allNotes.length === 0) {
       console.warn("No post-it notes found. Skipping post-it context.");
     } else {
@@ -243,12 +243,17 @@ async function getGPT3TurboResponse(userInput) {
       });
     }
 
-    // (3) 기존 시스템 프롬프트에 포스트잇 텍스트 데이터를 추가
+    // (3) 기존 시스템 프롬프트와 포스트잇 텍스트를 합침
     const finalSystemPrompt = YOGIBO_SYSTEM_PROMPT + postItContext;
     console.log("Final system prompt length:", finalSystemPrompt.length);
     console.log("Final system prompt content:\n", finalSystemPrompt);
 
-    // (4) GPT API 호출
+    // (4) (선택 사항) 만약 이 데이터를 파일로 저장하고 싶다면 Blob으로 생성
+    // 예시: const blob = new Blob([postItContext], { type: 'text/plain' });
+    // const fileUrl = URL.createObjectURL(blob);
+    // 이후 fileUrl을 다운로드 링크 등에 사용 가능
+
+    // (5) GPT API 호출
     const response = await axios.post(
       OPEN_URL,
       {
@@ -266,7 +271,7 @@ async function getGPT3TurboResponse(userInput) {
       }
     );
 
-    // (5) GPT 응답 처리
+    // (6) GPT 응답 처리
     const gptAnswer = response.data.choices[0].message.content;
     const formattedAnswer = addSpaceAfterPeriod(gptAnswer);
     return formattedAnswer;

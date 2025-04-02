@@ -213,27 +213,31 @@ function normalizeSentence(sentence) {
 function containsOrderNumber(input) {
   return /\d{8}-\d{7}/.test(input);
 }
-
-// ========== [7] OpenAI GPT (fallback) - 맥락(컨텍스트) 주입 ==========
 async function getGPT3TurboResponse(userInput) {
   try {
     // (1) DB에서 포스트잇 Q/A 불러오기
     const allNotes = await getAllPostItQA();
+    console.log("Retrieved post-it notes:", allNotes);
 
     // (2) 포스트잇 Q/A를 하나의 문자열로 합치기 (최대 10개 노트만 사용)
     let postItContext = "\n아래는 참고할 포스트잇 질문/답변입니다:\n";
-    const maxNotes = 10;
-    const notesToInclude = allNotes.slice(0, maxNotes);
-    notesToInclude.forEach((note, i) => {
-      // question과 answer가 모두 있는 경우에만 추가
-      if (note.question && note.answer) {
-        postItContext += `\nQ${i + 1}: ${note.question}\nA${i + 1}: ${note.answer}\n`;
-      }
-    });
+    if (!allNotes || allNotes.length === 0) {
+      console.warn("No post-it notes found. Skipping post-it context.");
+    } else {
+      const maxNotes = 10;
+      const notesToInclude = allNotes.slice(0, maxNotes);
+      notesToInclude.forEach((note, i) => {
+        // question과 answer가 모두 있는 경우에만 추가
+        if (note.question && note.answer) {
+          postItContext += `\nQ${i + 1}: ${note.question}\nA${i + 1}: ${note.answer}\n`;
+        }
+      });
+    }
 
     // (3) 기존 YOGIBO_SYSTEM_PROMPT 뒤에 포스트잇 Q/A 추가
     const finalSystemPrompt = YOGIBO_SYSTEM_PROMPT + postItContext;
-    console.log("Final system prompt length:", finalSystemPrompt.length); // 프롬프트 길이 확인
+    console.log("Final system prompt length:", finalSystemPrompt.length);
+    console.log("Final system prompt:", finalSystemPrompt); // (디버깅용, 민감 정보 주의)
 
     // (4) GPT API 호출
     const response = await axios.post(

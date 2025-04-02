@@ -55,6 +55,9 @@ const rawSystemPrompt = `
 const YOGIBO_SYSTEM_PROMPT = convertPromptLinks(rawSystemPrompt);
 console.log(YOGIBO_SYSTEM_PROMPT);
 
+// 전역 변수: 최초 한 번만 postIt 데이터를 포함한 최종 시스템 프롬프트를 구성
+let combinedSystemPrompt = null;
+
 // Express 앱
 const app = express();
 app.use(cors());
@@ -239,14 +242,12 @@ async function getAllPostItQA() {
   }
 }
 
-// getGPT3TurboResponse 함수 수정: postIt의 질문/답변 텍스트만 추출하여 시스템 프롬프트에 추가
-async function getGPT3TurboResponse(userInput) {
+// initializeChatPrompt 함수: postIt의 질문/답변 텍스트만 추출하여 시스템 프롬프트에 추가하고 반환
+async function initializeChatPrompt() {
   try {
-    // MongoDB에서 postItNotes 데이터를 불러옴
     const allNotes = await getAllPostItQA();
     console.log("Retrieved post-it notes:", allNotes);
 
-    // 질문과 답변 텍스트만 추출하여 평문 형식으로 구성 (최대 100개)
     let postItContext = "\n아래는 참고용 포스트잇 Q&A 데이터입니다:\n";
     if (allNotes && allNotes.length > 0) {
       const maxNotes = 100;  // 최대 100개 노트 포함
@@ -259,11 +260,23 @@ async function getGPT3TurboResponse(userInput) {
     } else {
       console.warn("No post-it notes found.");
     }
+    return YOGIBO_SYSTEM_PROMPT + postItContext;
+  } catch (error) {
+    console.error("Error initializing chat prompt:", error);
+    return YOGIBO_SYSTEM_PROMPT;
+  }
+}
 
-    // 최종 시스템 프롬프트에 postIt 텍스트를 추가
-    const finalSystemPrompt = YOGIBO_SYSTEM_PROMPT + postItContext;
-    console.log("Final system prompt length:", finalSystemPrompt.length);
-    console.log("Final system prompt content:\n", finalSystemPrompt);
+// getGPT3TurboResponse 함수 수정: 전역의 combinedSystemPrompt 사용 (최초 1회 초기화)
+async function getGPT3TurboResponse(userInput) {
+  try {
+    // combinedSystemPrompt가 없으면 초기화
+    if (!combinedSystemPrompt) {
+      combinedSystemPrompt = await initializeChatPrompt();
+      console.log("Combined system prompt initialized.");
+    }
+    console.log("Final system prompt used for GPT (length):", combinedSystemPrompt.length);
+    console.log("Final system prompt content:\n", combinedSystemPrompt);
 
     // GPT API 호출
     const response = await axios.post(
@@ -271,7 +284,7 @@ async function getGPT3TurboResponse(userInput) {
       {
         model: FINETUNED_MODEL,
         messages: [
-          { role: "system", content: finalSystemPrompt },
+          { role: "system", content: combinedSystemPrompt },
           { role: "user", content: userInput }
         ]
       },
@@ -662,7 +675,7 @@ async function findAnswer(userInput, memberId) {
               text: `고객님께서 주문하신 상품은 ${shippingCompany}를 통해 ${statusText} 이며, 운송장 번호는 ${trackingNo} 입니다.`,
               videoHtml: null,
               description: null,
-              imageUrl: null,
+              imageUrl: null
             };
           } else {
             return { text: "해당 주문에 대한 배송 상세 정보를 찾을 수 없습니다." };
@@ -937,6 +950,9 @@ app.delete("/postIt/:id", async (req, res) => {
 // ========== [14] 서버 시작 ==========
 (async function initialize() {
   await getTokensFromDB();  // MongoDB에서 토큰 불러오기
+  // 초기 한 번만 postIt 데이터를 포함한 시스템 프롬프트를 구성
+  combinedSystemPrompt = await initializeChatPrompt();
+  console.log("Combined system prompt initialized.");
   const PORT = process.env.PORT || 5000;
   app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);

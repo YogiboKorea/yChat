@@ -30,8 +30,8 @@ const CAFE24_API_VERSION = process.env.CAFE24_API_VERSION || '2024-06-01';
 // **Yogibo 브랜드 맥락(시스템 프롬프트)**
 function convertPromptLinks(promptText) {
   return promptText
-    .replace(/\[카카오플친 연결하기\]/g, '<a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank" rel="noopener noreferrer">카카오플친 연결하기</a>')
-    .replace(/\[네이버톡톡 연결하기\]/g, '<a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank" rel="noopener noreferrer">네이버톡톡 연결하기</a>');
+    .replace(/\[카카오플친 연결하기\]/g, '<a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank" rel="noopener noreferrer">카카오플친 연결하기해줘</a>')
+    .replace(/\[네이버톡톡 연결하기\]/g, '<a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank" rel="noopener noreferrer">카카오플친 연결하기해줘</a>');
 }
 
 const rawSystemPrompt = `

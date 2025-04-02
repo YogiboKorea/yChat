@@ -55,8 +55,6 @@ const rawSystemPrompt = `
 const YOGIBO_SYSTEM_PROMPT = convertPromptLinks(rawSystemPrompt);
 console.log(YOGIBO_SYSTEM_PROMPT);
 
-
-
 // Express 앱
 const app = express();
 app.use(cors());
@@ -223,16 +221,36 @@ function normalizeSentence(sentence) {
 function containsOrderNumber(input) {
   return /\d{8}-\d{7}/.test(input);
 }
-// postIt 데이터를 텍스트 형식으로 변환하고 시스템 프롬프트에 추가하는 함수
-async function initializeChatPrompt() {
+
+// postIt 데이터를 MongoDB에서 불러와 질문/답변 텍스트만 추출하는 함수
+async function getAllPostItQA() {
+  const client = new MongoClient(MONGODB_URI);
   try {
-    const allNotes = await getAllPostItQA(); // MongoDB에서 postIt 데이터 불러오기
+    await client.connect();
+    const db = client.db(DB_NAME);
+    const collection = db.collection("postItNotes");
+    const notes = await collection.find({}).toArray();
+    return notes;
+  } catch (error) {
+    console.error("포스트잇 Q/A 로드 오류:", error);
+    return [];
+  } finally {
+    await client.close();
+  }
+}
+
+// getGPT3TurboResponse 함수 수정: postIt의 질문/답변 텍스트만 추출하여 시스템 프롬프트에 추가
+async function getGPT3TurboResponse(userInput) {
+  try {
+    // MongoDB에서 postIt Q&A 데이터를 불러옴
+    const allNotes = await getAllPostItQA();
     console.log("Retrieved post-it notes:", allNotes);
 
+    // 질문과 답변 텍스트만 추출하여 평문으로 구성 (최대 10개)
     let postItContext = "\n아래는 참고용 포스트잇 Q&A 데이터입니다:\n";
     if (allNotes && allNotes.length > 0) {
-      // 원하는 개수만 포함 (예: 전체 또는 최대 10개)
-      const notesToInclude = allNotes.slice(0, 10);
+      const maxNotes = 10;
+      const notesToInclude = allNotes.slice(0, maxNotes);
       notesToInclude.forEach((note, i) => {
         if (note.question && note.answer) {
           postItContext += `\nQ${i + 1}: ${note.question}\nA${i + 1}: ${note.answer}\n`;
@@ -242,47 +260,10 @@ async function initializeChatPrompt() {
       console.warn("No post-it notes found.");
     }
 
-    // 기존 시스템 프롬프트(YOGIBO_SYSTEM_PROMPT)에 postIt 데이터를 추가
-    window.combinedSystemPrompt = YOGIBO_SYSTEM_PROMPT + postItContext;
-    console.log("Combined system prompt:\n", window.combinedSystemPrompt);
-  } catch (error) {
-    console.error("Error initializing chat prompt:", error);
-    // 만약 오류 발생 시 기존 프롬프트 사용
-    window.combinedSystemPrompt = YOGIBO_SYSTEM_PROMPT;
-  }
-}
-
-// 페이지 로딩 시 initializeChatPrompt를 호출하여 시스템 프롬프트를 구성
-window.addEventListener("load", async function() {
-  await initializeChatPrompt();
-
-  // 이후 기존 로직에 따라 회원 ID 전송, 채팅 초기화 등을 진행합니다.
-  try {
-    if (!memberId) {
-      memberId = await getCustomerId();
-      console.log("페이지 로딩 후 가져온 회원 ID:", memberId);
-    }
-    const payload = { message: "내 아이디", memberId: memberId };
-    const response = await fetch("https://port-0-ychat-lzgmwhc4d9883c97.sel4.cloudtype.app/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    const data = await response.json();
-    console.log("서버 응답:", data);
-    // 일반 응답은 기존 방식대로 출력
-    appendBotMessage(data.text);
-  } catch (error) {
-    console.error("회원 ID 전송 오류:", error);
-  }
-});
-
-// 수정된 getGPT3TurboResponse 함수에서 combinedSystemPrompt 사용 예시
-async function getGPT3TurboResponse(userInput) {
-  try {
-    // 기존에는 YOGIBO_SYSTEM_PROMPT를 사용했지만, 이제 combinedSystemPrompt를 사용합니다.
-    const finalSystemPrompt = window.combinedSystemPrompt || YOGIBO_SYSTEM_PROMPT;
-    console.log("Final system prompt used for GPT:", finalSystemPrompt);
+    // 최종 시스템 프롬프트에 postIt 텍스트를 추가
+    const finalSystemPrompt = YOGIBO_SYSTEM_PROMPT + postItContext;
+    console.log("Final system prompt length:", finalSystemPrompt.length);
+    console.log("Final system prompt content:\n", finalSystemPrompt);
 
     // GPT API 호출
     const response = await axios.post(
@@ -302,7 +283,6 @@ async function getGPT3TurboResponse(userInput) {
       }
     );
 
-    // GPT 응답 처리
     const gptAnswer = response.data.choices[0].message.content;
     const formattedAnswer = addSpaceAfterPeriod(gptAnswer);
     return formattedAnswer;
@@ -312,10 +292,6 @@ async function getGPT3TurboResponse(userInput) {
     return "요기보 챗봇 오류가 발생했습니다. 다시 시도 부탁드립니다.";
   }
 }
-
-
-
-
 
 // 점(.) 뒤에 공백이 없는 경우 자동 추가하는 함수
 function addSpaceAfterPeriod(text) {
@@ -342,11 +318,9 @@ async function saveConversationLog(memberId, userMessage, botResponse) {
       createdAt: new Date()
     };
     if (existingLog) {
-      // 이미 당일 대화가 있으면 conversation 배열에 새 항목 추가
       await collection.updateOne(query, { $push: { conversation: logEntry } });
       console.log("대화 로그 업데이트 성공");
     } else {
-      // 당일 대화가 없으면 새 문서 생성
       await collection.insertOne({
         memberId: (memberId && memberId !== "null") ? memberId : null,
         date: today,
@@ -368,49 +342,6 @@ async function findAnswer(userInput, memberId) {
   /************************************************
    * A. JSON 기반 FAQ / 제품 안내 로직
    ************************************************/
-  // (1) 세탁 방법 맥락 처리
-  // if (pendingWashingContext) {
-  //   const washingMap = {
-  //     "요기보": "요기보",
-  //     "줄라": "줄라",
-  //     "럭스": "럭스",
-  //     "모듀": "모듀",
-  //     "메이트": "메이트"
-  //   };
-  //   for (let key in washingMap) {
-  //     if (normalizedUserInput.includes(key)) {
-  //       if (companyData.washing && companyData.washing[key]) {
-  //         pendingWashingContext = false;
-  //         return {
-  //           text: companyData.washing[key].description,
-  //           videoHtml: null,
-  //           description: null,
-  //           imageUrl: null
-  //         };
-  //       }
-  //     }
-  //   }
-  //   pendingWashingContext = false;
-  //   return {
-  //     text: "해당 커버 종류를 찾지 못했어요. (요기보, 줄라, 럭스, 모듀, 메이트 중 하나를 입력해주세요.)",
-  //     videoHtml: null,
-  //     description: null,
-  //     imageUrl: null
-  //   };
-  // }
-  // if (
-  //   normalizedUserInput.includes("세탁방법") ||
-  //   (normalizedUserInput.includes("세탁") && normalizedUserInput.includes("방법"))
-  // ) {
-  //   pendingWashingContext = true;
-  //   return {
-  //     text: "어떤 커버(제품) 세탁 방법이 궁금하신가요? (요기보, 줄라, 럭스, 모듀, 메이트 등)",
-  //     videoHtml: null,
-  //     description: null,
-  //     imageUrl: null
-  //   };
-  // }
-
   // (2) 커버링 방법 맥락 처리
   if (pendingCoveringContext) {
     const coveringTypes = ["더블", "맥스", "프라임", "슬림", "미디", "미니", "팟", "드롭", "라운저", "피라미드"];
@@ -458,7 +389,7 @@ async function findAnswer(userInput, memberId) {
     } else {
       pendingCoveringContext = true;
       return {
-        text: "어떤 커버링을 알고 싶으신가요? (맥스, 더블, 프라임, 슬림, 미니 등)",
+        text: "어떤 커버링을 알고 싶으신가요? (맥스, 더블, 프리미엄, 슬림, 미니 등)",
         videoHtml: null,
         description: null,
         imageUrl: null
@@ -467,7 +398,7 @@ async function findAnswer(userInput, memberId) {
   }
 
   // (3) 사이즈 안내
-  const sizeTypes = ["더블", "맥스", "프라임", "슬림", "미디", "미니", "팟", "드롭", "라운저", "피라미드"];
+  const sizeTypes = ["더블", "맥스", "프리미엄", "슬림", "미디", "미니", "팟", "드롭", "라운저", "피라미드"];
   if (
     normalizedUserInput.includes("사이즈") ||
     normalizedUserInput.includes("크기")
@@ -521,7 +452,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // (6) goodsInfo (유사도 매칭)
+  // (5) goodsInfo (유사도 매칭)
   if (companyData.goodsInfo) {
     let bestGoodsMatch = null;
     let bestGoodsDistance = Infinity;
@@ -544,7 +475,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // (7) homePage 유사도 매칭
+  // (6) homePage 유사도 매칭
   if (companyData.homePage) {
     let bestHomeMatch = null;
     let bestHomeDist = Infinity;
@@ -565,7 +496,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // (8) asInfo 정보
+  // (7) asInfo 정보
   if (companyData.asInfoList) {
     let asInfoMatch = null;
     let asInfoDist = Infinity;
@@ -594,8 +525,8 @@ async function findAnswer(userInput, memberId) {
     return {
       text: `
       상담사와 연결을 도와드릴게요.
-      <a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank" >카카오플친 연결하기 </a>
-      <a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank">네이버톡톡 연결하기</a>
+      <a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank" rel="noopener noreferrer">카카오플친 연결하기</a>
+      <a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank" rel="noopener noreferrer">네이버톡톡 연결하기</a>
       `,
       videoHtml: null,
       description: null,
@@ -606,7 +537,7 @@ async function findAnswer(userInput, memberId) {
   /************************************************
    * B. Café24 주문/배송 로직
    ************************************************/
-  // (9) 회원 아이디 조회
+  // (8) 회원 아이디 조회
   if (
     normalizedUserInput.includes("내 아이디") ||
     normalizedUserInput.includes("나의 아이디") ||
@@ -630,7 +561,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // (10) 주문번호가 포함된 경우 처리
+  // (9) 주문번호가 포함된 경우 처리
   if (containsOrderNumber(normalizedUserInput)) {
     if (memberId && memberId !== "null") {
       try {
@@ -675,22 +606,23 @@ async function findAnswer(userInput, memberId) {
         };
       }
     } else {
-      {
-        return { 
-          text: `배송은 제품 출고 후 1~3 영업일 정도 소요되며, 제품별 출고 시 소요되는 기간은 아래 내용을 확인해주세요.
-          - 소파 및 바디필로우: 주문 확인 후 제작되는 제품으로, 3~7 영업일 이내에 출고됩니다.
-          - 모듀(모듈러) 소파: 주문 확인일로부터 1~3 영업일 이내에 출고됩니다.
-          - 그 외 제품: 주문 확인일로부터 1~3 영업일 이내에 출고됩니다.
-          일부 제품은 오후 1시 이전에 구매를 마쳐주시면 당일 출고될 수 있어요.
-          개별 배송되는 제품을 여러 개 구매하신 경우 제품이 여러 차례로 나눠 배송될 수 있습니다.
-          주문 폭주 및 재난 상황이나 천재지변, 택배사 사정 등에 의해 배송 일정이 일부 변경될 수 있습니다.
-          추가 문의사항이 있으신 경우 Yogibo 고객센터로 문의해주세요.`
-        };
-      }
+      return { 
+        text: `배송은 제품 출고 후 1~3 영업일 정도 소요되며, 제품별 출고 시 소요되는 기간은 아래 내용을 확인해주세요.
+        - 소파 및 바디필로우: 주문 확인 후 제작되는 제품으로, 3~7 영업일 이내에 출고됩니다.
+        - 모듀(모듈러) 소파: 주문 확인일로부터 1~3 영업일 이내에 출고됩니다.
+        - 그 외 제품: 주문 확인일로부터 1~3 영업일 이내에 출고됩니다.
+        일부 제품은 오후 1시 이전에 구매를 마쳐주시면 당일 출고될 수 있어요.
+        개별 배송되는 제품을 여러 개 구매하신 경우 제품이 여러 차례로 나눠 배송될 수 있습니다.
+        주문 폭주 및 재난 상황이나 천재지변, 택배사 사정 등에 의해 배송 일정이 일부 변경될 수 있습니다.
+        추가 문의사항이 있으신 경우 Yogibo 고객센터로 문의해주세요.`,
+        videoHtml: null,
+        description: null,
+        imageUrl: null
+      };
     }
   }
   
-  // (11) 주문번호 없이 주문상태 확인 처리
+  // (10) 주문번호 없이 주문상태 확인 처리
   if (
     (normalizedUserInput.includes("주문상태 확인") ||
       normalizedUserInput.includes("배송") ||
@@ -744,25 +676,29 @@ async function findAnswer(userInput, memberId) {
             일부 제품은 오후 1시 이전에 구매를 마쳐주시면 당일 출고될 수 있어요.
             개별 배송되는 제품을 여러 개 구매하신 경우 제품이 여러 차례로 나눠 배송될 수 있습니다.
             주문 폭주 및 재난 상황이나 천재지변, 택배사 사정 등에 의해 배송 일정이 일부 변경될 수 있습니다.
-            추가 문의사항이 있으신 경우 Yogibo 고객센터로 문의해주세요.`
+            추가 문의사항이 있으신 경우 Yogibo 고객센터로 문의해주세요.`,
+            videoHtml: null,
+            description: null,
+            imageUrl: null
           };
         }
       } catch (error) {
         return { text: "고객님의 주문 정보를 찾을 수 없습니다. 주문 여부를 확인해주세요." };
       }
     } else {
-      {
-        return { 
-          text: `배송은 제품 출고 후 1~3 영업일 정도 소요되며, 제품별 출고 시 소요되는 기간은 아래 내용을 확인해주세요.
-          - 소파 및 바디필로우: 주문 확인 후 제작되는 제품으로, 3~7 영업일 이내에 출고됩니다.
-          - 모듀(모듈러) 소파: 주문 확인일로부터 1~3 영업일 이내에 출고됩니다.
-          - 그 외 제품: 주문 확인일로부터 1~3 영업일 이내에 출고됩니다.
-          일부 제품은 오후 1시 이전에 구매를 마쳐주시면 당일 출고될 수 있어요.
-          개별 배송되는 제품을 여러 개 구매하신 경우 제품이 여러 차례로 나눠 배송될 수 있습니다.
-          주문 폭주 및 재난 상황이나 천재지변, 택배사 사정 등에 의해 배송 일정이 일부 변경될 수 있습니다.
-          추가 문의사항이 있으신 경우 Yogibo 고객센터로 문의해주세요.`
-        };
-      }
+      return { 
+        text: `배송은 제품 출고 후 1~3 영업일 정도 소요되며, 제품별 출고 시 소요되는 기간은 아래 내용을 확인해주세요.
+        - 소파 및 바디필로우: 주문 확인 후 제작되는 제품으로, 3~7 영업일 이내에 출고됩니다.
+        - 모듀(모듈러) 소파: 주문 확인일로부터 1~3 영업일 이내에 출고됩니다.
+        - 그 외 제품: 주문 확인일로부터 1~3 영업일 이내에 출고됩니다.
+        일부 제품은 오후 1시 이전에 구매를 마쳐주시면 당일 출고될 수 있어요.
+        개별 배송되는 제품을 여러 개 구매하신 경우 제품이 여러 차례로 나눠 배송될 수 있습니다.
+        주문 폭주 및 재난 상황이나 천재지변, 택배사 사정 등에 의해 배송 일정이 일부 변경될 수 있습니다.
+        추가 문의사항이 있으신 경우 Yogibo 고객센터로 문의해주세요.`,
+        videoHtml: null,
+        description: null,
+        imageUrl: null
+      };
     }
   }
   
@@ -813,7 +749,7 @@ app.post("/chat", async (req, res) => {
   }
 });
 
-//대화 내용 적용 로직
+// 대화 내용 Excel 다운로드 라우팅
 app.get('/chatConnet', async (req, res) => {
   const client = new MongoClient(MONGODB_URI);
   try {
@@ -857,206 +793,8 @@ app.get('/chatConnet', async (req, res) => {
   } finally {
     await client.close();
   }
-});// 채팅 응답 답변에 대한 데이터 추가 
-/******************************************************
- * server.js - 기존 코드 + 포스트잇(질문/답변/카테고리) 저장 로직
- ******************************************************/
-
-// 새로 추가할 collection 이름
-const postItCollectionName = "postItNotes";
-
-function convertHashtagsToLinks(text) {
-  const hashtagLinks = {
-    '홈페이지': 'https://yogibo.kr/',
-    '매장': 'https://yogibo.kr/why/store.html',
-    '카카오플친':'http://pf.kakao.com/_lxmZsxj/chat',
-    '네이버톡톡':'https://talk.naver.com/ct/wc4u67?frm=psf'
-  };
-  return text.replace(/@([\w가-힣]+)/g, (match, keyword) => {
-    const url = hashtagLinks[keyword];
-    // 반환 시 keyword만 사용하여 '@' 제거
-    return `<a href="${url}" target="_blank">${keyword}</a>`;
-  });
-}
-
-// 포스트잇 데이터 저장 함수
-async function getAllPostItQA() {
-  const client = new MongoClient(MONGODB_URI);
-  try {
-    await client.connect();
-    const db = client.db(DB_NAME);
-    const collection = db.collection(postItCollectionName);
-
-    // 전체 포스트잇 Q/A 불러오기
-    const notes = await collection.find({}).toArray();
-
-    return notes;
-  } catch (error) {
-    console.error("포스트잇 Q/A 로드 오류:", error);
-    return [];
-  } finally {
-    await client.close();
-  }
-}
-
-// [A] 포스트잇 노트 조회 (페이징)
-// 선택적으로 ?category= 를 사용해 특정 카테고리만 필터링할 수 있음
-app.get("/postIt", async (req, res) => {
-  const page = parseInt(req.query.page) || 1;
-  const PAGE_SIZE = 300;
-  const category = req.query.category; // optional query param
-  const queryFilter = category ? { category } : {};
-
-  try {
-    const client = new MongoClient(MONGODB_URI);
-    await client.connect();
-    const db = client.db(DB_NAME);
-    const collection = db.collection(postItCollectionName);
-
-    // 전체 문서 수 (필터 적용)
-    const totalCount = await collection.countDocuments(queryFilter);
-    const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-
-    let currentPage = page;
-    if (currentPage < 1) currentPage = 1;
-    if (totalPages > 0 && currentPage > totalPages) currentPage = totalPages;
-
-    const skipCount = (currentPage - 1) * PAGE_SIZE;
-
-    // 최신 등록이 맨 위에 오도록 정렬 (desc)
-    const notes = await collection
-      .find(queryFilter)
-      .sort({ _id: -1 })
-      .skip(skipCount)
-      .limit(PAGE_SIZE)
-      .toArray();
-
-    // 각 문서의 _id를 문자열로 변환 (프론트에서 편하게 사용하기 위함)
-    notes.forEach(doc => {
-      doc._id = doc._id.toString();
-    });//업데이트 진행중
-
-    await client.close();
-
-    return res.json({
-      notes,           // 현재 페이지 노트 목록
-      currentPage,     // 현재 페이지
-      totalPages,      // 총 페이지 수
-      totalCount,      // 전체 노트 개수
-      pageSize: PAGE_SIZE
-    });
-  } catch (error) {
-    console.error("GET /postIt 오류:", error.message);
-    return res.status(500).json({ error: "포스트잇 목록 조회 중 오류가 발생했습니다." });
-  }
 });
 
-// [B] 포스트잇 노트 등록 (카테고리 추가)
-app.post("/postIt", async (req, res) => {
-  const { question, answer, category } = req.body;
-  if (!question && !answer) {
-    return res.status(400).json({ error: "질문 또는 답변이 비어있습니다." });
-  }
-
-  try {
-    const client = new MongoClient(MONGODB_URI);
-    await client.connect();
-    const db = client.db(DB_NAME);
-    const collection = db.collection(postItCollectionName);
-
-    const convertedAnswer = answer ? convertHashtagsToLinks(answer) : answer;
-
-    // DB에 저장할 문서 (category 필드 추가)
-    const newNote = {
-      question,
-      answer: convertedAnswer,
-      category: category || "uncategorized", // 기본값 설정 가능
-      createdAt: new Date()
-      // 필요하다면 color 등 다른 필드 추가 가능
-    };
-
-    const result = await collection.insertOne(newNote);
-    await client.close();
-
-    // 성공 시 새로 등록된 문서 반환
-    return res.json({
-      message: "포스트잇 등록 성공",
-      note: newNote
-    });
-  } catch (error) {
-    console.error("POST /postIt 오류:", error.message);
-    return res.status(500).json({ error: "포스트잇 등록 중 오류가 발생했습니다." });
-  }
-});
-
-// [C] 포스트잇 노트 수정 (카테고리 업데이트 옵션 포함)
-app.put("/postIt/:id", async (req, res) => {
-  try {
-    const noteId = req.params.id; 
-    const { question, answer, category } = req.body;
-    const { ObjectId } = require("mongodb");
-
-    const client = new MongoClient(MONGODB_URI);
-    await client.connect();
-    const db = client.db(DB_NAME);
-    const collection = db.collection(postItCollectionName);
-
-    const filter = { _id: new ObjectId(noteId) };
-    const updateData = {
-      ...(question && { question }),
-      ...(answer && { answer: convertHashtagsToLinks(answer) }),
-      ...(category && { category }),
-      updatedAt: new Date()
-    };
-
-    const result = await collection.findOneAndUpdate(
-      filter,
-      { $set: updateData },
-      { returnDocument: "after" }
-    );
-
-    await client.close();
-
-    if (!result.value) {
-      return res.status(404).json({ error: "해당 포스트잇을 찾을 수 없습니다." });
-    }
-
-    return res.json({
-      message: "포스트잇 수정 성공",
-      note: result.value
-    });
-  } catch (error) {
-    console.error("PUT /postIt 오류:", error.message);
-    return res.status(500).json({ error: "포스트잇 수정 중 오류가 발생했습니다." });
-  }
-});
-
-// [D] 포스트잇 노트 삭제
-app.delete("/postIt/:id", async (req, res) => {
-  const noteId = req.params.id;
-
-  try {
-    const client = new MongoClient(MONGODB_URI);
-    await client.connect();
-    const db = client.db(DB_NAME);
-    const collection = db.collection(postItCollectionName);
-
-    const { ObjectId } = require("mongodb");
-    const filter = { _id: new ObjectId(noteId) };
-
-    const result = await collection.deleteOne(filter);
-    await client.close();
-
-    if (result.deletedCount === 0) {
-      return res.status(404).json({ error: "삭제할 포스트잇을 찾지 못했습니다." });
-    }
-
-    return res.json({ message: "포스트잇 삭제 성공" });
-  } catch (error) {
-    console.error("DELETE /postIt 오류:", error.message);
-    return res.status(500).json({ error: "포스트잇 삭제 중 오류가 발생했습니다." });
-  }
-});
 // ========== [13] 서버 시작 ==========
 (async function initialize() {
   await getTokensFromDB();  // MongoDB에서 토큰 불러오기

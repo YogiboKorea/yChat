@@ -714,40 +714,59 @@ async function findAnswer(userInput, memberId) {
 }
 
 // ========== [12] /chat 라우팅 ==========
-app.post("/chat", async (req, res) => {
-  const userInput = req.body.message;
-  const memberId = req.body.memberId; // 프론트에서 전달한 회원 ID
-  if (!userInput) {
-    return res.status(400).json({ error: "Message is required" });
-  }
-
+async function getGPT3TurboResponse(userInput) {
   try {
-    const answer = await findAnswer(userInput, memberId);
-    let finalAnswer = answer;
-    if (answer.text === "질문을 이해하지 못했어요. 좀더 자세히 입력 해주시겠어요") {
-      const gptResponse = await getGPT3TurboResponse(userInput);
-      finalAnswer = {
-        text: gptResponse,
-        videoHtml: null,
-        description: null,
-        imageUrl: null
-      };
+    // MongoDB에서 postItNotes 데이터를 불러옴
+    const allNotes = await getAllPostItQA();
+    console.log("Retrieved post-it notes:", allNotes);
+
+    // 질문과 답변 텍스트만 추출하여 평문 형식으로 구성 (최대 100개 노트)
+    let postItContext = "\n아래는 참고용 포스트잇 Q&A 데이터입니다:\n";
+    if (allNotes && allNotes.length > 0) {
+      const maxNotes = 300;  // 변경: 최대 100개 노트 포함
+      const notesToInclude = allNotes.slice(0, maxNotes);
+      notesToInclude.forEach((note, i) => {
+        if (note.question && note.answer) {
+          postItContext += `\nQ${i + 1}: ${note.question}\nA${i + 1}: ${note.answer}\n`;
+        }
+      });
+    } else {
+      console.warn("No post-it notes found.");
     }
-    // "내아이디" 검색어인 경우에는 로그 저장을 건너뜁니다.
-    if (normalizeSentence(userInput) !== "내 아이디") {
-      await saveConversationLog(memberId, userInput, finalAnswer.text);
-    }
-    return res.json(finalAnswer);
+
+    // 기존 시스템 프롬프트에 postIt 데이터를 추가하여 최종 프롬프트 구성
+    const finalSystemPrompt = YOGIBO_SYSTEM_PROMPT + postItContext;
+    console.log("Final system prompt length:", finalSystemPrompt.length);
+    console.log("Final system prompt content:\n", finalSystemPrompt);
+
+    // GPT API 호출
+    const response = await axios.post(
+      OPEN_URL,
+      {
+        model: FINETUNED_MODEL,
+        messages: [
+          { role: "system", content: finalSystemPrompt },
+          { role: "user", content: userInput }
+        ]
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const gptAnswer = response.data.choices[0].message.content;
+    const formattedAnswer = addSpaceAfterPeriod(gptAnswer);
+    return formattedAnswer;
+
   } catch (error) {
-    console.error("Error in /chat endpoint:", error.message);
-    return res.status(500).json({
-      text: "질문을 이해하지 못했어요. 좀더 자세히 입력 해주시겠어요",
-      videoHtml: null,
-      description: null,
-      imageUrl: null
-    });
+    console.error("Error calling OpenAI:", error.message);
+    return "요기보 챗봇 오류가 발생했습니다. 다시 시도 부탁드립니다.";
   }
-});
+}
+
 
 // 대화 내용 Excel 다운로드 라우팅
 app.get('/chatConnet', async (req, res) => {

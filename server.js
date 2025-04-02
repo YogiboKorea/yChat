@@ -29,11 +29,11 @@ const CAFE24_API_VERSION = process.env.CAFE24_API_VERSION || '2024-06-01';
 
 function convertLinkText(promptText) {
   // [카카오플친 연결하기]를 a 태그로 변환
-  const kakaoPattern = /\[카카오플친 연결하기\]/g;
+  const kakaoPattern = /\[카카오플친 연결하기1\]/g;
   const kakaoLink = '<a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank" rel="noopener noreferrer">카카오플친 연결하기12</a>';
   
   // [네이버톡톡 연결하기]를 a 태그로 변환
-  const naverPattern = /\[네이버톡톡 연결하기\]/g;
+  const naverPattern = /\[네이버톡톡 연결하기1\]/g;
   const naverLink = '<a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank" rel="noopener noreferrer">네이버톡톡 연결하기12</a>';
   
   return promptText

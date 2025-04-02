@@ -27,21 +27,13 @@ const API_KEY = process.env.API_KEY;    // OpenAI API 키
 const FINETUNED_MODEL = process.env.FINETUNED_MODEL || "gpt-3.5-turbo";
 const CAFE24_API_VERSION = process.env.CAFE24_API_VERSION || '2024-06-01';
 
-function convertLinkText(promptText) {
-  // [카카오플친 연결하기]를 a 태그로 변환
-  const kakaoPattern = /\[카카오플친 연결하기\]/g;
-  const kakaoLink = '<a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank" rel="noopener noreferrer">카카오플친 연결하기</a>';
-  
-  // [네이버톡톡 연결하기]를 a 태그로 변환
-  const naverPattern = /\[네이버톡톡 연결하기\]/g;
-  const naverLink = '<a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank" rel="noopener noreferrer">네이버톡톡 연결하기</a>';
-  
+// **Yogibo 브랜드 맥락(시스템 프롬프트)**
+function convertPromptLinks(promptText) {
   return promptText
-    .replace(kakaoPattern, kakaoLink)
-    .replace(naverPattern, naverLink);
+    .replace(/\[카카오플친 연결하기\]/g, '<a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank" rel="noopener noreferrer">카카오플친 연결하기</a>')
+    .replace(/\[네이버톡톡 연결하기\]/g, '<a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank" rel="noopener noreferrer">네이버톡톡 연결하기</a>');
 }
 
-// 원래 시스템 프롬프트
 const rawSystemPrompt = `
 
 1. 역할 및 말투  
@@ -60,9 +52,9 @@ const rawSystemPrompt = `
 라고 안내해 주세요.
 `;
 
-// 변환된 프롬프트
-const YOGIBO_SYSTEM_PROMPT = convertLinkText(rawSystemPrompt);
+const YOGIBO_SYSTEM_PROMPT = convertPromptLinks(rawSystemPrompt);
 console.log(YOGIBO_SYSTEM_PROMPT);
+
 
 
 // Express 앱

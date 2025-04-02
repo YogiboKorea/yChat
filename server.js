@@ -27,31 +27,19 @@ const API_KEY = process.env.API_KEY;    // OpenAI API 키
 const FINETUNED_MODEL = process.env.FINETUNED_MODEL || "gpt-3.5-turbo";
 const CAFE24_API_VERSION = process.env.CAFE24_API_VERSION || '2024-06-01';
 
-
 // 원본 URL 문자열 (이미 "%20" 포함)
 const rawKakaoUrl = "http://pf.%20kakao.%20com/_lxmZsxj/chat";
 const rawNaverUrl = "https://talk.%20naver.%20com/ct/wc4u67?frm=psf";
 
-// 먼저 decodeURIComponent를 이용해 URL 인코딩된 부분을 일반 문자로 변환
-const decodedKakaoUrl = decodeURIComponent(rawKakaoUrl); // "http://pf. kakao. com/_lxmZsxj/chat"
-const decodedNaverUrl = decodeURIComponent(rawNaverUrl); // "https://talk. naver. com/ct/wc4u67?frm=psf"
-
-// 변환된 문자열에서 모든 공백을 제거
-const kakaoUrl = decodedKakaoUrl.replace(/\s+/g, "");
-const naverUrl = decodedNaverUrl.replace(/\s+/g, "");
+// "%20" 문자열을 제거하여 올바른 URL로 변경
+const kakaoUrl = rawKakaoUrl.replace(/%20/g, "");
+const naverUrl = rawNaverUrl.replace(/%20/g, "");
 
 console.log(kakaoUrl); // "http://pf.kakao.com/_lxmZsxj/chat"
 console.log(naverUrl); // "https://talk.naver.com/ct/wc4u67?frm=psf"
 
-
-// **Yogibo 브랜드 맥락(시스템 프롬프트)**
-function convertPromptLinks(promptText) {
-  return promptText
-    .replace(/\[카카오플친 연결하기\]/g, '<a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank" rel="noopener noreferrer">카카오플친 연결하기해줘</a>')
-    .replace(/\[네이버톡톡 연결하기\]/g, '<a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank" rel="noopener noreferrer">카카오플친 연결하기해줘</a>');
-}
-
-const rawSystemPrompt = `
+// 이후 시스템 프롬프트에 이 URL을 사용
+const YOGIBO_SYSTEM_PROMPT = `
 
 1. 역할 및 말투  
 전문가 역할: 요기보 브랜드에 대한 전문 지식을 가진 전문가로 행동합니다.  
@@ -64,12 +52,11 @@ const rawSystemPrompt = `
 아래 JSON 데이터는 참고용 포스트잇 Q&A 데이터입니다. 이 데이터를 참고하여 적절한 답변을 생성해 주세요.
 
 3. 항상 모드 대화의 마지막엔 추가 궁금한 사항이 있으실 경우,  
-[카카오플친 연결하기]  
-[네이버톡톡 연결하기]  
+<a href="${kakaoUrl}" target="_blank" rel="noopener noreferrer">카카오플친 연결하기</a>  
+<a href="${naverUrl}" target="_blank" rel="noopener noreferrer">네이버톡톡 연결하기</a>  
 라고 안내해 주세요.
 `;
 
-const YOGIBO_SYSTEM_PROMPT = convertPromptLinks(rawSystemPrompt);
 console.log(YOGIBO_SYSTEM_PROMPT);
 
 

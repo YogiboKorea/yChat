@@ -55,7 +55,7 @@ const rawSystemPrompt = `
 const YOGIBO_SYSTEM_PROMPT = convertPromptLinks(rawSystemPrompt);
 console.log(YOGIBO_SYSTEM_PROMPT);
 
-// 전역 변수: 최초 한 번만 postIt 데이터를 포함한 최종 시스템 프롬프트를 구성
+// 전역 변수: 최초 서버 시작 시 한 번만 postIt 데이터를 포함한 시스템 프롬프트를 구성
 let combinedSystemPrompt = null;
 
 // Express 앱
@@ -69,7 +69,7 @@ app.use(express.static(path.join(__dirname, "public")));
 const companyDataPath = path.join(__dirname, "json", "companyData.json");
 const companyData = JSON.parse(fs.readFileSync(companyDataPath, "utf-8"));
 
-// 간단한 맥락 변수 (서버 메모리에 저장: 실제 운영 시 세션/DB로 관리 권장)
+// 간단한 맥락 변수 (실제 운영 시 세션/DB로 관리 권장)
 let pendingCoveringContext = false;
 let pendingWashingContext = false;
 
@@ -225,7 +225,7 @@ function containsOrderNumber(input) {
   return /\d{8}-\d{7}/.test(input);
 }
 
-// ========== postIt 데이터 관련 함수 ==========
+// ========== [7] postIt 데이터 관련 함수 ==========
 async function getAllPostItQA() {
   const client = new MongoClient(MONGODB_URI);
   try {
@@ -242,7 +242,7 @@ async function getAllPostItQA() {
   }
 }
 
-// initializeChatPrompt 함수: postIt의 질문/답변 텍스트만 추출하여 시스템 프롬프트에 추가하고 반환
+// initializeChatPrompt 함수: postIt의 질문/답변 텍스트만 추출하여 시스템 프롬프트에 추가
 async function initializeChatPrompt() {
   try {
     const allNotes = await getAllPostItQA();
@@ -267,10 +267,13 @@ async function initializeChatPrompt() {
   }
 }
 
-// getGPT3TurboResponse 함수 수정: 전역의 combinedSystemPrompt 사용 (최초 1회 초기화)
+// Global variable for combined system prompt (한번만 초기화)
+//let combinedSystemPrompt = null;
+
+// ========== [8] getGPT3TurboResponse 함수 ==========
 async function getGPT3TurboResponse(userInput) {
   try {
-    // combinedSystemPrompt가 없으면 초기화
+    // combinedSystemPrompt가 없으면 초기화 (최초 1회)
     if (!combinedSystemPrompt) {
       combinedSystemPrompt = await initializeChatPrompt();
       console.log("Combined system prompt initialized.");
@@ -306,12 +309,12 @@ async function getGPT3TurboResponse(userInput) {
   }
 }
 
-// ========== [7] 점(.) 뒤에 공백 자동 추가 함수 ==========
+// ========== [9] 점(.) 뒤에 공백 자동 추가 함수 ==========
 function addSpaceAfterPeriod(text) {
   return text.replace(/\.([^\s])/g, '. $1');
 }
 
-// ========== [8] 대화 로그 저장 함수 (당일 동일 아이디 대화는 배열로 업데이트) ==========
+// ========== [10] 대화 로그 저장 함수 (당일 동일 아이디 대화는 배열로 업데이트) ==========
 async function saveConversationLog(memberId, userMessage, botResponse) {
   const client = new MongoClient(MONGODB_URI);
   try {
@@ -348,7 +351,7 @@ async function saveConversationLog(memberId, userMessage, botResponse) {
   }
 }
 
-// ========== [9] 메인 로직: findAnswer ==========
+// ========== [11] 메인 로직: findAnswer ==========
 async function findAnswer(userInput, memberId) {
   const normalizedUserInput = normalizeSentence(userInput);
 
@@ -762,7 +765,7 @@ app.post("/chat", async (req, res) => {
   }
 });
 
-// 대화 내용 Excel 다운로드 라우팅
+// ========== [13] 대화 내용 Excel 다운로드 라우팅 ==========
 app.get('/chatConnet', async (req, res) => {
   const client = new MongoClient(MONGODB_URI);
   try {
@@ -808,7 +811,7 @@ app.get('/chatConnet', async (req, res) => {
   }
 });
 
-// ========== [13] 포스트잇 노트 CRUD ==========
+// ========== [14] 포스트잇 노트 CRUD ==========
 function convertHashtagsToLinks(text) {
   const hashtagLinks = {
     '홈페이지': 'https://yogibo.kr/',
@@ -818,6 +821,7 @@ function convertHashtagsToLinks(text) {
   };
   return text.replace(/@([\w가-힣]+)/g, (match, keyword) => {
     const url = hashtagLinks[keyword];
+    // 반환 시 keyword만 사용하여 '@' 제거
     return `<a href="${url}" target="_blank">${keyword}</a>`;
   });
 }

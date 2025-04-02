@@ -42,7 +42,7 @@ const YOGIBO_SYSTEM_PROMPT = `
 - 네이버톡톡: <a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank" rel="noopener noreferrer">네이버톡톡 연결하기1</a>
 
 3. 항상 모드 대화의 마지막엔 추가 궁금한 사항이 있으실 경우, 위 링크들을 포함하여 "더 많은 정보를 원하신다면" 다음과 같이 안내해 주세요:
-더 많은 정보를 원하신다면 <a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank" rel="noopener noreferrer">카카오플친 연결하기1</a> <a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank" rel="noopener noreferrer">네이버톡톡 연결하기1</a>
+더 많은 정보를 원하신다면 <a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank" rel="noopener noreferrer">카카오플친 연결하기22</a> <a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank" rel="noopener noreferrer">네이버톡톡 연결하기22</a>
 
 `;
 

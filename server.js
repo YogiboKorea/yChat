@@ -28,8 +28,8 @@ const FINETUNED_MODEL = process.env.FINETUNED_MODEL || "gpt-3.5-turbo";
 const CAFE24_API_VERSION = process.env.CAFE24_API_VERSION || '2024-06-01';
 
 // 원본 URL 문자열 (이미 "%20" 포함)
-const rawKakaoUrl = "http://pf.%20kakao.%20com/_lxmZsxj/chat";
-const rawNaverUrl = "https://talk.%20naver.%20com/ct/wc4u67?frm=psf";
+const rawKakaoUrl = "http://pf. kakao. com/_lxmZsxj/chat";
+const rawNaverUrl = "https://talk. naver. com/ct/wc4u67?frm=psf";
 
 // "%20" 문자열을 제거하여 올바른 URL로 변경
 const kakaoUrl = rawKakaoUrl.replace(/%20/g, "");

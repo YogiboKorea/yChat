@@ -223,37 +223,68 @@ function normalizeSentence(sentence) {
 function containsOrderNumber(input) {
   return /\d{8}-\d{7}/.test(input);
 }
-async function getGPT3TurboResponse(userInput) {
+// postIt 데이터를 텍스트 형식으로 변환하고 시스템 프롬프트에 추가하는 함수
+async function initializeChatPrompt() {
   try {
-    // (1) DB에서 포스트잇 Q&A 불러오기
-    const allNotes = await getAllPostItQA();
+    const allNotes = await getAllPostItQA(); // MongoDB에서 postIt 데이터 불러오기
     console.log("Retrieved post-it notes:", allNotes);
 
-    // (2) 질문과 답변만 평문 텍스트로 추출 (최대 10개 노트)
     let postItContext = "\n아래는 참고용 포스트잇 Q&A 데이터입니다:\n";
-    if (!allNotes || allNotes.length === 0) {
-      console.warn("No post-it notes found. Skipping post-it context.");
-    } else {
-      const maxNotes = 10;
-      const notesToInclude = allNotes.slice(0, maxNotes);
+    if (allNotes && allNotes.length > 0) {
+      // 원하는 개수만 포함 (예: 전체 또는 최대 10개)
+      const notesToInclude = allNotes.slice(0, 10);
       notesToInclude.forEach((note, i) => {
         if (note.question && note.answer) {
           postItContext += `\nQ${i + 1}: ${note.question}\nA${i + 1}: ${note.answer}\n`;
         }
       });
+    } else {
+      console.warn("No post-it notes found.");
     }
 
-    // (3) 기존 시스템 프롬프트와 포스트잇 텍스트를 합침
-    const finalSystemPrompt = YOGIBO_SYSTEM_PROMPT + postItContext;
-    console.log("Final system prompt length:", finalSystemPrompt.length);
-    console.log("Final system prompt content:\n", finalSystemPrompt);
+    // 기존 시스템 프롬프트(YOGIBO_SYSTEM_PROMPT)에 postIt 데이터를 추가
+    window.combinedSystemPrompt = YOGIBO_SYSTEM_PROMPT + postItContext;
+    console.log("Combined system prompt:\n", window.combinedSystemPrompt);
+  } catch (error) {
+    console.error("Error initializing chat prompt:", error);
+    // 만약 오류 발생 시 기존 프롬프트 사용
+    window.combinedSystemPrompt = YOGIBO_SYSTEM_PROMPT;
+  }
+}
 
-    // (4) (선택 사항) 만약 이 데이터를 파일로 저장하고 싶다면 Blob으로 생성
-    // 예시: const blob = new Blob([postItContext], { type: 'text/plain' });
-    // const fileUrl = URL.createObjectURL(blob);
-    // 이후 fileUrl을 다운로드 링크 등에 사용 가능
+// 페이지 로딩 시 initializeChatPrompt를 호출하여 시스템 프롬프트를 구성
+window.addEventListener("load", async function() {
+  await initializeChatPrompt();
 
-    // (5) GPT API 호출
+  // 이후 기존 로직에 따라 회원 ID 전송, 채팅 초기화 등을 진행합니다.
+  try {
+    if (!memberId) {
+      memberId = await getCustomerId();
+      console.log("페이지 로딩 후 가져온 회원 ID:", memberId);
+    }
+    const payload = { message: "내 아이디", memberId: memberId };
+    const response = await fetch("https://port-0-ychat-lzgmwhc4d9883c97.sel4.cloudtype.app/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await response.json();
+    console.log("서버 응답:", data);
+    // 일반 응답은 기존 방식대로 출력
+    appendBotMessage(data.text);
+  } catch (error) {
+    console.error("회원 ID 전송 오류:", error);
+  }
+});
+
+// 수정된 getGPT3TurboResponse 함수에서 combinedSystemPrompt 사용 예시
+async function getGPT3TurboResponse(userInput) {
+  try {
+    // 기존에는 YOGIBO_SYSTEM_PROMPT를 사용했지만, 이제 combinedSystemPrompt를 사용합니다.
+    const finalSystemPrompt = window.combinedSystemPrompt || YOGIBO_SYSTEM_PROMPT;
+    console.log("Final system prompt used for GPT:", finalSystemPrompt);
+
+    // GPT API 호출
     const response = await axios.post(
       OPEN_URL,
       {
@@ -271,7 +302,7 @@ async function getGPT3TurboResponse(userInput) {
       }
     );
 
-    // (6) GPT 응답 처리
+    // GPT 응답 처리
     const gptAnswer = response.data.choices[0].message.content;
     const formattedAnswer = addSpaceAfterPeriod(gptAnswer);
     return formattedAnswer;
@@ -281,6 +312,7 @@ async function getGPT3TurboResponse(userInput) {
     return "요기보 챗봇 오류가 발생했습니다. 다시 시도 부탁드립니다.";
   }
 }
+
 
 
 

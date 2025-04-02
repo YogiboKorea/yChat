@@ -225,24 +225,22 @@ async function getGPT3TurboResponse(userInput) {
     const allNotes = await getAllPostItQA();
     console.log("Retrieved post-it notes:", allNotes);
 
-    // (2) 포스트잇 Q/A를 JSON 형식 문자열로 변환 (최대 10개 노트만 사용)
-    let postItContext = "\n아래는 참고할 포스트잇 질문/답변 데이터 (JSON 형식)입니다:\n";
+    // (2) 포스트잇 Q/A를 평문 텍스트 형식으로 변환 (최대 10개 노트만 사용)
+    let postItContext = "\n아래는 참고용 포스트잇 질문/답변 데이터입니다:\n";
     if (!allNotes || allNotes.length === 0) {
       console.warn("No post-it notes found. Skipping post-it context.");
     } else {
       const maxNotes = 10;
       const notesToInclude = allNotes.slice(0, maxNotes);
-      // question과 answer 필드만 추출하여 JSON 배열 생성
-      const jsonNotes = notesToInclude.reduce((acc, note) => {
+      notesToInclude.forEach((note, i) => {
+        // question과 answer가 모두 있는 경우에만 추가
         if (note.question && note.answer) {
-          acc.push({ question: note.question, answer: note.answer });
+          postItContext += `\nQ${i + 1}: ${note.question}\nA${i + 1}: ${note.answer}\n`;
         }
-        return acc;
-      }, []);
-      postItContext += JSON.stringify(jsonNotes, null, 2);
+      });
     }
 
-    // (3) 기존 YOGIBO_SYSTEM_PROMPT 뒤에 포스트잇 JSON 데이터 추가
+    // (3) 기존 YOGIBO_SYSTEM_PROMPT 뒤에 포스트잇 텍스트 데이터 추가
     const finalSystemPrompt = YOGIBO_SYSTEM_PROMPT + postItContext;
     console.log("Final system prompt length:", finalSystemPrompt.length);
     console.log("Final system prompt content:\n", finalSystemPrompt);
@@ -275,6 +273,7 @@ async function getGPT3TurboResponse(userInput) {
     return "요기보 챗봇 오류가 발생했습니다. 다시 시도 부탁드립니다.";
   }
 }
+
 
 
 

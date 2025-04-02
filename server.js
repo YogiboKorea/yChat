@@ -250,7 +250,7 @@ async function initializeChatPrompt() {
 
     let postItContext = "\n아래는 참고용 포스트잇 Q&A 데이터입니다:\n";
     if (allNotes && allNotes.length > 0) {
-      const maxNotes = 100;  // 최대 100개 노트 포함
+      const maxNotes = 300;  // 최대 100개 노트 포함
       const notesToInclude = allNotes.slice(0, maxNotes);
       notesToInclude.forEach((note, i) => {
         if (note.question && note.answer) {

@@ -342,9 +342,9 @@ async function initializeChatPrompt() {
     const postItNotes = await db.collection("postItNotes").find({}).limit(100).toArray();
 
     let postItContext = "\n아래는 참고용 포스트잇 Q&A 데이터입니다:\n";
-    postItNotes.forEach((note, i) => {
+    postItNotes.forEach(note => {
       if (note.question && note.answer) {
-        postItContext += `\nQ${i + 1}: ${note.question}\nA${i + 1}: ${note.answer}\n`;
+        postItContext += `\n질문: ${note.question}\n답변: ${note.answer}\n`;
       }
     });
 
@@ -356,6 +356,7 @@ async function initializeChatPrompt() {
     await client.close();
   }
 }
+
 
 // ========== [대화 로그 저장] ==========
 async function saveConversationLog(memberId, userMessage, botResponse) {

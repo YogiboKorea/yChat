@@ -53,15 +53,13 @@ const basePrompt = `
 존대 및 공손: 고객에게 항상 존댓말과 공손한 말투를 사용합니다.  
 이모티콘 활용: 대화 중 적절히 이모티콘을 사용합니다.  
 문단 띄어쓰기: 각 문단이 끝날 때마다 한 줄 이상의 공백을 넣어 가독성을 높여 주세요.
+맞춤법 다음문장에서는 문단 공백을 통해 가독성을 높여 주세요.
 
 2. 고객 응대 지침  
 정확한 답변: 웹상의 모든 요기보 관련 데이터를 숙지하고, 고객 문의에 대해 명확하고 이해하기 쉬운 답변을 제공해 주세요.  
 아래 JSON 데이터는 참고용 포스트잇 Q&A 데이터입니다. 이 데이터를 참고하여 적절한 답변을 생성해 주세요.
 
-3. 항상 모드 대화의 마지막엔 추가 궁금한 사항이 있으실 경우,  
-[카카오플친 연결하기]  
-[네이버톡톡 연결하기]  
-라고 안내해 주세요.
+3. 항상 모드 대화의 마지막엔 추가 궁금한 사항이 있으실 경우, 상담사 연결을 채팅창에 입력 해주시면 보다 정확한 정보를 제공해 드릴수 있습니다. 
 `;
 const YOGIBO_SYSTEM_PROMPT = convertPromptLinks(basePrompt);
 
@@ -344,9 +342,9 @@ async function initializeChatPrompt() {
     const postItNotes = await db.collection("postItNotes").find({}).limit(100).toArray();
 
     let postItContext = "\n아래는 참고용 포스트잇 Q&A 데이터입니다:\n";
-    postItNotes.forEach((note, i) => {
+    postItNotes.forEach(note => {
       if (note.question && note.answer) {
-        postItContext += `\nQ${i + 1}: ${note.question}\nA${i + 1}: ${note.answer}\n`;
+        postItContext += `\n질문: ${note.question}\n답변: ${note.answer}\n`;
       }
     });
 
@@ -358,6 +356,7 @@ async function initializeChatPrompt() {
     await client.close();
   }
 }
+
 
 // ========== [대화 로그 저장] ==========
 async function saveConversationLog(memberId, userMessage, botResponse) {
@@ -439,7 +438,7 @@ async function findAnswer(userInput, memberId) {
     } else {
       pendingCoveringContext = true;
       return {
-        text: "어떤 커버링을 알고 싶으신가요? (맥스, 더블, 프리미엄, 슬림, 미니 등)",
+        text: "어떤 커버링을 알고 싶으신가요? (맥스, 더블, 프라임, 슬림, 미니 등)",
         videoHtml: null,
         description: null,
         imageUrl: null
@@ -448,7 +447,7 @@ async function findAnswer(userInput, memberId) {
   }
 
   // (3) 사이즈 안내
-  const sizeTypes = ["더블", "맥스", "프리미엄", "슬림", "미디", "미니", "팟", "드롭", "라운저", "피라미드"];
+  const sizeTypes = ["더블", "맥스", "프라임", "슬림", "미디", "미니", "팟", "드롭", "라운저", "피라미드"];
   if (
     normalizedUserInput.includes("사이즈") ||
     normalizedUserInput.includes("크기")
@@ -566,15 +565,13 @@ async function findAnswer(userInput, memberId) {
       };
     }
   }
-
   if (
     normalizedUserInput.includes("상담사 연결") ||
     normalizedUserInput.includes("상담원 연결") ||
     normalizedUserInput.includes("고객센터 연결")
   ) {
     return {
-      text: `
-      상담사와 연결을 도와드릴게요.
+      text: `상담사와 연결을 도와드릴게요.
       <a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank" rel="noopener noreferrer">카카오플친 연결하기</a>
       <a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank" rel="noopener noreferrer">네이버톡톡 연결하기</a>
       `,
@@ -583,6 +580,21 @@ async function findAnswer(userInput, memberId) {
       imageUrl: null
     };
   }
+
+  if (
+    normalizedUserInput.includes("오프라인 매장")||
+    normalizedUserInput.includes("매장안내")
+  ) {
+    return {
+      text: `오프라인 매장안내 페이지를 통해 고객님의 위치와 가까운 매장을 안내해 드리고 있습니다. .
+      <a href="/why.stroe.html" target="_blank" rel="noopener noreferrer">매장안내</a>
+      `,
+      videoHtml: null,
+      description: null,
+      imageUrl: null
+    };
+  }
+
 
   /************************************************
    * B. Café24 주문/배송 로직
@@ -919,11 +931,13 @@ app.post("/postIt", async (req, res) => {
   if (!question && !answer) {
     return res.status(400).json({ error: "질문 또는 답변이 비어있습니다." });
   }
+
   try {
     const client = new MongoClient(MONGODB_URI);
     await client.connect();
     const db = client.db(DB_NAME);
     const collection = db.collection("postItNotes");
+
     const convertedAnswer = answer ? convertHashtagsToLinks(answer) : answer;
     const newNote = {
       question,
@@ -931,10 +945,15 @@ app.post("/postIt", async (req, res) => {
       category: category || "uncategorized",
       createdAt: new Date()
     };
-    const result = await collection.insertOne(newNote);
+
+    await collection.insertOne(newNote);
     await client.close();
+
+    // ✅ 프롬프트 즉시 갱신
+    combinedSystemPrompt = await initializeChatPrompt();
+
     return res.json({
-      message: "포스트잇 등록 성공",
+      message: "포스트잇 등록 성공 및 프롬프트 갱신 완료 ✅",
       note: newNote
     });
   } catch (error) {
@@ -945,13 +964,13 @@ app.post("/postIt", async (req, res) => {
 
 app.put("/postIt/:id", async (req, res) => {
   try {
-    const noteId = req.params.id; 
+    const noteId = req.params.id;
     const { question, answer, category } = req.body;
-    const { ObjectId } = require("mongodb");
     const client = new MongoClient(MONGODB_URI);
     await client.connect();
     const db = client.db(DB_NAME);
     const collection = db.collection("postItNotes");
+
     const filter = { _id: new ObjectId(noteId) };
     const updateData = {
       ...(question && { question }),
@@ -959,17 +978,23 @@ app.put("/postIt/:id", async (req, res) => {
       ...(category && { category }),
       updatedAt: new Date()
     };
+
     const result = await collection.findOneAndUpdate(
       filter,
       { $set: updateData },
       { returnDocument: "after" }
     );
     await client.close();
+
     if (!result.value) {
       return res.status(404).json({ error: "해당 포스트잇을 찾을 수 없습니다." });
     }
+
+    // ✅ 프롬프트 즉시 갱신
+    combinedSystemPrompt = await initializeChatPrompt();
+
     return res.json({
-      message: "포스트잇 수정 성공",
+      message: "포스트잇 수정 성공 및 프롬프트 갱신 완료 ✅",
       note: result.value
     });
   } catch (error) {
@@ -977,6 +1002,7 @@ app.put("/postIt/:id", async (req, res) => {
     return res.status(500).json({ error: "포스트잇 수정 중 오류가 발생했습니다." });
   }
 });
+
 
 app.delete("/postIt/:id", async (req, res) => {
   const noteId = req.params.id;
@@ -998,6 +1024,7 @@ app.delete("/postIt/:id", async (req, res) => {
     return res.status(500).json({ error: "포스트잇 삭제 중 오류가 발생했습니다." });
   }
 });
+
 
 
 // ========== [서버 실행 및 프롬프트 초기화] ==========

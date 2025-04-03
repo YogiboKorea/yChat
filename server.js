@@ -69,7 +69,8 @@ const YOGIBO_SYSTEM_PROMPT = convertPromptLinks(basePrompt);
 const companyDataPath = path.join(__dirname, "json", "companyData.json");
 const companyData = JSON.parse(fs.readFileSync(companyDataPath, "utf-8"));
 
-// ⏬ 이어서 계속... (다음 메시지로)
+// MongoDB에서 토큰을 저장할 컬렉션명
+const tokenCollectionName = "tokens";
 
 // ========== [3] MongoDB 토큰 관리 함수 ==========
 async function getTokensFromDB() {

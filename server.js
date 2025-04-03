@@ -453,7 +453,7 @@ async function getGPT3TurboResponse(userInput) {
 
     // (2) 포스트잇 Q/A를 하나의 문자열로 합치기 (최대 10개 노트만 사용)
     let postItContext = "\n아래는 참고할 포스트잇 질문/답변입니다:\n";
-    const maxNotes = 10;
+    const maxNotes = 100;
     const notesToInclude = allNotes.slice(0, maxNotes);
     notesToInclude.forEach((note, i) => {
       // question과 answer가 모두 있는 경우에만 추가

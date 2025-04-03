@@ -580,6 +580,21 @@ async function findAnswer(userInput, memberId) {
     };
   }
 
+  if (
+    normalizedUserInput.includes("오프라인 매장")||
+    normalizedUserInput.includes("매장안내")
+  ) {
+    return {
+      text: `오프라인 매장안내 페이지를 통해 고객님의 위치와 가까운 매장을 안내해 드리고 있습니다. .
+      <a href="/why.stroe.html" target="_blank" rel="noopener noreferrer">매장안내</a>
+      `,
+      videoHtml: null,
+      description: null,
+      imageUrl: null
+    };
+  }
+
+
   /************************************************
    * B. Café24 주문/배송 로직
    ************************************************/

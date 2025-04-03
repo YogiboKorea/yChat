@@ -930,11 +930,13 @@ app.post("/postIt", async (req, res) => {
   if (!question && !answer) {
     return res.status(400).json({ error: "질문 또는 답변이 비어있습니다." });
   }
+
   try {
     const client = new MongoClient(MONGODB_URI);
     await client.connect();
     const db = client.db(DB_NAME);
     const collection = db.collection("postItNotes");
+
     const convertedAnswer = answer ? convertHashtagsToLinks(answer) : answer;
     const newNote = {
       question,
@@ -942,10 +944,15 @@ app.post("/postIt", async (req, res) => {
       category: category || "uncategorized",
       createdAt: new Date()
     };
-    const result = await collection.insertOne(newNote);
+
+    await collection.insertOne(newNote);
     await client.close();
+
+    // ✅ 프롬프트 즉시 갱신
+    combinedSystemPrompt = await initializeChatPrompt();
+
     return res.json({
-      message: "포스트잇 등록 성공",
+      message: "포스트잇 등록 성공 및 프롬프트 갱신 완료 ✅",
       note: newNote
     });
   } catch (error) {
@@ -956,13 +963,13 @@ app.post("/postIt", async (req, res) => {
 
 app.put("/postIt/:id", async (req, res) => {
   try {
-    const noteId = req.params.id; 
+    const noteId = req.params.id;
     const { question, answer, category } = req.body;
-    const { ObjectId } = require("mongodb");
     const client = new MongoClient(MONGODB_URI);
     await client.connect();
     const db = client.db(DB_NAME);
     const collection = db.collection("postItNotes");
+
     const filter = { _id: new ObjectId(noteId) };
     const updateData = {
       ...(question && { question }),
@@ -970,17 +977,23 @@ app.put("/postIt/:id", async (req, res) => {
       ...(category && { category }),
       updatedAt: new Date()
     };
+
     const result = await collection.findOneAndUpdate(
       filter,
       { $set: updateData },
       { returnDocument: "after" }
     );
     await client.close();
+
     if (!result.value) {
       return res.status(404).json({ error: "해당 포스트잇을 찾을 수 없습니다." });
     }
+
+    // ✅ 프롬프트 즉시 갱신
+    combinedSystemPrompt = await initializeChatPrompt();
+
     return res.json({
-      message: "포스트잇 수정 성공",
+      message: "포스트잇 수정 성공 및 프롬프트 갱신 완료 ✅",
       note: result.value
     });
   } catch (error) {
@@ -988,6 +1001,7 @@ app.put("/postIt/:id", async (req, res) => {
     return res.status(500).json({ error: "포스트잇 수정 중 오류가 발생했습니다." });
   }
 });
+
 
 app.delete("/postIt/:id", async (req, res) => {
   const noteId = req.params.id;
@@ -1010,14 +1024,6 @@ app.delete("/postIt/:id", async (req, res) => {
   }
 });
 
-app.post("/refreshPrompt", async (req, res) => {
-  try {
-    combinedSystemPrompt = await initializeChatPrompt();
-    return res.json({ message: "📚 시스템 프롬프트가 갱신되었습니다." });
-  } catch (error) {
-    return res.status(500).json({ error: "프롬프트 갱신 실패" });
-  }
-});
 
 
 // ========== [서버 실행 및 프롬프트 초기화] ==========

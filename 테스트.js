@@ -53,13 +53,15 @@ const basePrompt = `
 존대 및 공손: 고객에게 항상 존댓말과 공손한 말투를 사용합니다.  
 이모티콘 활용: 대화 중 적절히 이모티콘을 사용합니다.  
 문단 띄어쓰기: 각 문단이 끝날 때마다 한 줄 이상의 공백을 넣어 가독성을 높여 주세요.
-맞춤법 다음문장에서는 문단 공백을 통해 가독성을 높여 주세요.
 
 2. 고객 응대 지침  
 정확한 답변: 웹상의 모든 요기보 관련 데이터를 숙지하고, 고객 문의에 대해 명확하고 이해하기 쉬운 답변을 제공해 주세요.  
 아래 JSON 데이터는 참고용 포스트잇 Q&A 데이터입니다. 이 데이터를 참고하여 적절한 답변을 생성해 주세요.
 
-3. 항상 모드 대화의 마지막엔 추가 궁금한 사항이 있으실 경우, 상담사 연결을 채팅창에 입력 해주시면 보다 정확한 정보를 제공해 드릴수 있습니다. 
+3. 항상 모드 대화의 마지막엔 추가 궁금한 사항이 있으실 경우,  
+[카카오플친 연결하기]  
+[네이버톡톡 연결하기]  
+라고 안내해 주세요.
 `;
 const YOGIBO_SYSTEM_PROMPT = convertPromptLinks(basePrompt);
 
@@ -564,13 +566,15 @@ async function findAnswer(userInput, memberId) {
       };
     }
   }
+
   if (
     normalizedUserInput.includes("상담사 연결") ||
     normalizedUserInput.includes("상담원 연결") ||
     normalizedUserInput.includes("고객센터 연결")
   ) {
     return {
-      text: `상담사와 연결을 도와드릴게요.
+      text: `
+      상담사와 연결을 도와드릴게요.
       <a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank" rel="noopener noreferrer">카카오플친 연결하기</a>
       <a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank" rel="noopener noreferrer">네이버톡톡 연결하기</a>
       `,
@@ -992,15 +996,6 @@ app.delete("/postIt/:id", async (req, res) => {
   } catch (error) {
     console.error("DELETE /postIt 오류:", error.message);
     return res.status(500).json({ error: "포스트잇 삭제 중 오류가 발생했습니다." });
-  }
-});
-
-app.post("/refreshPrompt", async (req, res) => {
-  try {
-    combinedSystemPrompt = await initializeChatPrompt();
-    return res.json({ message: "📚 시스템 프롬프트가 갱신되었습니다." });
-  } catch (error) {
-    return res.status(500).json({ error: "프롬프트 갱신 실패" });
   }
 });
 

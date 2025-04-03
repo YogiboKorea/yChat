@@ -437,7 +437,7 @@ async function findAnswer(userInput, memberId) {
     } else {
       pendingCoveringContext = true;
       return {
-        text: "어떤 커버링을 알고 싶으신가요? (맥스, 더블, 프리미엄, 슬림, 미니 등)",
+        text: "어떤 커버링을 알고 싶으신가요? (맥스, 더블, 프라임, 슬림, 미니 등)",
         videoHtml: null,
         description: null,
         imageUrl: null
@@ -446,7 +446,7 @@ async function findAnswer(userInput, memberId) {
   }
 
   // (3) 사이즈 안내
-  const sizeTypes = ["더블", "맥스", "프리미엄", "슬림", "미디", "미니", "팟", "드롭", "라운저", "피라미드"];
+  const sizeTypes = ["더블", "맥스", "프라임", "슬림", "미디", "미니", "팟", "드롭", "라운저", "피라미드"];
   if (
     normalizedUserInput.includes("사이즈") ||
     normalizedUserInput.includes("크기")

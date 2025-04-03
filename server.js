@@ -115,6 +115,48 @@ async function refreshAccessToken() {
   return accessToken;
 }
 
+async function findAnswer(userInput, memberId) {
+  const normalized = normalizeSentence(userInput);
+
+  // 1. FAQ 예시 처리
+  if (normalized.includes("사이즈")) {
+    return {
+      text: "요기보 사이즈는 모델에 따라 다릅니다. 예) 맥스는 170cm x 70cm 크기예요 😊",
+      videoHtml: null,
+      description: null,
+      imageUrl: null
+    };
+  }
+
+  // 2. 배송 상태 요청
+  if (normalized.includes("배송")) {
+    if (!memberId) {
+      return {
+        text: "비회원은 배송 상태를 확인할 수 없습니다. 로그인을 해주세요!",
+        videoHtml: null,
+        description: null,
+        imageUrl: null
+      };
+    }
+    // 배송 조회 로직 들어가는 자리...
+    return {
+      text: "주문하신 상품은 현재 배송 중입니다 🚚",
+      videoHtml: null,
+      description: null,
+      imageUrl: null
+    };
+  }
+
+  // 3. fallback
+  return {
+    text: "질문을 이해하지 못했어요. 좀더 자세히 입력 해주시겠어요",
+    videoHtml: null,
+    description: null,
+    imageUrl: null
+  };
+}
+
+
 // ========== [GPT 호출 함수] ==========
 async function getGPT3TurboResponse(userInput) {
   if (!combinedSystemPrompt) {

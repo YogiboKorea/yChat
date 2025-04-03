@@ -70,20 +70,25 @@ const companyDataPath = path.join(__dirname, "json", "companyData.json");
 const companyData = JSON.parse(fs.readFileSync(companyDataPath, "utf-8"));
 
 // ⏬ 이어서 계속... (다음 메시지로)
-// ========== [MongoDB 관련 함수: 토큰 관리] ==========
+
+// ========== [3] MongoDB 토큰 관리 함수 ==========
 async function getTokensFromDB() {
   const client = new MongoClient(MONGODB_URI);
   try {
     await client.connect();
     const db = client.db(DB_NAME);
-    const collection = db.collection("tokens");
+    const collection = db.collection(tokenCollectionName);
     const tokensDoc = await collection.findOne({});
     if (tokensDoc) {
       accessToken = tokensDoc.accessToken;
       refreshToken = tokensDoc.refreshToken;
+      console.log('MongoDB에서 토큰 로드 성공:', tokensDoc);
     } else {
+      console.log('MongoDB에 저장된 토큰이 없습니다. 초기 토큰을 저장합니다.');
       await saveTokensToDB(accessToken, refreshToken);
     }
+  } catch (error) {
+    console.error('토큰 로드 중 오류:', error);
   } finally {
     await client.close();
   }
@@ -94,7 +99,8 @@ async function saveTokensToDB(newAccessToken, newRefreshToken) {
   try {
     await client.connect();
     const db = client.db(DB_NAME);
-    await db.collection("tokens").updateOne(
+    const collection = db.collection(tokenCollectionName);
+    await collection.updateOne(
       {},
       {
         $set: {
@@ -105,15 +111,51 @@ async function saveTokensToDB(newAccessToken, newRefreshToken) {
       },
       { upsert: true }
     );
+    console.log('MongoDB에 토큰 저장 완료');
+  } catch (error) {
+    console.error('토큰 저장 중 오류:', error);
   } finally {
     await client.close();
   }
 }
 
 async function refreshAccessToken() {
+  console.log('401 에러 발생: MongoDB에서 토큰 정보 다시 가져오기...');
   await getTokensFromDB();
+  console.log('MongoDB에서 토큰 갱신 완료:', accessToken, refreshToken);
   return accessToken;
 }
+
+// ========== [4] Cafe24 API 요청 함수 ==========
+async function apiRequest(method, url, data = {}, params = {}) {
+  console.log(`Request: ${method} ${url}`);
+  console.log("Params:", params);
+  console.log("Data:", data);
+  try {
+    const response = await axios({
+      method,
+      url,
+      data,
+      params,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'X-Cafe24-Api-Version': CAFE24_API_VERSION
+      },
+    });
+    return response.data;
+  } catch (error) {
+    if (error.response && error.response.status === 401) {
+      console.log('Access Token 만료. 갱신 중...');
+      await refreshAccessToken();
+      return apiRequest(method, url, data, params);
+    } else {
+      console.error('API 요청 오류:', error.response ? error.response.data : error.message);
+      throw error;
+    }
+  }
+}
+
 
 async function findAnswer(userInput, memberId) {
   const normalized = normalizeSentence(userInput);
@@ -156,6 +198,95 @@ async function findAnswer(userInput, memberId) {
   };
 }
 
+// ========== [5] Cafe24 주문/배송 관련 함수 ==========
+async function getOrderShippingInfo(memberId) {
+  const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`;
+  const today = new Date();
+  const end_date = today.toISOString().split('T')[0];
+  const twoWeeksAgo = new Date(today);
+  twoWeeksAgo.setDate(today.getDate() - 14);
+  const start_date = twoWeeksAgo.toISOString().split('T')[0];
+  const params = {
+    member_id: memberId,
+    start_date: start_date,
+    end_date: end_date,
+    limit: 10,
+  };
+  try {
+    const response = await apiRequest("GET", API_URL, {}, params);
+    return response; // 응답 내 orders 배열
+  } catch (error) {
+    console.error("Error fetching order shipping info:", error.message);
+    throw error;
+  }
+}
+
+async function getShipmentDetail(orderId) {
+  const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders/${orderId}/shipments`;
+  const params = { shop_no: 1 };
+  try {
+    const response = await apiRequest("GET", API_URL, {}, params);
+    if (response.shipments && response.shipments.length > 0) {
+      const shipment = response.shipments[0];
+      // 배송사 코드에 따른 이름과 링크 매핑
+      const shippingCompanies = {
+        "0019": { name: "롯데 택배", url: "https://www.lotteglogis.com/home/reservation/tracking/index" },
+        "0039": { name: "경동 택배", url: "https://kdexp.com/index.do" }
+      };
+      if (shippingCompanies[shipment.shipping_company_code]) {
+        shipment.shipping_company_name = shippingCompanies[shipment.shipping_company_code].name;
+        shipment.shipping_company_url = shippingCompanies[shipment.shipping_company_code].url;
+      } else {
+        shipment.shipping_company_name = shipment.shipping_company_code || "물류 창고";
+        shipment.shipping_company_url = null;
+      }
+      return shipment;
+    } else {
+      throw new Error("배송 정보를 찾을 수 없습니다.");
+    }
+  } catch (error) {
+    console.error("Error fetching shipment detail:", error.message);
+    throw error;
+  }
+}
+
+
+// ========== [10] 대화 로그 저장 함수 (당일 동일 아이디 대화는 배열로 업데이트) ==========
+async function saveConversationLog(memberId, userMessage, botResponse) {
+  const client = new MongoClient(MONGODB_URI);
+  try {
+    await client.connect();
+    const db = client.db(DB_NAME);
+    const collection = db.collection("conversationLogs");
+    // 오늘 날짜 (YYYY-MM-DD)
+    const today = new Date().toISOString().split("T")[0];
+    const query = {
+      memberId: (memberId && memberId !== "null") ? memberId : null,
+      date: today
+    };
+    const existingLog = await collection.findOne(query);
+    const logEntry = {
+      userMessage,
+      botResponse,
+      createdAt: new Date()
+    };
+    if (existingLog) {
+      await collection.updateOne(query, { $push: { conversation: logEntry } });
+      console.log("대화 로그 업데이트 성공");
+    } else {
+      await collection.insertOne({
+        memberId: (memberId && memberId !== "null") ? memberId : null,
+        date: today,
+        conversation: [logEntry]
+      });
+      console.log("새 대화 로그 생성 및 저장 성공");
+    }
+  } catch (error) {
+    console.error("대화 로그 저장 중 오류:", error.message);
+  } finally {
+    await client.close();
+  }
+}
 
 // ========== [GPT 호출 함수] ==========
 async function getGPT3TurboResponse(userInput) {
@@ -251,6 +382,386 @@ async function saveConversationLog(memberId, userMessage, botResponse) {
     await client.close();
   }
 }
+
+
+// ========== [11] 메인 로직: findAnswer ==========
+async function findAnswer(userInput, memberId) {
+  const normalizedUserInput = normalizeSentence(userInput);
+
+  /************************************************
+   * A. JSON 기반 FAQ / 제품 안내 로직
+   ************************************************/
+  // (2) 커버링 방법 맥락 처리
+  if (pendingCoveringContext) {
+    const coveringTypes = ["더블", "맥스", "프리미엄", "슬림", "미디", "미니", "팟", "드롭", "라운저", "피라미드"];
+    if (coveringTypes.includes(normalizedUserInput)) {
+      const key = `${normalizedUserInput} 커버링 방법을 알고 싶어`;
+      if (companyData.covering && companyData.covering[key]) {
+        const videoUrl = companyData.covering[key].videoUrl;
+        pendingCoveringContext = false;
+        return {
+          text: companyData.covering[key].answer,
+          videoHtml: videoUrl
+            ? `<iframe width="100%" height="auto" src="${videoUrl}" frameborder="0" allowfullscreen></iframe>`
+            : null,
+          description: null,
+          imageUrl: null
+        };
+      }
+      pendingCoveringContext = false;
+    }
+  }
+  if (
+    normalizedUserInput.includes("커버링") &&
+    normalizedUserInput.includes("방법") &&
+    !normalizedUserInput.includes("주문")
+  ) {
+    const coveringTypes2 = ["더블", "맥스", "프리미엄", "슬림", "미디", "미니", "팟", "드롭", "라운저", "피라미드"];
+    const foundType = coveringTypes2.find(type => normalizedUserInput.includes(type));
+    if (foundType) {
+      const key = `${foundType} 커버링 방법을 알고 싶어`;
+      console.log("커버링 key:", key);
+      if (companyData.covering && companyData.covering[key]) {
+        const videoUrl = companyData.covering[key].videoUrl;
+        console.log("videoUrl:", videoUrl);
+        return {
+          text: companyData.covering[key].answer,
+          videoHtml: videoUrl
+            ? `<iframe width="100%" height="auto" src="${videoUrl}" frameborder="0" allowfullscreen></iframe>`
+            : null,
+          description: null,
+          imageUrl: null
+        };
+      } else {
+        console.warn(`companyData.covering 에 "${key}" 키가 없습니다.`);
+      }
+    } else {
+      pendingCoveringContext = true;
+      return {
+        text: "어떤 커버링을 알고 싶으신가요? (맥스, 더블, 프리미엄, 슬림, 미니 등)",
+        videoHtml: null,
+        description: null,
+        imageUrl: null
+      };
+    }
+  }
+
+  // (3) 사이즈 안내
+  const sizeTypes = ["더블", "맥스", "프리미엄", "슬림", "미디", "미니", "팟", "드롭", "라운저", "피라미드"];
+  if (
+    normalizedUserInput.includes("사이즈") ||
+    normalizedUserInput.includes("크기")
+  ) {
+    for (let sizeType of sizeTypes) {
+      if (normalizedUserInput.includes(sizeType)) {
+        const key = sizeType + " 사이즈 또는 크기.";
+        if (companyData.sizeInfo && companyData.sizeInfo[key]) {
+          return {
+            text: companyData.sizeInfo[key].description,
+            videoHtml: null,
+            description: null,
+            imageUrl: companyData.sizeInfo[key].imageUrl
+          };
+        }
+      }
+    }
+  }
+
+  // (4) 비즈 안내
+  const bizKeywords = ["스탠다드", "프리미엄", "프리미엄 플러스", "비즈"];
+  if (bizKeywords.some(bw => normalizedUserInput.includes(bw))) {
+    let matchedType = null;
+    if (normalizedUserInput.includes("스탠다드")) matchedType = "스탠다드";
+    else if (normalizedUserInput.includes("프리미엄 플러스")) matchedType = "프리미엄 플러스";
+    else if (normalizedUserInput.includes("프리미엄")) matchedType = "프리미엄";
+    if (matchedType) {
+      const key = `${matchedType} 비즈 에 대해 알고 싶어`;
+      if (companyData.biz && companyData.biz[key]) {
+        return {
+          text: companyData.biz[key].description,
+          videoHtml: null,
+          description: null,
+          imageUrl: null
+        };
+      } else {
+        return {
+          text: `${matchedType} 비즈 정보가 없습니다. (JSON에 등록되어 있는지 확인해주세요)`,
+          videoHtml: null,
+          description: null,
+          imageUrl: null
+        };
+      }
+    } else {
+      return {
+        text: "어떤 비즈가 궁금하신가요? (스탠다드, 프리미엄, 프리미엄 플러스 등)",
+        videoHtml: null,
+        description: null,
+        imageUrl: null
+      };
+    }
+  }
+
+  // (5) goodsInfo (유사도 매칭)
+  if (companyData.goodsInfo) {
+    let bestGoodsMatch = null;
+    let bestGoodsDistance = Infinity;
+    for (let question in companyData.goodsInfo) {
+      const distance = levenshtein.get(normalizedUserInput, normalizeSentence(question));
+      if (distance < bestGoodsDistance) {
+        bestGoodsDistance = distance;
+        bestGoodsMatch = companyData.goodsInfo[question];
+      }
+    }
+    if (bestGoodsDistance < 6 && bestGoodsMatch) {
+      return {
+        text: Array.isArray(bestGoodsMatch.description)
+          ? bestGoodsMatch.description.join("\n")
+          : bestGoodsMatch.description,
+        videoHtml: null,
+        description: null,
+        imageUrl: bestGoodsMatch.imageUrl || null
+      };
+    }
+  }
+
+  // (6) homePage 유사도 매칭
+  if (companyData.homePage) {
+    let bestHomeMatch = null;
+    let bestHomeDist = Infinity;
+    for (let question in companyData.homePage) {
+      const distance = levenshtein.get(normalizedUserInput, normalizeSentence(question));
+      if (distance < bestHomeDist) {
+        bestHomeDist = distance;
+        bestHomeMatch = companyData.homePage[question];
+      }
+    }
+    if (bestHomeDist < 5 && bestHomeMatch) {
+      return {
+        text: bestHomeMatch.description,
+        videoHtml: null,
+        description: null,
+        imageUrl: null
+      };
+    }
+  }
+
+  // (7) asInfo 정보
+  if (companyData.asInfoList) {
+    let asInfoMatch = null;
+    let asInfoDist = Infinity;
+    for (let question in companyData.asInfo) {
+      const distance = levenshtein.get(normalizedUserInput, normalizeSentence(question));
+      if (distance < asInfoDist) {
+        asInfoDist = distance;
+        asInfoMatch = companyData.asInfo[question];
+      }
+    }
+    if (asInfoDist < 8 && asInfoMatch) {
+      return {
+        text: asInfoMatch.description,
+        videoHtml: null,
+        description: null,
+        imageUrl: null
+      };
+    }
+  }
+
+  if (
+    normalizedUserInput.includes("상담사 연결") ||
+    normalizedUserInput.includes("상담원 연결") ||
+    normalizedUserInput.includes("고객센터 연결")
+  ) {
+    return {
+      text: `
+      상담사와 연결을 도와드릴게요.
+      <a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank" rel="noopener noreferrer">카카오플친 연결하기</a>
+      <a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank" rel="noopener noreferrer">네이버톡톡 연결하기</a>
+      `,
+      videoHtml: null,
+      description: null,
+      imageUrl: null
+    };
+  }
+
+  /************************************************
+   * B. Café24 주문/배송 로직
+   ************************************************/
+  // (8) 회원 아이디 조회
+  if (
+    normalizedUserInput.includes("내 아이디") ||
+    normalizedUserInput.includes("나의 아이디") ||
+    normalizedUserInput.includes("아이디 조회") ||
+    normalizedUserInput.includes("아이디 알려줘")
+  ) {
+    if (memberId && memberId !== "null") {
+      return {
+        text: `안녕하세요 ${memberId} 고객님, 궁금하신 사항을 남겨주세요.`,
+        videoHtml: null,
+        description: null,
+        imageUrl: null,
+      };
+    } else {
+      return {
+        text: `안녕하세요 고객님 회원가입을 통해 요기보의 다양한 이벤트 혜택을 만나보실수 있어요! <a href="/member/login.html" target="_blank">회원가입 하러가기</a>`,
+        videoHtml: null,
+        description: null,
+        imageUrl: null,
+      };
+    }
+  }
+
+  // (9) 주문번호가 포함된 경우 처리
+  if (containsOrderNumber(normalizedUserInput)) {
+    if (memberId && memberId !== "null") {
+      try {
+        const match = normalizedUserInput.match(/\d{8}-\d{7}/);
+        const targetOrderNumber = match ? match[0] : "";
+        const shipment = await getShipmentDetail(targetOrderNumber);
+        if (shipment) {
+          console.log("Shipment 전체 데이터:", shipment);
+          console.log("shipment.status 값:", shipment.status);
+          console.log("shipment.items 값:", shipment.items);
+          const shipmentStatus =
+            shipment.status || (shipment.items && shipment.items.length > 0 ? shipment.items[0].status : undefined);
+          const itemStatusMap = {
+            standby: "배송대기",
+            shipping: "배송중",
+            shipped: "배송완료",
+            shipready:"배송준비중" 
+          };
+          const statusText = itemStatusMap[shipmentStatus] || shipmentStatus || "배송 완료";
+          const trackingNo = shipment.tracking_no || "정보 없음";
+          const shippingCompany = shipment.shipping_company_name || "정보 없음";
+          return {
+            text: `주문번호 ${targetOrderNumber}의 배송 상태는 ${statusText}이며, 송장번호는 ${trackingNo}, 택배사는 ${shippingCompany} 입니다.`,
+            videoHtml: null,
+            description: null,
+            imageUrl: null,
+          };
+        } else {
+          return {
+            text: "해당 주문번호에 대한 배송 정보를 찾을 수 없습니다.",
+            videoHtml: null,
+            description: null,
+            imageUrl: null,
+          };
+        }
+      } catch (error) {
+        return {
+          text: "배송 정보를 확인하는 데 오류가 발생했습니다.",
+          videoHtml: null,
+          description: null,
+          imageUrl: null,
+        };
+      }
+    } else {
+      return { 
+        text: `배송은 제품 출고 후 1~3 영업일 정도 소요되며, 제품별 출고 시 소요되는 기간은 아래 내용을 확인해주세요.
+        - 소파 및 바디필로우: 주문 확인 후 제작되는 제품으로, 3~7 영업일 이내에 출고됩니다.
+        - 모듀(모듈러) 소파: 주문 확인일로부터 1~3 영업일 이내에 출고됩니다.
+        - 그 외 제품: 주문 확인일로부터 1~3 영업일 이내에 출고됩니다.
+        일부 제품은 오후 1시 이전에 구매를 마쳐주시면 당일 출고될 수 있어요.
+        개별 배송되는 제품을 여러 개 구매하신 경우 제품이 여러 차례로 나눠 배송될 수 있습니다.
+        주문 폭주 및 재난 상황이나 천재지변, 택배사 사정 등에 의해 배송 일정이 일부 변경될 수 있습니다.
+        추가 문의사항이 있으신 경우 Yogibo 고객센터로 문의해주세요.`,
+        videoHtml: null,
+        description: null,
+        imageUrl: null
+      };
+    }
+  }
+
+  // (10) 주문번호 없이 주문상태 확인 처리
+  if (
+    (normalizedUserInput.includes("주문상태 확인") ||
+      normalizedUserInput.includes("배송") ||
+      normalizedUserInput.includes("배송 상태 확인") ||
+      normalizedUserInput.includes("상품 배송정보") ||
+      normalizedUserInput.includes("배송상태 확인") ||
+      normalizedUserInput.includes("주문정보 확인") ||
+      normalizedUserInput.includes("배송정보 확인")) &&
+    !containsOrderNumber(normalizedUserInput)
+  ) {
+    if (memberId && memberId !== "null") {
+      try {
+        const orderData = await getOrderShippingInfo(memberId);
+        if (orderData.orders && orderData.orders.length > 0) {
+          const targetOrder = orderData.orders[0];
+          const shipment = await getShipmentDetail(targetOrder.order_id);
+          if (shipment) {
+            const shipmentStatus =
+              shipment.status || (shipment.items && shipment.items.length > 0 ? shipment.items[0].status : undefined);
+            const itemStatusMap = {
+              standby: "배송대기",
+              shipping: "배송중",
+              shipped: "배송완료",
+              shipready:"배송준비중",
+            };
+            const statusText = itemStatusMap[shipmentStatus] || shipmentStatus || "배송완료";
+            const trackingNo = shipment.tracking_no || "등록전";
+            let shippingCompany = shipment.shipping_company_name || "등록전";
+    
+            if (shippingCompany === "롯데 택배") {
+              shippingCompany = `<a href="https://www.lotteglogis.com/home/reservation/tracking/index">${shippingCompany}</a>`;
+            } else if (shippingCompany === "경동 택배") {
+              shippingCompany = `<a href="https://kdexp.com/index.do" target="_blank">${shippingCompany}</a>`;
+            }
+    
+            return {
+              text: `고객님께서 주문하신 상품은 ${shippingCompany}를 통해 ${statusText} 이며, 운송장 번호는 ${trackingNo} 입니다.`,
+              videoHtml: null,
+              description: null,
+              imageUrl: null
+            };
+          } else {
+            return { text: "해당 주문에 대한 배송 상세 정보를 찾을 수 없습니다." };
+          }
+        } else {
+          return { 
+            text: `배송은 제품 출고 후 1~3 영업일 정도 소요되며, 제품별 출고 시 소요되는 기간은 아래 내용을 확인해주세요.
+            - 소파 및 바디필로우: 주문 확인 후 제작되는 제품으로, 3~7 영업일 이내에 출고됩니다.
+            - 모듀(모듈러) 소파: 주문 확인일로부터 1~3 영업일 이내에 출고됩니다.
+            - 그 외 제품: 주문 확인일로부터 1~3 영업일 이내에 출고됩니다.
+            일부 제품은 오후 1시 이전에 구매를 마쳐주시면 당일 출고될 수 있어요.
+            개별 배송되는 제품을 여러 개 구매하신 경우 제품이 여러 차례로 나눠 배송될 수 있습니다.
+            주문 폭주 및 재난 상황이나 천재지변, 택배사 사정 등에 의해 배송 일정이 일부 변경될 수 있습니다.
+            추가 문의사항이 있으신 경우 Yogibo 고객센터로 문의해주세요.`,
+            videoHtml: null,
+            description: null,
+            imageUrl: null
+          };
+        }
+      } catch (error) {
+        return { text: "고객님의 주문 정보를 찾을 수 없습니다. 주문 여부를 확인해주세요." };
+      }
+    } else {
+      return { 
+        text: `배송은 제품 출고 후 1~3 영업일 정도 소요되며, 제품별 출고 시 소요되는 기간은 아래 내용을 확인해주세요.
+        - 소파 및 바디필로우: 주문 확인 후 제작되는 제품으로, 3~7 영업일 이내에 출고됩니다.
+        - 모듀(모듈러) 소파: 주문 확인일로부터 1~3 영업일 이내에 출고됩니다.
+        - 그 외 제품: 주문 확인일로부터 1~3 영업일 이내에 출고됩니다.
+        일부 제품은 오후 1시 이전에 구매를 마쳐주시면 당일 출고될 수 있어요.
+        개별 배송되는 제품을 여러 개 구매하신 경우 제품이 여러 차례로 나눠 배송될 수 있습니다.
+        주문 폭주 및 재난 상황이나 천재지변, 택배사 사정 등에 의해 배송 일정이 일부 변경될 수 있습니다.
+        추가 문의사항이 있으신 경우 Yogibo 고객센터로 문의해주세요.`,
+        videoHtml: null,
+        description: null,
+        imageUrl: null
+      };
+    }
+  }
+  
+  /************************************************
+   * C. 최종 fallback
+   ************************************************/
+  return {
+    text: "질문을 이해하지 못했어요. 좀더 자세히 입력 해주시겠어요",
+    videoHtml: null,
+    description: null,
+    imageUrl: null,
+  };
+}
+
 // ========== [Chat 요청 처리] ==========
 app.post("/chat", async (req, res) => {
   const userInput = req.body.message;
@@ -298,6 +809,54 @@ app.post("/chat", async (req, res) => {
     });
   }
 });
+
+
+// ========== [13] 대화 내용 Excel 다운로드 라우팅 ==========
+app.get('/chatConnet', async (req, res) => {
+  const client = new MongoClient(MONGODB_URI);
+  try {
+    await client.connect();
+    const db = client.db(DB_NAME);
+    const collection = db.collection("conversationLogs");
+    const data = await collection.find({}).toArray();
+
+    // 새로운 Excel 워크북과 워크시트 생성
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('ConversationList');
+
+    // 워크시트 컬럼 헤더 설정
+    worksheet.columns = [
+      { header: '회원아이디', key: 'memberId', width: 15 },
+      { header: '날짜', key: 'date', width: 15 },
+      { header: '대화내용', key: 'conversation', width: 50 },
+    ];
+
+    // 각 문서마다 한 행씩 추가 (conversation 배열은 JSON 문자열로 변환)
+    data.forEach(doc => {
+      worksheet.addRow({
+        memberId: doc.memberId || '비회원',
+        date: doc.date,
+        conversation: JSON.stringify(doc.conversation, null, 2)
+      });
+    });
+
+    // 응답 헤더 설정 후 워크북을 스트림으로 전송 (Excel 다운로드)
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader("Content-Disposition", "attachment; filename=conversationLogs.xlsx");
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.error("Excel 파일 생성 중 오류:", error.message);
+    res.status(500).send("Excel 파일 생성 중 오류가 발생했습니다.");
+  } finally {
+    await client.close();
+  }
+});
+
 
 // ========== [서버 실행 및 프롬프트 초기화] ==========
 (async function initialize() {

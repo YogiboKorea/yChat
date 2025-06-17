@@ -314,9 +314,12 @@ async function getGPT3TurboResponse(userInput) {
     const gptAnswer = response.data.choices[0].message.content;
     return addSpaceAfterPeriod(gptAnswer);
 
-  } catch (error) {
-    console.error("OpenAI API 오류:", error.message);
-    return "요기보 챗봇 오류가 발생했습니다. 다시 시도 부탁드립니다.";
+  }  catch (error) {
+    //에러 데이터 확인코드
+    if (error.response) {
+      console.error("Status:", error.response.status);        
+      console.error("Response body:", error.response.data);  
+    }
   }
 }
 

@@ -1047,38 +1047,43 @@ transporter.verify(err => {
   if (err) console.error('SMTP 연결 실패:', err);
   else     console.log('SMTP 연결 성공');
 });
-app.post('/send-email', async (req, res) => {
-  const { from: userEmail, company, contact, url, message } = req.body;
+app.post(
+  '/send-email',
+  upload.single('attachment'),       // form-data의 'attachment' 필드 하나 받기
+  async (req, res) => {
+    // req.file 에 업로드된 파일 정보가 담겨 있습니다.
+    // req.body 에는 기존 formData 필드(companyEmail, companyName, message 등)
+    const { companyEmail, companyName, message } = req.body;
+    const userEmail = companyEmail; // 필요에 따라 분리
 
-  // 반드시 SMTP_USER (인증 계정) 으로 From 지정
-  const mailOptions = {
-    from: process.env.SMTP_USER,     // ex: 'sallyfeel@naver.com'
-    to: 'leshwann@naver.com',         // ex: 'contact@yogico.kr'
-    replyTo: userEmail,              // 사용자가 입력한 이메일
-    subject: `Contact 요청: ${company || userEmail}`,
-    text:
-      `Company: ${company}\n` +
-      `Contact: ${contact}\n` +
-      `URL: ${url}\n\n` +
-      `Message:\n${message}`,
-    html:
-      `<h2>새 Contact 요청</h2>` +
-      `<p><strong>Company:</strong> ${company}</p>` +
-      `<p><strong>Contact:</strong> ${contact}</p>` +
-      `<p><strong>URL:</strong> <a href="${url}">${url}</a></p>` +
-      `<hr>` +
-      `<p>${message}</p>`,
-  };
+    // mailOptions에 attachments 추가
+    const mailOptions = {
+      from: {
+        name: userEmail,
+        address: process.env.SMTP_USER
+      },
+      to: 'leshwann@naver.com',
+      replyTo: userEmail,
+      subject: `Contact : ${companyName || userEmail}`,
+      text: message,
+      html: `<p>${message.replace(/\n/g,'<br>')}</p>`,
+      attachments: req.file
+        ? [{
+            filename: req.file.originalname,
+            path: req.file.path
+          }]
+        : []
+    };
 
-  try {
-    const info = await transporter.sendMail(mailOptions);
-    return res.json({ success: true, messageId: info.messageId });
-  } catch (error) {
-    console.error('메일 전송 오류:', error);
-    return res.status(500).json({ success: false, error: error.message });
+    try {
+      const info = await transporter.sendMail(mailOptions);
+      return res.json({ success: true, messageId: info.messageId });
+    } catch (error) {
+      console.error('메일 전송 오류:', error);
+      return res.status(500).json({ success: false, error: error.message });
+    }
   }
-});
-
+);
 
 // ========== [서버 실행 및 프롬프트 초기화] ==========
 (async function initialize() {

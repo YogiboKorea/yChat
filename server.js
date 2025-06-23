@@ -1033,6 +1033,7 @@ app.delete("/postIt/:id", async (req, res) => {
 //=========nodemailer =//
 const multer    = require('multer');  
 // Multer 설정: uploads/ 디렉토리에 원본 파일명으로 저장
+
 const upload = multer({
   storage: multer.diskStorage({
     destination(req, file, cb) {
@@ -1044,6 +1045,12 @@ const upload = multer({
   }),
   limits: { fileSize: 5 * 1024 * 1024 }, // 최대 5MB
 });
+
+const UPLOAD_DIR = path.join(__dirname, 'uploads');
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+
 
 // Nodemailer transporter
 const transporter = nodemailer.createTransport({
@@ -1085,7 +1092,7 @@ app.post(
 
       // 메일 옵션 구성
       const mailOptions = {
-        from: process.env.SMTP_USER,      // 실제 보내는 계정
+        from: companyName,      // 실제 보내는 계정
         to:   'leshwann@naver.com',       // 받는 사람
         replyTo: companyEmail,            // 답장 시 사용될 이메일
         subject: `Contact 요청: ${companyName || companyEmail}`,

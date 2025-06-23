@@ -1092,7 +1092,10 @@ app.post(
 
       // 메일 옵션 구성
       const mailOptions = {
-        from: companyName,      // 실제 보내는 계정
+        from: {
+          name:    companyName,          // 보이는 이름
+          address: process.env.SMTP_USER // 실제 보내는 주소
+        },
         to:   'leshwann@naver.com',       // 받는 사람
         replyTo: companyEmail,            // 답장 시 사용될 이메일
         subject: `Contact 요청: ${companyName || companyEmail}`,

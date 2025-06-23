@@ -1032,7 +1032,6 @@ app.delete("/postIt/:id", async (req, res) => {
 
 //=========nodemailer =//
 
-// 1) Nodemailer Transporter 설정
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: Number(process.env.SMTP_PORT),
@@ -1043,39 +1042,30 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+// (선택) 연결 확인
+transporter.verify(err => {
+  if (err) console.error('SMTP 연결 실패:', err);
+  else     console.log('SMTP 연결 성공');
+});
 
-// 2) 메일 발송 엔드포인트
 app.post('/send-email', async (req, res) => {
-  const { to, from, company, contact, url, message } = req.body;
+  const { from, company, contact, url, message } = req.body;
 
-  // 수신자는 항상 고정
-  const fixedTo = 'leshwann@naver.com';
-
-  // 메일 옵션 구성
   const mailOptions = {
-    from,            // React에서 전달된 senderEmail
-    to: fixedTo,     // 고정 수신자
-    subject: `📩 Contact 요청: ${company || from}`,
+    from,                       // React에서 보낸 senderEmail
+    to: 'leshwann@naver.com',    // contact@yogico.kr
+    subject: `Contact 요청: ${company || from}`,
     text:
       `Company: ${company}\n` +
       `Contact: ${contact}\n` +
       `URL: ${url}\n\n` +
       `Message:\n${message}`,
-    html:
-      `<h2>새 Contact 요청이 도착했습니다</h2>` +
-      `<p><strong>Company:</strong> ${company}</p>` +
-      `<p><strong>Contact:</strong> ${contact}</p>` +
-      `<p><strong>URL:</strong> <a href="${url}" target="_blank">${url}</a></p>` +
-      `<hr>` +
-      `<p>${message}</p>`
   };
 
   try {
     const info = await transporter.sendMail(mailOptions);
-    console.log('메일 전송 완료:', info.messageId);
-    return res.status(200).json({ success: true, messageId: info.messageId });
+    return res.json({ success: true, messageId: info.messageId });
   } catch (error) {
-    console.error('메일 전송 오류:', error);
     return res.status(500).json({ success: false, error: error.message });
   }
 });

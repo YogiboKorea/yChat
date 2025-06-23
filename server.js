@@ -1031,7 +1031,7 @@ app.delete("/postIt/:id", async (req, res) => {
 
 
 //=========nodemailer =//
-
+const upload = multer({ dest: 'uploads/' });
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: Number(process.env.SMTP_PORT),

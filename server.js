@@ -1032,11 +1032,24 @@ app.delete("/postIt/:id", async (req, res) => {
 
 //=========nodemailer =//
 const multer    = require('multer');  
-const upload = multer({ dest: 'uploads/' });
+// Multer 설정: uploads/ 디렉토리에 원본 파일명으로 저장
+const upload = multer({
+  storage: multer.diskStorage({
+    destination(req, file, cb) {
+      cb(null, path.join(__dirname, 'uploads'));
+    },
+    filename(req, file, cb) {
+      cb(null, `${Date.now()}_${file.originalname}`);
+    },
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 최대 5MB
+});
+
+// Nodemailer transporter
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT),
-  secure: process.env.SMTP_SECURE === 'true',
+  host:    process.env.SMTP_HOST,
+  port:    Number(process.env.SMTP_PORT),
+  secure:  process.env.SMTP_SECURE === 'true',
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
@@ -1048,35 +1061,48 @@ transporter.verify(err => {
   if (err) console.error('SMTP 연결 실패:', err);
   else     console.log('SMTP 연결 성공');
 });
+
+// 파일 + 폼 데이터를 다 받는 엔드포인트
 app.post(
   '/send-email',
-  upload.single('attachment'),       // form-data의 'attachment' 필드 하나 받기
+  upload.single('attachment'),   // React에서 FormData.append('attachment', file) 로 보냄
   async (req, res) => {
-    // req.file 에 업로드된 파일 정보가 담겨 있습니다.
-    // req.body 에는 기존 formData 필드(companyEmail, companyName, message 등)
-    const { companyEmail, companyName, message } = req.body;
-    const userEmail = companyEmail; // 필요에 따라 분리
-
-    // mailOptions에 attachments 추가
-    const mailOptions = {
-      from: {
-        name: userEmail,
-        address: process.env.SMTP_USER
-      },
-      to: 'leshwann@naver.com',
-      replyTo: userEmail,
-      subject: `Contact : ${companyName || userEmail}`,
-      text: message,
-      html: `<p>${message.replace(/\n/g,'<br>')}</p>`,
-      attachments: req.file
-        ? [{
-            filename: req.file.originalname,
-            path: req.file.path
-          }]
-        : []
-    };
-
     try {
+      // 프론트에서 보내는 필드 이름과 일치시킵니다.
+      const { companyEmail, companyName, message } = req.body;
+      if (!companyEmail) {
+        return res.status(400).json({ error: 'Company Email이 필요합니다.' });
+      }
+
+      // 첨부파일이 있으면 attachments 배열에 추가
+      const attachments = [];
+      if (req.file) {
+        attachments.push({
+          filename: req.file.originalname,
+          path:     req.file.path,
+        });
+      }
+
+      // 메일 옵션 구성
+      const mailOptions = {
+        from: process.env.SMTP_USER,      // 실제 보내는 계정
+        to:   'leshwann@naver.com',       // 받는 사람
+        replyTo: companyEmail,            // 답장 시 사용될 이메일
+        subject: `Contact 요청: ${companyName || companyEmail}`,
+        text:
+          `Company Email: ${companyEmail}\n` +
+          `Company Name:  ${companyName}\n\n` +
+          `Message:\n${message}`,
+        html:
+          `<h2>새 Contact 요청</h2>` +
+          `<p><strong>Company Email:</strong> ${companyEmail}</p>` +
+          `<p><strong>Company Name:</strong> ${companyName}</p>` +
+          `<hr/>` +
+          `<p>${message.replace(/\n/g, '<br/>')}</p>`,
+        attachments
+      };
+
+      // 메일 전송
       const info = await transporter.sendMail(mailOptions);
       return res.json({ success: true, messageId: info.messageId });
     } catch (error) {
@@ -1085,7 +1111,6 @@ app.post(
     }
   }
 );
-
 // ========== [서버 실행 및 프롬프트 초기화] ==========
 (async function initialize() {
   try {

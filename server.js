@@ -1047,29 +1047,37 @@ transporter.verify(err => {
   if (err) console.error('SMTP 연결 실패:', err);
   else     console.log('SMTP 연결 성공');
 });
-
 app.post('/send-email', async (req, res) => {
-  const { from, company, contact, url, message } = req.body;
+  const { from: userEmail, company, contact, url, message } = req.body;
 
+  // 반드시 SMTP_USER (인증 계정) 으로 From 지정
   const mailOptions = {
-    from,                       // React에서 보낸 senderEmail
-    to: 'leshwann@naver.com',    // contact@yogico.kr
-    subject: `Contact 요청: ${company || from}`,
+    from: process.env.SMTP_USER,     // ex: 'sallyfeel@naver.com'
+    to: 'leshwann@naver.com',         // ex: 'contact@yogico.kr'
+    replyTo: userEmail,              // 사용자가 입력한 이메일
+    subject: `Contact 요청: ${company || userEmail}`,
     text:
       `Company: ${company}\n` +
       `Contact: ${contact}\n` +
       `URL: ${url}\n\n` +
       `Message:\n${message}`,
+    html:
+      `<h2>새 Contact 요청</h2>` +
+      `<p><strong>Company:</strong> ${company}</p>` +
+      `<p><strong>Contact:</strong> ${contact}</p>` +
+      `<p><strong>URL:</strong> <a href="${url}">${url}</a></p>` +
+      `<hr>` +
+      `<p>${message}</p>`,
   };
 
   try {
     const info = await transporter.sendMail(mailOptions);
     return res.json({ success: true, messageId: info.messageId });
   } catch (error) {
+    console.error('메일 전송 오류:', error);
     return res.status(500).json({ success: false, error: error.message });
   }
 });
-
 
 
 // ========== [서버 실행 및 프롬프트 초기화] ==========

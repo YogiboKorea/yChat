@@ -13,12 +13,13 @@
     "body-parser": "^1.20.3",
     "compression": "^1.8.0",
     "cors": "^2.8.5",
-    "dotenv": "^16.4.7",
+    "dotenv": "^16.5.0",
     "env": "^0.0.2",
     "exceljs": "^4.4.0",
     "express": "^4.21.2",
     "fast-levenshtein": "^3.0.0",
     "natural": "^8.0.1",
+    "nodemailer": "^7.0.3",
     "nodemon": "^3.1.9",
     "openai": "^4.85.3"
   }

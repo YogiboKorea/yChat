@@ -9,7 +9,7 @@ const { MongoClient, ObjectId } = require("mongodb");
 const levenshtein = require("fast-levenshtein");
 const ExcelJS = require("exceljs");
 require("dotenv").config();
-
+const nodemailer = require('nodemailer');
 // ========== [환경 설정] ==========
 const {
   ACCESS_TOKEN,
@@ -315,7 +315,7 @@ async function getGPT3TurboResponse(userInput) {
     return addSpaceAfterPeriod(gptAnswer);
 
   }  catch (error) {
-    //에러 데이터 확인코드
+    //에러
     if (error.response) {
       console.error("Status:", error.response.status);        
       console.error("Response body:", error.response.data);  
@@ -1025,6 +1025,58 @@ app.delete("/postIt/:id", async (req, res) => {
   } catch (error) {
     console.error("DELETE /postIt 오류:", error.message);
     return res.status(500).json({ error: "포스트잇 삭제 중 오류가 발생했습니다." });
+  }
+});
+
+
+
+//=========nodemailer =//
+
+// 1) Nodemailer Transporter 설정
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT),
+  secure: process.env.SMTP_SECURE === 'true',
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
+
+
+// 2) 메일 발송 엔드포인트
+app.post('/send-email', async (req, res) => {
+  const { to, from, company, contact, url, message } = req.body;
+
+  // 수신자는 항상 고정
+  const fixedTo = 'leshwann@naver.com';
+
+  // 메일 옵션 구성
+  const mailOptions = {
+    from,            // React에서 전달된 senderEmail
+    to: fixedTo,     // 고정 수신자
+    subject: `📩 Contact 요청: ${company || from}`,
+    text:
+      `Company: ${company}\n` +
+      `Contact: ${contact}\n` +
+      `URL: ${url}\n\n` +
+      `Message:\n${message}`,
+    html:
+      `<h2>새 Contact 요청이 도착했습니다</h2>` +
+      `<p><strong>Company:</strong> ${company}</p>` +
+      `<p><strong>Contact:</strong> ${contact}</p>` +
+      `<p><strong>URL:</strong> <a href="${url}" target="_blank">${url}</a></p>` +
+      `<hr>` +
+      `<p>${message}</p>`
+  };
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log('메일 전송 완료:', info.messageId);
+    return res.status(200).json({ success: true, messageId: info.messageId });
+  } catch (error) {
+    console.error('메일 전송 오류:', error);
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 

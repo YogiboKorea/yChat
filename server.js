@@ -1128,7 +1128,7 @@ app.post(
 
 // 필요 모듈 (중복 require 있으면 이 줄들은 생략하세요)
 const ftp   = require('basic-ftp');
-
+const dayjs = require('dayjs');
 const MALL_ID = 'yogibo';
 const FTP_HOST = 'yogibo.ftp.cafe24.com';
 const FTP_USER = 'yogibo';

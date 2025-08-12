@@ -1134,14 +1134,11 @@ const FTP_HOST = 'yogibo.ftp.cafe24.com';
 const FTP_USER = 'yogibo';
 const FTP_PASS = 'korea2025!!';
 
-// 선행 슬래시 제거! 홈 기준 상대경로
-const FTP_REMOTE_ROOT = (process.env.FTP_REMOTE_ROOT || 'web/img/temple').replace(/^\/+/, '');
-// 퍼블릭 URL 접두사(끝 슬래시 제거)
+// 반드시 절대경로, 끝에 슬래시 제거
+const FTP_REMOTE_ROOT = (process.env.FTP_REMOTE_ROOT || '/web/img/temple').replace(/\/+$/, '');
 const FTP_PUBLIC_BASE = (process.env.FTP_PUBLIC_BASE || 'https://yogibo.kr/web/img/temple').replace(/\/+$/, '');
 
-// =========================
-// 이미지 업로드 (FTP)
-// =========================
+// 업로드 엔드포인트
 app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => {
   const localPath = req.file?.path;
   const filename  = req.file?.filename;
@@ -1153,36 +1150,36 @@ app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => 
   client.ftp.verbose = false;
 
   try {
-    // ⚠️ Cafe24에서 FTPS AUTH 안되는 경우가 많아 기본은 평문 FTP
+    // FTPS가 안되면 500 AUTH 에러 → 일반 FTP 사용
     await client.access({
       host: FTP_HOST,
       user: FTP_USER,
       password: FTP_PASS,
-      port: 21,
-      secure: false, // ← FTPS 실패하면 이걸로 OK
+      secure: false, // FTPS 미지원 계정 대비
     });
 
-    // 1) 기본 디렉터리 보장: web/img/temple
-    await client.ensureDir(FTP_REMOTE_ROOT);
+    // 항상 절대경로로 한 번만 이동
+    const absRoot = FTP_REMOTE_ROOT.startsWith('/') ? FTP_REMOTE_ROOT : `/${FTP_REMOTE_ROOT}`;
+    await client.ensureDir(absRoot);
+    await client.cd(absRoot);
 
-    // 2) 날짜 경로 보장: web/img/temple/uploads/yogibo/YYYY/MM/DD
-    const dateFolder = dayjs().format('YYYY/MM/DD');
-    const subDir = path.posix.join(FTP_REMOTE_ROOT, 'uploads', MALL_ID, dateFolder);
-    await client.ensureDir(subDir);
+    // 날짜 경로 단계적으로 생성하며 이동
+    const dateFolder = dayjs().format('YYYY/MM/DD'); // "2025/08/12"
+    const segments = ['uploads', MALL_ID, ...dateFolder.split('/')];
+    for (const seg of segments) {
+      await client.ensureDir(seg);
+      await client.cd(seg);
+    }
 
-    // 3) 업로드
-    const remotePath = path.posix.join(subDir, filename);
-    await client.uploadFrom(localPath, remotePath);
+    // 현재 위치에 파일 업로드
+    await client.uploadFrom(localPath, filename);
 
-    // 4) 퍼블릭 URL 반환
+    // 퍼블릭 URL
     const url = `${FTP_PUBLIC_BASE}/uploads/${MALL_ID}/${dateFolder}/${filename}`;
     return res.json({ url });
   } catch (err) {
     console.error('[IMAGE UPLOAD ERROR][FTP]', err?.code, err?.message || err);
-    return res.status(500).json({
-      error: '이미지 업로드 실패(FTP)',
-      detail: err?.message || String(err),
-    });
+    return res.status(500).json({ error: '이미지 업로드 실패(FTP)', detail: err?.message || String(err) });
   } finally {
     try { client.close(); } catch {}
     fs.unlink(localPath, () => {});
@@ -1348,7 +1345,7 @@ app.post('/api/:_any/track', async (req, res) => {
 
     // 이벤트 존재 확인
     const exists = await withDb(db =>
-      db.collection('eventsTemple').findOne({ _id: new ObjectId(pageId) }, { projection: { _id: 1 } })
+      db.collection('events').findOne({ _id: new ObjectId(pageId) }, { projection: { _id: 1 } })
     );
     if (!exists) return res.sendStatus(204);
 

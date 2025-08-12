@@ -1131,63 +1131,31 @@ app.post(
 // =========================
 // yogibo 템플 모듈 (ADD-ON)
 // =========================
+// 의존성 보장
+const fs   = require('fs');
+const path = require('path');
+const ftp  = require('basic-ftp');
+const dayjs = require('dayjs');
+// upload(single('file'))는 기존 multer 설정 재사용
 
-// 중간 require 가능 (Node OK)
-const ftp = require('basic-ftp');
-
-// 고정 mallId & FTP 설정
 const MALL_ID = 'yogibo';
 const FTP_HOST = 'yogibo.ftp.cafe24.com';
 const FTP_USER = 'yogibo';
 const FTP_PASS = 'korea2025!!';
 
-// 문서 루트와 업로드 베이스(앞에 슬래시 넣지 마세요)
-const FTP_DOC_ROOT    = '/web';
-const FTP_UPLOAD_BASE = '/img/temple';
+// 절대 경로(FTP 루트부터): /web/img/temple
 const FTP_REMOTE_ROOT = process.env.FTP_REMOTE_ROOT || '/web/img/temple';
+// 퍼블릭 URL 접두사(끝 슬래시 금지)
 const FTP_PUBLIC_BASE = process.env.FTP_PUBLIC_BASE || 'https://yogibo.kr/web/img/temple';
 
-
-// YYYY/MM/DD 경로 생성
-function ymdPath() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}/${m}/${day}`;
-}
-
-// 공용 DB 헬퍼 (요청마다 연결/종료)
-async function withDb(task) {
-  const client = new MongoClient(MONGODB_URI);
-  await client.connect();
-  try {
-    const db = client.db(DB_NAME);
-    return await task(db);
-  } finally {
-    await client.close();
-  }
-}
-
-// Ping
-app.get('/api/:_any/ping', (req, res) => {
-  res.json({ ok: true, mallId: MALL_ID, time: new Date().toISOString() });
-});
-
-// =========================
-// 이미지 업로드 (FTPS)
-// FormData field: "file"
-// =========================
 app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => {
   const localPath = req.file?.path;
   const filename  = req.file?.filename;
-  const mallId    = MALL_ID;
-
   if (!localPath || !filename) {
     return res.status(400).json({ error: '파일이 없습니다.' });
   }
 
-  const client = new ftp.Client(15_000);
+  const client = new ftp.Client(15000);
   client.ftp.verbose = false;
 
   try {
@@ -1195,30 +1163,35 @@ app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => 
       host: FTP_HOST,
       user: FTP_USER,
       password: FTP_PASS,
-      secure: true, // FTPS(Explicit)
+      secure: true, // FTPS
       secureOptions: { rejectUnauthorized: false },
     });
 
-    // ex) /public_html/web/img/temple/uploads/yogibo/2025/08/11
+    // 1) 문서루트 보장
+    await client.ensureDir(FTP_REMOTE_ROOT);
+    await client.cd(FTP_REMOTE_ROOT);
+
+    // 2) 날짜 서브경로 생성
     const dateFolder = dayjs().format('YYYY/MM/DD');
-    const remoteDir  = path.posix.join(FTP_REMOTE_ROOT, 'uploads', mallId, dateFolder);
+    const subDir     = path.posix.join('uploads', MALL_ID, dateFolder);
+    await client.ensureDir(subDir);
 
-    await client.ensureDir(remoteDir);
-    await client.uploadFrom(localPath, path.posix.join(remoteDir, filename));
+    // 3) 업로드
+    const remotePath = path.posix.join(subDir, filename);
+    await client.uploadFrom(localPath, remotePath);
 
-    // 프론트가 접근할 수 있는 공개 URL (ex: https://yogibo.kr/web/img/temple/uploads/…)
-    const url = `${FTP_PUBLIC_BASE}/uploads/${mallId}/${dateFolder}/${filename}`;
-
+    // 4) 퍼블릭 URL
+    const url = `${FTP_PUBLIC_BASE}/uploads/${MALL_ID}/${dateFolder}/${filename}`;
     return res.json({ url });
   } catch (err) {
-    console.error('[IMAGE UPLOAD ERROR][FTP]', err?.message || err);
-    return res.status(500).json({ error: '이미지 업로드 실패(FTP)', detail: err?.message });
+    console.error('[IMAGE UPLOAD ERROR][FTP]', err?.code, err?.message || err);
+    return res.status(500).json({ error: '이미지 업로드 실패(FTP)', detail: err?.message || String(err) });
   } finally {
-    // 커넥션 정리 + 로컬 임시파일 정리
     try { client.close(); } catch {}
     fs.unlink(localPath, () => {});
   }
 });
+
 
 // =========================
 // Events CRUD

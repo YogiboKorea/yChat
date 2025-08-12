@@ -1127,7 +1127,7 @@ app.post(
 //여기부터 yogibo 템플 추가 하여 진행하기
 
 // 필요 모듈 (중복 require 있으면 이 줄들은 생략하세요)
-const ftp   = require('basic-ftp');
+const ftp = require('basic-ftp');
 const dayjs = require('dayjs');
 const MALL_ID = 'yogibo';
 const FTP_HOST = 'yogibo.ftp.cafe24.com';
@@ -1135,43 +1135,10 @@ const FTP_USER = 'yogibo';
 const FTP_PASS = 'korea2025!!';
 
 
-
-// 퍼블릭 URL 접두사 (마지막 슬래시 제거)
+// 퍼블릭 URL 접두사 (중복 슬래시 방지)
 const FTP_PUBLIC_BASE = (process.env.FTP_PUBLIC_BASE || 'https://yogibo.kr/web/img/temple').replace(/\/+$/,'');
 
-// 베이스(/web/img/temple)로 상대경로 진입 시도
-async function enterTemple(client) {
-  // 상위로 최대 5단계
-  for (let i = 0; i < 5; i++) { try { await client.cd('..'); } catch { break; } }
-
-  const seqs = [
-    ['web','img','temple'],
-    ['img','temple'],
-    ['temple'],
-  ];
-  for (const seq of seqs) {
-    let moved = 0;
-    try {
-      for (const d of seq) { await client.cd(d); moved++; }
-      return true; // 진입 성공
-    } catch {
-      // 되돌리기
-      for (let i = 0; i < moved; i++) { try { await client.cd('..'); } catch {} }
-    }
-  }
-  // 이미 temple에 있을 수도 있으니 true 반환
-  return true;
-}
-
-// parts 배열 경로를 한 단계씩 ensure + cd
-async function ensureAndCd(client, parts) {
-  for (const seg of parts) {
-    try { await client.ensureDir(seg); } catch {}
-    try { await client.cd(seg); } catch (e) { return false; }
-  }
-  return true;
-}
-
+// 업로드 엔드포인트 교체
 app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => {
   const localPath = req.file?.path;
   const filename  = req.file?.filename;
@@ -1183,7 +1150,7 @@ app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => 
   client.ftp.verbose = false;
 
   try {
-    // Cafe24는 FTPS AUTH 미지원 케이스가 많아 일반 FTP 사용
+    // Cafe24 쪽은 FTPS AUTH 미지원 케이스가 있어서 일반 FTP (secure:false)
     await client.access({
       host: FTP_HOST,
       user: FTP_USER,
@@ -1191,35 +1158,49 @@ app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => 
       secure: false,
     });
 
-    // 1) /web/img/temple 진입만 시도(생성 안 함)
-    await enterTemple(client);
+    const ymd = dayjs().format('YYYY/MM/DD');
+    const relSuffix = `${MALL_ID}/${ymd}`; // URL 생성에 사용
 
-    // 2) 목적지 경로 후보들을 깊은 순으로 시도
-    const ymd = dayjs().format('YYYY/MM/DD').split('/');
+    // 로그인 디렉터리가 어디든, 아래 후보들을 순서대로 시도
+    // 1) temple 바로 아래 uploads/...
+    // 2) 루트부터 web/img/temple/uploads/...
+    // 3) img/temple/uploads/...
+    // 4) temple/uploads/...
     const candidates = [
-      ['uploads', MALL_ID, ...ymd],
-      ['uploads', MALL_ID],
-      ['uploads'],
+      `uploads/${relSuffix}`,
+      `web/img/temple/uploads/${relSuffix}`,
+      `img/temple/uploads/${relSuffix}`,
+      `temple/uploads/${relSuffix}`,
     ];
 
-    let finalParts = null;
-    for (const parts of candidates) {
-      // 현재 위치를 temple로 리셋
-      await enterTemple(client);
-      const ok = await ensureAndCd(client, parts);
-      if (ok) { finalParts = parts; break; }
-    }
-    if (!finalParts) {
-      return res.status(500).json({ error: '경로 이동 실패', detail: 'uploads 경로 생성/진입 불가' });
+    let uploaded = false;
+    let usedCandidate = null;
+
+    for (const cand of candidates) {
+      try {
+        // ensureDir는 중간 경로까지 전부 만들고, 마지막 디렉토리로 CWD를 변경해줍니다.
+        await client.ensureDir(cand);
+        await client.uploadFrom(localPath, filename);
+        uploaded = true;
+        usedCandidate = cand;
+        break;
+      } catch (e) {
+        // 다음 후보로
+      }
     }
 
-    // 3) 업로드 (CWD = temple/…/finalParts)
-    await client.uploadFrom(localPath, filename);
+    if (!uploaded) {
+      return res.status(500).json({
+        error: '경로 이동 실패',
+        detail: 'uploads 경로 생성/진입 불가',
+        tried: candidates,
+      });
+    }
 
-    // 4) URL 반환
-    const remoteRel = finalParts.join('/');
-    const url = `${FTP_PUBLIC_BASE}/${remoteRel}/${filename}`;
-    return res.json({ url });
+    // 퍼블릭 URL은 temple 기준으로만 만들면 됨 (후보가 무엇이었든)
+    const url = `${FTP_PUBLIC_BASE}/uploads/${relSuffix}/${filename}`.replace(/([^:]\/)\/+/g, '$1');
+
+    return res.json({ url, pathTried: usedCandidate });
   } catch (err) {
     console.error('[IMAGE UPLOAD ERROR][FTP]', err?.code, err?.message || err);
     return res.status(500).json({ error: '이미지 업로드 실패(FTP)', detail: err?.message || String(err) });
@@ -1228,7 +1209,6 @@ app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => 
     fs.unlink(localPath, () => {});
   }
 });
-
 
 // =========================
 // Events CRUD  (Mongo collection: eventTemple)

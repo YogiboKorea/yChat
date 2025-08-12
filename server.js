@@ -1139,7 +1139,7 @@ const ftp = require('basic-ftp');
 const MALL_ID = 'yogibo';
 const FTP_HOST = 'yogibo.ftp.cafe24.com';
 const FTP_USER = 'yogibo';
-const FTP_PASS = 'yogibo';
+const FTP_PASS = 'korea2022@@';
 
 // 문서 루트와 업로드 베이스(앞에 슬래시 넣지 마세요)
 const FTP_DOC_ROOT    = '/web';
@@ -1386,7 +1386,7 @@ app.post('/api/:_any/track', async (req, res) => {
 
     // 이벤트 존재 확인
     const exists = await withDb(db =>
-      db.collection('events').findOne({ _id: new ObjectId(pageId) }, { projection: { _id: 1 } })
+      db.collection('eventsTemple').findOne({ _id: new ObjectId(pageId) }, { projection: { _id: 1 } })
     );
     if (!exists) return res.sendStatus(204);
 

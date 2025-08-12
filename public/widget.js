@@ -22,8 +22,8 @@
   const couponQSStart  = couponNos ? `?coupon_no=${couponNos}` : '';
   const couponQSAppend = couponNos ? `&coupon_no=${couponNos}` : '';
   const directNos      = script.dataset.directNos || '';
-  const ignoreText     = script.dataset.ignoreText === '1' ? true : false; // ← 텍스트 스킵 여부
-  const autoplayAll    = script.dataset.autoplayAll === '1' ? true : false; // ← 모든 영상 강제 자동재생
+  const ignoreText     = script.dataset.ignoreText === '1';
+  const autoplayAll    = script.dataset.autoplayAll === '1';
 
   // API preconnect
   if (API_BASE) {
@@ -91,6 +91,35 @@
   function escapeHtml(s = '') {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
+
+  // ✅ 유튜브 ID 파서 (URL/ID/iframe src 모두 대응)
+  function parseYouTubeId(input) {
+    if (!input) return null;
+    const str = String(input).trim();
+    if (/^[\w-]{11}$/.test(str)) return str;
+    try {
+      const url = new URL(str);
+      const host = url.hostname.replace('www.', '');
+      if (host === 'youtu.be') return url.pathname.slice(1);
+      if (host.includes('youtube.com')) {
+        const v = url.searchParams.get('v');
+        if (v) return v;
+        const m = url.pathname.match(/\/(embed|shorts)\/([\w-]{11})/);
+        if (m) return m[2];
+      }
+    } catch (_) {
+      // not a URL, try to extract from iframe src
+      const m = str.match(/src=["']([^"']+)["']/i);
+      if (m) return parseYouTubeId(m[1]);
+    }
+    return null;
+  }
+
+  // truthy → boolean
+  function toBool(v) {
+    return v === true || v === 'true' || v === 1 || v === '1' || v === 'on';
+  }
+
   const productsCache = {};
   const storagePrefix = `widgetCache_${pageId}_`;
 
@@ -127,7 +156,7 @@
   function renderBlocks(blocks) {
     const root = getRootContainer();
 
-    blocks.forEach((b, idx) => {
+    blocks.forEach((b) => {
       const type = b.type || 'image';
 
       // TEXT
@@ -153,10 +182,10 @@
       // VIDEO
       if (type === 'video') {
         const ratio = b.ratio || { w: 16, h: 9 };
-        const yid = b.youtubeId;
+        const yid = b.youtubeId || parseYouTubeId(b.src);
         if (!yid) return;
 
-        const willAutoplay = autoplayAll || !!b.autoplay;
+        const willAutoplay = autoplayAll || toBool(b.autoplay);
         const qs = new URLSearchParams({
           autoplay: willAutoplay ? '1' : '0',
           mute: willAutoplay ? '1' : '0',      // 모바일 자동재생 필수
@@ -171,14 +200,10 @@
         wrap.style.width = '100%';
         wrap.style.maxWidth = '800px';
         wrap.style.margin = '0 auto';
-        // aspect-ratio 속성(지원 안되면 패딩 방법으로 대체)
+
+        // aspect-ratio 속성(미지원 브라우저 대비)
         if ('aspectRatio' in wrap.style) {
           wrap.style.aspectRatio = `${ratio.w}/${ratio.h}`;
-        } else {
-          const innerBox = document.createElement('div');
-          innerBox.style.position = 'relative';
-          innerBox.style.width = '100%';
-          innerBox.style.paddingTop = `${(ratio.h / ratio.w) * 100}%`;
           const iframe = document.createElement('iframe');
           iframe.src = src;
           iframe.title = `youtube-${yid}`;
@@ -189,12 +214,16 @@
           iframe.style.border = '0';
           iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
           iframe.setAttribute('allowfullscreen', '');
-          innerBox.appendChild(iframe);
-          wrap.appendChild(innerBox);
+          wrap.appendChild(iframe);
           root.appendChild(wrap);
           return;
         }
 
+        // 패딩박스 방식
+        const innerBox = document.createElement('div');
+        innerBox.style.position = 'relative';
+        innerBox.style.width = '100%';
+        innerBox.style.paddingTop = `${(ratio.h / ratio.w) * 100}%`;
         const iframe = document.createElement('iframe');
         iframe.src = src;
         iframe.title = `youtube-${yid}`;
@@ -205,7 +234,8 @@
         iframe.style.border = '0';
         iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
         iframe.setAttribute('allowfullscreen', '');
-        wrap.appendChild(iframe);
+        innerBox.appendChild(iframe);
+        wrap.appendChild(innerBox);
         root.appendChild(wrap);
         return;
       }
@@ -488,11 +518,13 @@
       const blocks = rawBlocks.map(b => {
         const t = b.type || 'image';
         if (t === 'video') {
+          // ✅ youtubeId 보정 + autoplay 강제 boolean
+          const yid = b.youtubeId || parseYouTubeId(b.src);
           return {
             type: 'video',
-            youtubeId: b.youtubeId,
-            ratio: b.ratio || { w: 16, h: 9 },
-            autoplay: !!b.autoplay
+            youtubeId: yid,
+            ratio: (b.ratio && typeof b.ratio.w === 'number' && typeof b.ratio.h === 'number') ? b.ratio : { w: 16, h: 9 },
+            autoplay: toBool(b.autoplay)
           };
         }
         if (t === 'text') {

@@ -1138,6 +1138,7 @@ const FTP_PASS = 'korea2025!!';
 // 퍼블릭 URL 접두사 (중복 슬래시 방지)
 const FTP_PUBLIC_BASE = (process.env.FTP_PUBLIC_BASE || 'https://yogibo.kr/web/img/temple').replace(/\/+$/,'');
 
+
 // 업로드 엔드포인트 (이 블록만 교체)
 app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => {
   const localPath = req.file?.path;
@@ -1248,6 +1249,25 @@ const runDb =
 
 const EVENT_COLL = 'eventTemple';
 
+/** ✅ NEW: blocks 내 video.autoplay를 Boolean으로 정규화 */
+function normalizeBlocks(blocks = []) {
+  if (!Array.isArray(blocks)) return [];
+  return blocks.map(b => {
+    const type = b?.type || 'image';
+    if (type === 'video') {
+      return {
+        ...b,
+        autoplay:
+          b?.autoplay === true ||
+          b?.autoplay === 'true' ||
+          b?.autoplay === 1 ||
+          b?.autoplay === '1'
+      };
+    }
+    return b;
+  });
+}
+
 // ───────────────────────────────────────────────
 // EventTemple + events(알리아스) 라우트 마운트
 // ───────────────────────────────────────────────
@@ -1263,11 +1283,17 @@ function mountEventRoutes(basePath) {
         return res.status(400).json({ error: 'images를 배열로 보내주세요.' });
       }
 
+      /** ✅ content 정규화 */
+      const content = payload.content || {};
+      if (Array.isArray(content.blocks)) {
+        content.blocks = normalizeBlocks(content.blocks);
+      }
+
       const now = new Date();
       const doc = {
         mallId: MALL_ID,
         title: payload.title.trim(),
-        content: payload.content || '',
+        content, // ← 보정된 content 저장
         images: payload.images,
         gridSize: payload.gridSize ?? null,
         layoutType: payload.layoutType || 'none',
@@ -1323,7 +1349,16 @@ function mountEventRoutes(basePath) {
     const p = req.body || {};
     const set = { updatedAt: new Date() };
     if (p.title) set.title = String(p.title).trim();
-    if (p.content) set.content = p.content;
+
+    /** ✅ content.blocks 정규화 후 저장 */
+    if (p.content) {
+      const content = p.content;
+      if (Array.isArray(content.blocks)) {
+        content.blocks = normalizeBlocks(content.blocks);
+      }
+      set.content = content;
+    }
+
     if (Array.isArray(p.images)) set.images = p.images;
     if (p.gridSize !== undefined) set.gridSize = p.gridSize;
     if (p.layoutType) set.layoutType = p.layoutType;
@@ -1380,12 +1415,18 @@ app.post('/api/:_any/events', async (req, res) => {
   }
 
   try {
+    /** ✅ content.blocks 정규화 */
+    const content = payload.content || {};
+    if (Array.isArray(content.blocks)) {
+      content.blocks = normalizeBlocks(content.blocks);
+    }
+
     const now = new Date();
     const doc = {
       mallId: MALL_ID,
       title: payload.title.trim(),
-      content: payload.content || '',
-      images: payload.images,               // [{url, regions...}]
+      content,                       // ← 보정된 content 저장
+      images: payload.images,        // [{url, regions...}]
       gridSize: payload.gridSize || null,
       layoutType: payload.layoutType || 'none',
       classification: payload.classification || {},
@@ -1444,9 +1485,18 @@ app.put('/api/:_any/events/:id', async (req, res) => {
     return res.status(400).json({ error: '수정할 내용을 하나 이상 보내주세요.' });
   }
 
+  /** ✅ update용 content 보정 */
   const update = { updatedAt: new Date() };
   if (payload.title) update.title = payload.title.trim();
-  if (payload.content) update.content = payload.content;
+
+  if (payload.content) {
+    const content = payload.content;
+    if (Array.isArray(content.blocks)) {
+      content.blocks = normalizeBlocks(content.blocks);
+    }
+    update.content = content;
+  }
+
   if (Array.isArray(payload.images)) update.images = payload.images;
   if (payload.gridSize !== undefined) update.gridSize = payload.gridSize;
   if (payload.layoutType) update.layoutType = payload.layoutType;
@@ -2155,14 +2205,6 @@ app.get('/api/:_any/analytics/:pageId/product-performance', async (req, res) => 
     res.status(500).json({ error: '상품 퍼포먼스 집계 실패' });
   }
 });
-
-
-
-
-
-
-
-
 
 
 // ========== [서버 실행 및 프롬프트 초기화] ==========

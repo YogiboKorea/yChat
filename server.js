@@ -1132,11 +1132,6 @@ app.post(
 // yogibo 템플 모듈 (ADD-ON)
 // =========================
 // 의존성 보장
-const fs   = require('fs');
-const path = require('path');
-const ftp  = require('basic-ftp');
-const dayjs = require('dayjs');
-// upload(single('file'))는 기존 multer 설정 재사용
 
 const MALL_ID = 'yogibo';
 const FTP_HOST = 'yogibo.ftp.cafe24.com';

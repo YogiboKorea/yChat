@@ -1144,7 +1144,9 @@ const FTP_PASS = 'korea2025!!';
 // 문서 루트와 업로드 베이스(앞에 슬래시 넣지 마세요)
 const FTP_DOC_ROOT    = '/web';
 const FTP_UPLOAD_BASE = '/img/temple';
-const FTP_PUBLIC_BASE = process.env.FTP_PUBLIC_BASE || 'https://yogibo.kr';
+const FTP_REMOTE_ROOT = process.env.FTP_REMOTE_ROOT || '/web/img/temple';
+const FTP_PUBLIC_BASE = process.env.FTP_PUBLIC_BASE || 'https://yogibo.kr/web/img/temple';
+
 
 // YYYY/MM/DD 경로 생성
 function ymdPath() {
@@ -1177,54 +1179,44 @@ app.get('/api/:_any/ping', (req, res) => {
 // FormData field: "file"
 // =========================
 app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => {
+  const localPath = req.file?.path;
+  const filename  = req.file?.filename;
+  const mallId    = MALL_ID;
+
+  if (!localPath || !filename) {
+    return res.status(400).json({ error: '파일이 없습니다.' });
+  }
+
+  const client = new ftp.Client(15_000);
+  client.ftp.verbose = false;
+
   try {
-    const localPath = req.file?.path;
-    const filename  = req.file?.filename;
-    if (!localPath || !filename) {
-      return res.status(400).json({ error: '파일이 없습니다.' });
-    }
+    await client.access({
+      host: FTP_HOST,
+      user: FTP_USER,
+      password: FTP_PASS,
+      secure: true, // FTPS(Explicit)
+      secureOptions: { rejectUnauthorized: false },
+    });
 
-    const client = new ftp.Client(15_000);
-    client.ftp.verbose = false;
-    try {
-      await client.access({
-        host: FTP_HOST,
-        user: FTP_USER,
-        password: FTP_PASS,
-        secure: true,                          // Explicit TLS
-        secureOptions: { rejectUnauthorized: false },
-      });
+    // ex) /public_html/web/img/temple/uploads/yogibo/2025/08/11
+    const dateFolder = dayjs().format('YYYY/MM/DD');
+    const remoteDir  = path.posix.join(FTP_REMOTE_ROOT, 'uploads', mallId, dateFolder);
 
-      const dateFolder = ymdPath();
-      const remoteDir  = path.posix.join(
-        FTP_DOC_ROOT,
-        FTP_UPLOAD_BASE,
-        MALL_ID,
-        dateFolder
-      );
+    await client.ensureDir(remoteDir);
+    await client.uploadFrom(localPath, path.posix.join(remoteDir, filename));
 
-      await client.ensureDir(remoteDir);
-      await client.uploadFrom(localPath, path.posix.join(remoteDir, filename));
-    } finally {
-      try { await client.close(); } catch (_) {}
-    }
-
-    // 로컬 임시 삭제
-    fs.unlink(localPath, () => {});
-
-    // 공개 URL 반환
-    const url = [
-      FTP_PUBLIC_BASE.replace(/\/+$/, ''),
-      FTP_UPLOAD_BASE,   // 앞 슬래시 금지
-      MALL_ID,
-      ymdPath(),
-      filename
-    ].join('/');
+    // 프론트가 접근할 수 있는 공개 URL (ex: https://yogibo.kr/web/img/temple/uploads/…)
+    const url = `${FTP_PUBLIC_BASE}/uploads/${mallId}/${dateFolder}/${filename}`;
 
     return res.json({ url });
   } catch (err) {
-    console.error('[IMAGE UPLOAD ERROR][FTP]', err);
-    return res.status(500).json({ error: '이미지 업로드 실패(FTP)' });
+    console.error('[IMAGE UPLOAD ERROR][FTP]', err?.message || err);
+    return res.status(500).json({ error: '이미지 업로드 실패(FTP)', detail: err?.message });
+  } finally {
+    // 커넥션 정리 + 로컬 임시파일 정리
+    try { client.close(); } catch {}
+    fs.unlink(localPath, () => {});
   }
 });
 

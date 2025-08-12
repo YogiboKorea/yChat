@@ -1229,9 +1229,15 @@ app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => 
   }
 });
 
+
 // =========================
-// Events CRUD
+// Events CRUD  (Mongo collection: eventTemple)
 // =========================
+
+// 컬렉션 상수 및 withDb Fallback (상단에 withDb가 이미 있으면 그걸 씁니다)
+const EVENT_COLL = 'eventTemple';
+const _withDb = (typeof withDb === 'function') ? withDb : (task) => task(db);
+
 app.post('/api/:_any/events', async (req, res) => {
   const payload = req.body;
   if (!payload.title || typeof payload.title !== 'string') {
@@ -1255,8 +1261,8 @@ app.post('/api/:_any/events', async (req, res) => {
       updatedAt: now,
     };
 
-    const result = await withDb(db =>
-      db.collection('events').insertOne(doc)
+    const result = await _withDb(db =>
+      db.collection(EVENT_COLL).insertOne(doc)
     );
     res.json({ _id: result.insertedId, ...doc });
   } catch (err) {
@@ -1267,8 +1273,8 @@ app.post('/api/:_any/events', async (req, res) => {
 
 app.get('/api/:_any/events', async (req, res) => {
   try {
-    const list = await withDb(db =>
-      db.collection('events')
+    const list = await _withDb(db =>
+      db.collection(EVENT_COLL)
         .find({ mallId: MALL_ID })
         .sort({ createdAt: -1 })
         .toArray()
@@ -1286,8 +1292,8 @@ app.get('/api/:_any/events/:id', async (req, res) => {
     return res.status(400).json({ error: '잘못된 이벤트 ID입니다.' });
   }
   try {
-    const ev = await withDb(db =>
-      db.collection('events').findOne({ _id: new ObjectId(id), mallId: MALL_ID })
+    const ev = await _withDb(db =>
+      db.collection(EVENT_COLL).findOne({ _id: new ObjectId(id), mallId: MALL_ID })
     );
     if (!ev) return res.status(404).json({ error: '이벤트를 찾을 수 없습니다.' });
     res.json(ev);
@@ -1303,7 +1309,8 @@ app.put('/api/:_any/events/:id', async (req, res) => {
   if (!ObjectId.isValid(id)) {
     return res.status(400).json({ error: '잘못된 이벤트 ID입니다.' });
   }
-  if (!payload.title && !payload.content && !payload.images && payload.gridSize === undefined && !payload.layoutType && !payload.classification) {
+  if (!payload.title && !payload.content && !payload.images &&
+      payload.gridSize === undefined && !payload.layoutType && !payload.classification) {
     return res.status(400).json({ error: '수정할 내용을 하나 이상 보내주세요.' });
   }
 
@@ -1316,8 +1323,8 @@ app.put('/api/:_any/events/:id', async (req, res) => {
   if (payload.classification) update.classification = payload.classification;
 
   try {
-    const result = await withDb(db =>
-      db.collection('events').updateOne(
+    const result = await _withDb(db =>
+      db.collection(EVENT_COLL).updateOne(
         { _id: new ObjectId(id), mallId: MALL_ID },
         { $set: update }
       )
@@ -1325,8 +1332,8 @@ app.put('/api/:_any/events/:id', async (req, res) => {
     if (result.matchedCount === 0) {
       return res.status(404).json({ error: '이벤트를 찾을 수 없습니다.' });
     }
-    const updated = await withDb(db =>
-      db.collection('events').findOne({ _id: new ObjectId(id) })
+    const updated = await _withDb(db =>
+      db.collection(EVENT_COLL).findOne({ _id: new ObjectId(id) })
     );
     res.json({ success: true, data: updated });
   } catch (err) {
@@ -1346,15 +1353,15 @@ app.delete('/api/:_any/events/:id', async (req, res) => {
   const prdClick   = `prdClick_${MALL_ID}`;
 
   try {
-    const { deletedCount } = await withDb(db =>
-      db.collection('events').deleteOne({ _id: eventId, mallId: MALL_ID })
+    const { deletedCount } = await _withDb(db =>
+      db.collection(EVENT_COLL).deleteOne({ _id: eventId, mallId: MALL_ID })
     );
     if (!deletedCount) {
       return res.status(404).json({ error: '이벤트를 찾을 수 없습니다.' });
     }
 
     // 연관 로그 제거
-    await withDb(async db => {
+    await _withDb(async db => {
       await Promise.all([
         db.collection(visitsColl).deleteMany({ pageId: id }),
         db.collection(clicksColl).deleteMany({ pageId: id }),
@@ -1385,9 +1392,12 @@ app.post('/api/:_any/track', async (req, res) => {
     }
     if (!ObjectId.isValid(pageId)) return res.sendStatus(204);
 
-    // 이벤트 존재 확인
-    const exists = await withDb(db =>
-      db.collection('events').findOne({ _id: new ObjectId(pageId) }, { projection: { _id: 1 } })
+    // 이벤트 존재 확인 (eventTemple)
+    const exists = await _withDb(db =>
+      db.collection(EVENT_COLL).findOne(
+        { _id: new ObjectId(pageId) },
+        { projection: { _id: 1 } }
+      )
     );
     if (!exists) return res.sendStatus(204);
 
@@ -1416,7 +1426,7 @@ app.post('/api/:_any/track', async (req, res) => {
         console.error('[PRODUCT NAME FETCH ERROR]', e?.response?.data || e);
       }
 
-      await withDb(db =>
+      await _withDb(db =>
         db.collection(`prdClick_${MALL_ID}`).updateOne(
           { pageId, productNo },
           {
@@ -1440,7 +1450,7 @@ app.post('/api/:_any/track', async (req, res) => {
     if (type === 'click') {
       if (element === 'coupon') {
         const coupons = Array.isArray(productNo) ? productNo : [productNo];
-        await withDb(async db => {
+        await _withDb(async db => {
           await Promise.all(coupons.map(cpn =>
             db.collection(`clicks_${MALL_ID}`).insertOne({
               pageId, visitorId, dateKey, pageUrl: pathOnly,
@@ -1453,7 +1463,7 @@ app.post('/api/:_any/track', async (req, res) => {
       }
 
       // element === 'url' or others
-      await withDb(db =>
+      await _withDb(db =>
         db.collection(`clicks_${MALL_ID}`).insertOne({
           pageId, visitorId, dateKey, pageUrl: pathOnly,
           referrer: referrer || null, device: device || null,
@@ -1478,7 +1488,7 @@ app.post('/api/:_any/track', async (req, res) => {
     if (type === 'view')    update2.$inc.viewCount = 1;
     if (type === 'revisit') update2.$inc.revisitCount = 1;
 
-    await withDb(db =>
+    await _withDb(db =>
       db.collection(`visits_${MALL_ID}`).updateOne(filter2, update2, { upsert: true })
     );
 
@@ -1812,7 +1822,7 @@ app.get('/api/:_any/analytics/:pageId/visitors-by-date', async (req, res) => {
   if (url) match.pageUrl = url;
 
   try {
-    const stats = await withDb(db =>
+    const stats = await _withDb(db =>
       db.collection(`visits_${MALL_ID}`).aggregate([
         { $match: match },
         { $group: { _id: { date: '$dateKey', visitorId: '$visitorId' }, viewCount: { $sum: { $ifNull: ['$viewCount', 0] } }, revisitCount: { $sum: { $ifNull: ['$revisitCount', 0] } } } },
@@ -1840,7 +1850,7 @@ app.get('/api/:_any/analytics/:pageId/clicks-by-date', async (req, res) => {
   if (url) match.pageUrl = url;
 
   try {
-    const data = await withDb(db =>
+    const data = await _withDb(db =>
       db.collection(`clicks_${MALL_ID}`).aggregate([
         { $match: match },
         { $group: { _id: { date: '$dateKey', element: '$element' }, count: { $sum: 1 } } },
@@ -1868,7 +1878,7 @@ app.get('/api/:_any/analytics/:pageId/url-clicks', async (req, res) => {
   if (url) match.pageUrl = url;
 
   try {
-    const count = await withDb(db => db.collection(`visits_${MALL_ID}`).countDocuments(match));
+    const count = await _withDb(db => db.collection(`visits_${MALL_ID}`).countDocuments(match));
     res.json({ count });
   } catch (err) {
     console.error('[URL CLICKS COUNT ERROR]', err);
@@ -1885,7 +1895,7 @@ app.get('/api/:_any/analytics/:pageId/coupon-clicks', async (req, res) => {
   if (url) match.pageUrl = url;
 
   try {
-    const count = await withDb(db => db.collection(`visits_${MALL_ID}`).countDocuments(match));
+    const count = await _withDb(db => db.collection(`visits_${MALL_ID}`).countDocuments(match));
     res.json({ count });
   } catch (err) {
     console.error('[COUPON CLICKS COUNT ERROR]', err);
@@ -1896,7 +1906,7 @@ app.get('/api/:_any/analytics/:pageId/coupon-clicks', async (req, res) => {
 app.get('/api/:_any/analytics/:pageId/urls', async (req, res) => {
   const { pageId } = req.params;
   try {
-    const urls = await withDb(db => db.collection(`visits_${MALL_ID}`).distinct('pageUrl', { pageId }));
+    const urls = await _withDb(db => db.collection(`visits_${MALL_ID}`).distinct('pageUrl', { pageId }));
     res.json(urls);
   } catch (err) {
     console.error('[URLS DISTINCT ERROR]', err);
@@ -1907,7 +1917,7 @@ app.get('/api/:_any/analytics/:pageId/urls', async (req, res) => {
 app.get('/api/:_any/analytics/:pageId/coupons-distinct', async (req, res) => {
   const { pageId } = req.params;
   try {
-    const couponNos = await withDb(db =>
+    const couponNos = await _withDb(db =>
       db.collection(`clicks_${MALL_ID}`).distinct('couponNo', { pageId, element: 'coupon' })
     );
     res.json(couponNos);
@@ -1927,7 +1937,7 @@ app.get('/api/:_any/analytics/:pageId/devices', async (req, res) => {
   if (url) match.pageUrl = url;
 
   try {
-    const data = await withDb(db =>
+    const data = await _withDb(db =>
       db.collection(`visits_${MALL_ID}`).aggregate([
         { $match: match },
         { $group: { _id: '$device', count: { $sum: { $add: [ { $ifNull: ['$viewCount',0] }, { $ifNull: ['$revisitCount',0] } ] } } } },
@@ -1951,7 +1961,7 @@ app.get('/api/:_any/analytics/:pageId/devices-by-date', async (req, res) => {
   if (url) match.pageUrl = url;
 
   try {
-    const data = await withDb(db =>
+    const data = await _withDb(db =>
       db.collection(`visits_${MALL_ID}`).aggregate([
         { $match: match },
         { $group: { _id: { date:'$dateKey', device:'$device', visitor:'$visitorId' } } },
@@ -1975,7 +1985,7 @@ app.get('/api/:_any/analytics/:pageId/product-clicks', async (req, res) => {
   if (start_date && end_date) filter.lastClickAt = { $gte: new Date(start_date), $lte: new Date(end_date) };
 
   try {
-    const docs = await withDb(db =>
+    const docs = await _withDb(db =>
       db.collection(`prdClick_${MALL_ID}`).find(filter).sort({ clickCount: -1 }).toArray()
     );
     res.json(docs.map(d => ({ productNo: d.productNo, clicks: d.clickCount })));
@@ -1987,7 +1997,7 @@ app.get('/api/:_any/analytics/:pageId/product-clicks', async (req, res) => {
 
 app.get('/api/:_any/analytics/:pageId/product-performance', async (req, res) => {
   try {
-    const clicks = await withDb(db =>
+    const clicks = await _withDb(db =>
       db.collection(`prdClick_${MALL_ID}`).aggregate([
         { $match: { pageId: req.params.pageId } },
         { $group: { _id: '$productNo', clicks: { $sum: '$clickCount' } } }
@@ -2015,8 +2025,6 @@ app.get('/api/:_any/analytics/:pageId/product-performance', async (req, res) => 
     res.status(500).json({ error: '상품 퍼포먼스 집계 실패' });
   }
 });
-
-
 
 // ========== [서버 실행 및 프롬프트 초기화] ==========
 (async function initialize() {

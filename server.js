@@ -1138,7 +1138,7 @@ const FTP_PASS = 'korea2025!!';
 // 퍼블릭 URL 접두사 (중복 슬래시 방지)
 const FTP_PUBLIC_BASE = (process.env.FTP_PUBLIC_BASE || 'https://yogibo.kr/web/img/temple').replace(/\/+$/,'');
 
-// 업로드 엔드포인트 (교체)
+// 업로드 엔드포인트 (이 블록만 교체)
 app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => {
   const localPath = req.file?.path;
   const filename  = req.file?.filename;
@@ -1154,48 +1154,81 @@ app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => 
       host: FTP_HOST,
       user: FTP_USER,
       password: FTP_PASS,
-      secure: false,                 // Cafe24 일반 FTP
+      secure: false,            // Cafe24 일반 FTP
     });
 
-    // 진짜 어디서 작업 중인지 찍어보기
-    const rootPwd = await client.pwd().catch(()=> '(pwd error)');
-    console.log('[FTP] login PWD:', rootPwd);
+    const pwd0 = await client.pwd().catch(() => '(pwd error)');
+    console.log('[FTP] login PWD:', pwd0);
 
-    // 업로드 하위경로: /web/img/temple/uploads/yogibo/YYYY/MM/DD
+    // 날짜 suffix: yogibo/YYYY/MM/DD
     const ymd = dayjs().format('YYYY/MM/DD');
     const relSuffix = `${MALL_ID}/${ymd}`;
-    const ftpDirAbs = `/web/img/temple/uploads/${relSuffix}`;   // ✅ 절대경로로 고정
 
-    // 디렉터리 생성 후 그 위치로 이동
-    await client.ensureDir(ftpDirAbs);
-    await client.cd(ftpDirAbs);
+    // 📌 상대경로 베이스 후보 (상단 트리 스샷 기준)
+    const baseCandidates = [
+      'web/img/temple/uploads',
+      'img/temple/uploads',
+      'temple/uploads',
+    ];
 
-    // 업로드
-    await client.uploadFrom(localPath, filename);
+    let usedBase = null;
+    let finalPwd = null;
 
-    // 검증: 파일 크기/목록
-    let size = -1;
-    try { size = await client.size(filename); } catch {}
-    let listing = [];
-    try { listing = await client.list(); } catch {}
-    console.log('[FTP] uploaded:', `${ftpDirAbs}/${filename}`, 'size:', size);
-    console.log('[FTP] list:', listing.map(i => i.name));
+    for (const base of baseCandidates) {
+      try {
+        // 항상 시작 지점으로 돌아가려 시도 (에러 무시)
+        try { await client.cd('/'); } catch {}
+        try { await client.cd(pwd0); } catch {}
 
-    // 공개 URL
-    const url = `${FTP_PUBLIC_BASE}/uploads/${relSuffix}/${filename}`.replace(/([^:]\/)\/+/g, '$1');
+        // 상대경로로 베이스 진입 시도
+        await client.cd(base);
+        console.log('[FTP] cd base OK:', base, 'pwd:', await client.pwd());
 
-    return res.json({
-      url,
-      ftpPath: `${ftpDirAbs}/${filename}`,
-      size,
-      pwd: rootPwd
+        // base/yogibo/YYYY/MM/DD 생성 & 진입
+        await client.ensureDir(relSuffix);
+        finalPwd = await client.pwd();
+        console.log('[FTP] ensured subdir, pwd:', finalPwd);
+
+        // 업로드 (현재 디렉터리에 filename 저장)
+        await client.uploadFrom(localPath, filename);
+
+        // 검증용: 사이즈/리스트
+        let size = -1;
+        try { size = await client.size(filename); } catch {}
+        const listing = await client.list().catch(() => []);
+        console.log('[FTP] uploaded:', `${finalPwd}/${filename}`, 'size:', size);
+        console.log('[FTP] list in final dir:', listing.map(i => i.name));
+
+        usedBase = base;
+        // 공개 URL 생성
+        const url = `${FTP_PUBLIC_BASE}/uploads/${relSuffix}/${filename}`.replace(/([^:]\/)\/+/g, '$1');
+
+        return res.json({
+          url,
+          ftpBase: usedBase,
+          ftpDir: finalPwd,
+          ftpPath: `${finalPwd}/${filename}`,
+          size,
+        });
+      } catch (e) {
+        console.log('[FTP] try base fail:', base, e?.message || e);
+        // 다음 후보로 계속
+      }
+    }
+
+    // 어떤 베이스도 진입 실패
+    return res.status(500).json({
+      error: '경로 이동 실패',
+      detail: 'uploads 베이스 디렉터리에 진입할 수 없습니다.',
+      tried: baseCandidates,
+      loginPwd: pwd0,
     });
   } catch (err) {
     console.error('[IMAGE UPLOAD ERROR][FTP]', err?.code, err?.message || err);
     return res.status(500).json({ error: '이미지 업로드 실패(FTP)', detail: err?.message || String(err) });
   } finally {
     try { client.close(); } catch {}
-    fs.unlink(localPath, () => {}); // 로컬 임시파일 삭제
+    fs.unlink(localPath, () => {});
   }
 });
 

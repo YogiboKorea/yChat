@@ -1132,7 +1132,7 @@ app.post(
 // yogibo 템플 모듈 (ADD-ON)
 // =========================
 // 의존성 보장
-
+const ftp = require('basic-ftp');
 const MALL_ID = 'yogibo';
 const FTP_HOST = 'yogibo.ftp.cafe24.com';
 const FTP_USER = 'yogibo';
@@ -1186,6 +1186,8 @@ app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => 
     fs.unlink(localPath, () => {});
   }
 });
+
+
 
 
 // =========================

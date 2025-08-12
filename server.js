@@ -1210,6 +1210,127 @@ app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => 
   }
 });
 
+
+// ───────────────────────────────────────────────
+// EventTemple + events(알리아스) 라우트 마운트
+// ───────────────────────────────────────────────
+function mountEventRoutes(basePath) {
+  // 생성
+  app.post(`/api/:_any${basePath}`, async (req, res) => {
+    try {
+      const payload = req.body || {};
+      if (!payload.title || typeof payload.title !== 'string') {
+        return res.status(400).json({ error: '제목(title)을 입력해주세요.' });
+      }
+      if (!Array.isArray(payload.images)) {
+        return res.status(400).json({ error: 'images를 배열로 보내주세요.' });
+      }
+
+      const now = new Date();
+      const doc = {
+        mallId: MALL_ID,
+        title: payload.title.trim(),
+        content: payload.content || '',
+        images: payload.images,
+        gridSize: payload.gridSize ?? null,
+        layoutType: payload.layoutType || 'none',
+        classification: payload.classification || {},
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      const result = await withDb(db => db.collection('eventTemple').insertOne(doc));
+      return res.json({ _id: result.insertedId, ...doc });
+    } catch (err) {
+      console.error('[CREATE eventTemple ERROR]', err);
+      return res.status(500).json({ error: '이벤트 생성에 실패했습니다.' });
+    }
+  });
+
+  // 목록
+  app.get(`/api/:_any${basePath}`, async (req, res) => {
+    try {
+      const list = await withDb(db =>
+        db.collection('eventTemple')
+          .find({ mallId: MALL_ID })
+          .sort({ createdAt: -1 })
+          .toArray()
+      );
+      return res.json(list);
+    } catch (err) {
+      console.error('[GET eventTemple ERROR]', err);
+      return res.status(500).json({ error: '이벤트 목록 조회에 실패했습니다.' });
+    }
+  });
+
+  // 상세
+  app.get(`/api/:_any${basePath}/:id`, async (req, res) => {
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) return res.status(400).json({ error: '잘못된 이벤트 ID입니다.' });
+    try {
+      const ev = await withDb(db =>
+        db.collection('eventTemple').findOne({ _id: new ObjectId(id), mallId: MALL_ID })
+      );
+      if (!ev) return res.status(404).json({ error: '이벤트를 찾을 수 없습니다.' });
+      return res.json(ev);
+    } catch (err) {
+      console.error('[GET eventTemple ONE ERROR]', err);
+      return res.status(500).json({ error: '이벤트 조회에 실패했습니다.' });
+    }
+  });
+
+  // 수정
+  app.put(`/api/:_any${basePath}/:id`, async (req, res) => {
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) return res.status(400).json({ error: '잘못된 이벤트 ID입니다.' });
+    const p = req.body || {};
+    const set = { updatedAt: new Date() };
+    if (p.title) set.title = String(p.title).trim();
+    if (p.content) set.content = p.content;
+    if (Array.isArray(p.images)) set.images = p.images;
+    if (p.gridSize !== undefined) set.gridSize = p.gridSize;
+    if (p.layoutType) set.layoutType = p.layoutType;
+    if (p.classification) set.classification = p.classification;
+
+    try {
+      const r = await withDb(db =>
+        db.collection('eventTemple').updateOne(
+          { _id: new ObjectId(id), mallId: MALL_ID },
+          { $set: set }
+        )
+      );
+      if (!r.matchedCount) return res.status(404).json({ error: '이벤트를 찾을 수 없습니다.' });
+      const updated = await withDb(db =>
+        db.collection('eventTemple').findOne({ _id: new ObjectId(id) })
+      );
+      return res.json({ success: true, data: updated });
+    } catch (err) {
+      console.error('[UPDATE eventTemple ERROR]', err);
+      return res.status(500).json({ error: '이벤트 수정에 실패했습니다.' });
+    }
+  });
+
+  // 삭제
+  app.delete(`/api/:_any${basePath}/:id`, async (req, res) => {
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) return res.status(400).json({ error: '잘못된 이벤트 ID입니다.' });
+    try {
+      const r = await withDb(db =>
+        db.collection('eventTemple').deleteOne({ _id: new ObjectId(id), mallId: MALL_ID })
+      );
+      if (!r.deletedCount) return res.status(404).json({ error: '이벤트를 찾을 수 없습니다.' });
+      return res.json({ success: true });
+    } catch (err) {
+      console.error('[DELETE eventTemple ERROR]', err);
+      return res.status(500).json({ error: '이벤트 삭제에 실패했습니다.' });
+    }
+  });
+}
+
+// 신규 경로
+mountEventRoutes('/eventTemple');
+// 구 경로도 임시 지원(알리아스) — 프론트 전부 변경 끝나면 제거 가능
+
 // =========================
 // Events CRUD  (Mongo collection: eventTemple)
 // =========================

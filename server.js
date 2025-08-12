@@ -2203,7 +2203,7 @@ app.get('/api/:_any/analytics/:pageId/product-performance', async (req, res) => 
   } catch (err) {
     console.error('[PRODUCT PERFORMANCE ERROR]', err);
     res.status(500).json({ error: '상품 퍼포먼스 집계 실패' });
-  }
+  }//서버 데이터
 });
 
 

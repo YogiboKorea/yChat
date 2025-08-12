@@ -1138,7 +1138,6 @@ const FTP_PASS = 'korea2025!!';
 // 퍼블릭 URL 접두사 (중복 슬래시 방지)
 const FTP_PUBLIC_BASE = (process.env.FTP_PUBLIC_BASE || 'https://yogibo.kr/web/img/temple').replace(/\/+$/,'');
 
-// 업로드 엔드포인트 교체
 // 업로드 엔드포인트 (교체)
 app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => {
   const localPath = req.file?.path;
@@ -1155,32 +1154,51 @@ app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => 
       host: FTP_HOST,
       user: FTP_USER,
       password: FTP_PASS,
-      secure: false,
+      secure: false,                 // Cafe24 일반 FTP
     });
 
+    // 진짜 어디서 작업 중인지 찍어보기
+    const rootPwd = await client.pwd().catch(()=> '(pwd error)');
+    console.log('[FTP] login PWD:', rootPwd);
+
+    // 업로드 하위경로: /web/img/temple/uploads/yogibo/YYYY/MM/DD
     const ymd = dayjs().format('YYYY/MM/DD');
     const relSuffix = `${MALL_ID}/${ymd}`;
+    const ftpDirAbs = `/web/img/temple/uploads/${relSuffix}`;   // ✅ 절대경로로 고정
 
-    // ✅ 절대 경로로 고정 (Cafe24 공개 루트)
-    const ftpDir = `/web/img/temple/uploads/${relSuffix}`;
-    await client.ensureDir(ftpDir);
+    // 디렉터리 생성 후 그 위치로 이동
+    await client.ensureDir(ftpDirAbs);
+    await client.cd(ftpDirAbs);
+
+    // 업로드
     await client.uploadFrom(localPath, filename);
 
-    // 업로드 검증 (파일 크기)
-    const size = await client.size(filename).catch(() => -1);
+    // 검증: 파일 크기/목록
+    let size = -1;
+    try { size = await client.size(filename); } catch {}
+    let listing = [];
+    try { listing = await client.list(); } catch {}
+    console.log('[FTP] uploaded:', `${ftpDirAbs}/${filename}`, 'size:', size);
+    console.log('[FTP] list:', listing.map(i => i.name));
 
-    // ✅ 공개 URL도 동일한 경로에 매핑
+    // 공개 URL
     const url = `${FTP_PUBLIC_BASE}/uploads/${relSuffix}/${filename}`.replace(/([^:]\/)\/+/g, '$1');
 
-    return res.json({ url, ftpPath: `${ftpDir}/${filename}`, size });
+    return res.json({
+      url,
+      ftpPath: `${ftpDirAbs}/${filename}`,
+      size,
+      pwd: rootPwd
+    });
   } catch (err) {
     console.error('[IMAGE UPLOAD ERROR][FTP]', err?.code, err?.message || err);
     return res.status(500).json({ error: '이미지 업로드 실패(FTP)', detail: err?.message || String(err) });
   } finally {
     try { client.close(); } catch {}
-    fs.unlink(localPath, () => {});
+    fs.unlink(localPath, () => {}); // 로컬 임시파일 삭제
   }
 });
+
 
 // ───────────────────────────────────────────────
 // DB helper (withDb가 전역에 없을 때를 대비한 안전 래퍼)

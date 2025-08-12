@@ -1136,40 +1136,39 @@ const FTP_PASS = 'korea2025!!';
 
 
 
+// 퍼블릭 URL 접두사 (마지막 슬래시 제거)
+const FTP_PUBLIC_BASE = (process.env.FTP_PUBLIC_BASE || 'https://yogibo.kr/web/img/temple').replace(/\/+$/,'');
 
-// 퍼블릭 URL 접두사(끝 슬래시 제거)
-const FTP_PUBLIC_BASE = (process.env.FTP_PUBLIC_BASE || 'https://yogibo.kr/web/img/temple').replace(/\/+$/, '');
-
-// 상대경로만 사용해서 베이스(/web/img/temple)에 진입 시도
+// 베이스(/web/img/temple)로 상대경로 진입 시도
 async function enterTemple(client) {
-  // 1) 혹시 모를 하위 시작 대비: 상위로 최대 5단계 올라가기
-  for (let i = 0; i < 5; i++) {
-    try { await client.cd('..'); } catch (_) { break; }
-  }
+  // 상위로 최대 5단계
+  for (let i = 0; i < 5; i++) { try { await client.cd('..'); } catch { break; } }
 
-  // 2) 가능한 시나리오들을 순차 시도
-  const sequences = [
-    ['web', 'img', 'temple'],
-    ['img', 'temple'],
+  const seqs = [
+    ['web','img','temple'],
+    ['img','temple'],
     ['temple'],
   ];
-
-  for (const seq of sequences) {
-    let steps = 0;
+  for (const seq of seqs) {
+    let moved = 0;
     try {
-      for (const d of seq) { await client.cd(d); steps++; }
-      // 성공
-      return true;
-    } catch (_) {
-      // 실패했으면 방금 이동한 만큼 다시 상위로
-      for (let i = 0; i < steps; i++) {
-        try { await client.cd('..'); } catch { /* 무시 */ }
-      }
+      for (const d of seq) { await client.cd(d); moved++; }
+      return true; // 진입 성공
+    } catch {
+      // 되돌리기
+      for (let i = 0; i < moved; i++) { try { await client.cd('..'); } catch {} }
     }
   }
+  // 이미 temple에 있을 수도 있으니 true 반환
+  return true;
+}
 
-  // 일부 서버는 로그인 홈이 이미 /web/img/temple 이고 위 시도들이 다 실패할 수 있음
-  // 이런 경우엔 그냥 현재 위치에서 uploads 생성 시도하도록 true 반환
+// parts 배열 경로를 한 단계씩 ensure + cd
+async function ensureAndCd(client, parts) {
+  for (const seg of parts) {
+    try { await client.ensureDir(seg); } catch {}
+    try { await client.cd(seg); } catch (e) { return false; }
+  }
   return true;
 }
 
@@ -1184,29 +1183,42 @@ app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => 
   client.ftp.verbose = false;
 
   try {
+    // Cafe24는 FTPS AUTH 미지원 케이스가 많아 일반 FTP 사용
     await client.access({
       host: FTP_HOST,
       user: FTP_USER,
       password: FTP_PASS,
-      secure: false, // AUTH 미지원 → 일반 FTP
+      secure: false,
     });
 
-    // 1) 베이스로 진입 (생성하지 않음)
+    // 1) /web/img/temple 진입만 시도(생성 안 함)
     await enterTemple(client);
 
-    // 2) uploads/yogibo/YYYY/MM/DD 를 "한 단계씩" 생성+이동
-    const segs = ['uploads', MALL_ID, ...dayjs().format('YYYY/MM/DD').split('/')];
-    for (const seg of segs) {
-      try { await client.ensureDir(seg); } catch (_) { /* 일부 서버는 ensureDir 실패해도 바로 cd 가능 */ }
-      await client.cd(seg);
+    // 2) 목적지 경로 후보들을 깊은 순으로 시도
+    const ymd = dayjs().format('YYYY/MM/DD').split('/');
+    const candidates = [
+      ['uploads', MALL_ID, ...ymd],
+      ['uploads', MALL_ID],
+      ['uploads'],
+    ];
+
+    let finalParts = null;
+    for (const parts of candidates) {
+      // 현재 위치를 temple로 리셋
+      await enterTemple(client);
+      const ok = await ensureAndCd(client, parts);
+      if (ok) { finalParts = parts; break; }
+    }
+    if (!finalParts) {
+      return res.status(500).json({ error: '경로 이동 실패', detail: 'uploads 경로 생성/진입 불가' });
     }
 
-    // 3) 업로드 (현재 CWD = .../uploads/yogibo/YYYY/MM/DD)
+    // 3) 업로드 (CWD = temple/…/finalParts)
     await client.uploadFrom(localPath, filename);
 
-    // 4) 퍼블릭 URL 반환
-    const dateFolder = dayjs().format('YYYY/MM/DD');
-    const url = `${FTP_PUBLIC_BASE}/uploads/${MALL_ID}/${dateFolder}/${filename}`;
+    // 4) URL 반환
+    const remoteRel = finalParts.join('/');
+    const url = `${FTP_PUBLIC_BASE}/${remoteRel}/${filename}`;
     return res.json({ url });
   } catch (err) {
     console.error('[IMAGE UPLOAD ERROR][FTP]', err?.code, err?.message || err);
@@ -1216,9 +1228,6 @@ app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => 
     fs.unlink(localPath, () => {});
   }
 });
-
-
-
 
 // =========================
 // Events CRUD

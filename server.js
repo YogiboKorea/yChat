@@ -1139,6 +1139,7 @@ const FTP_PASS = 'korea2025!!';
 const FTP_PUBLIC_BASE = (process.env.FTP_PUBLIC_BASE || 'https://yogibo.kr/web/img/temple').replace(/\/+$/,'');
 
 // 업로드 엔드포인트 교체
+// 업로드 엔드포인트 (교체)
 app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => {
   const localPath = req.file?.path;
   const filename  = req.file?.filename;
@@ -1150,7 +1151,6 @@ app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => 
   client.ftp.verbose = false;
 
   try {
-    // Cafe24 쪽은 FTPS AUTH 미지원 케이스가 있어서 일반 FTP (secure:false)
     await client.access({
       host: FTP_HOST,
       user: FTP_USER,
@@ -1159,48 +1159,20 @@ app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => 
     });
 
     const ymd = dayjs().format('YYYY/MM/DD');
-    const relSuffix = `${MALL_ID}/${ymd}`; // URL 생성에 사용
+    const relSuffix = `${MALL_ID}/${ymd}`;
 
-    // 로그인 디렉터리가 어디든, 아래 후보들을 순서대로 시도
-    // 1) temple 바로 아래 uploads/...
-    // 2) 루트부터 web/img/temple/uploads/...
-    // 3) img/temple/uploads/...
-    // 4) temple/uploads/...
-    const candidates = [
-      `uploads/${relSuffix}`,
-      `web/img/temple/uploads/${relSuffix}`,
-      `img/temple/uploads/${relSuffix}`,
-      `temple/uploads/${relSuffix}`,
-    ];
+    // ✅ 절대 경로로 고정 (Cafe24 공개 루트)
+    const ftpDir = `/web/img/temple/uploads/${relSuffix}`;
+    await client.ensureDir(ftpDir);
+    await client.uploadFrom(localPath, filename);
 
-    let uploaded = false;
-    let usedCandidate = null;
+    // 업로드 검증 (파일 크기)
+    const size = await client.size(filename).catch(() => -1);
 
-    for (const cand of candidates) {
-      try {
-        // ensureDir는 중간 경로까지 전부 만들고, 마지막 디렉토리로 CWD를 변경해줍니다.
-        await client.ensureDir(cand);
-        await client.uploadFrom(localPath, filename);
-        uploaded = true;
-        usedCandidate = cand;
-        break;
-      } catch (e) {
-        // 다음 후보로
-      }
-    }
-
-    if (!uploaded) {
-      return res.status(500).json({
-        error: '경로 이동 실패',
-        detail: 'uploads 경로 생성/진입 불가',
-        tried: candidates,
-      });
-    }
-
-    // 퍼블릭 URL은 temple 기준으로만 만들면 됨 (후보가 무엇이었든)
+    // ✅ 공개 URL도 동일한 경로에 매핑
     const url = `${FTP_PUBLIC_BASE}/uploads/${relSuffix}/${filename}`.replace(/([^:]\/)\/+/g, '$1');
 
-    return res.json({ url, pathTried: usedCandidate });
+    return res.json({ url, ftpPath: `${ftpDir}/${filename}`, size });
   } catch (err) {
     console.error('[IMAGE UPLOAD ERROR][FTP]', err?.code, err?.message || err);
     return res.status(500).json({ error: '이미지 업로드 실패(FTP)', detail: err?.message || String(err) });

@@ -1210,6 +1210,20 @@ app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => 
   }
 });
 
+// ───────────────────────────────────────────────
+// DB helper (withDb가 전역에 없을 때를 대비한 안전 래퍼)
+// ───────────────────────────────────────────────
+const runDb =
+  (typeof withDb === 'function')
+    ? withDb
+    : async (task) => {
+        const client = new MongoClient(MONGODB_URI, { maxPoolSize: 8 });
+        await client.connect();
+        try { return await task(client.db(DB_NAME)); }
+        finally { await client.close(); }
+      };
+
+const EVENT_COLL = 'eventTemple';
 
 // ───────────────────────────────────────────────
 // EventTemple + events(알리아스) 라우트 마운트
@@ -1239,7 +1253,7 @@ function mountEventRoutes(basePath) {
         updatedAt: now,
       };
 
-      const result = await withDb(db => db.collection('eventTemple').insertOne(doc));
+      const result = await runDb(db => db.collection(EVENT_COLL).insertOne(doc));
       return res.json({ _id: result.insertedId, ...doc });
     } catch (err) {
       console.error('[CREATE eventTemple ERROR]', err);
@@ -1250,8 +1264,8 @@ function mountEventRoutes(basePath) {
   // 목록
   app.get(`/api/:_any${basePath}`, async (req, res) => {
     try {
-      const list = await withDb(db =>
-        db.collection('eventTemple')
+      const list = await runDb(db =>
+        db.collection(EVENT_COLL)
           .find({ mallId: MALL_ID })
           .sort({ createdAt: -1 })
           .toArray()
@@ -1268,8 +1282,8 @@ function mountEventRoutes(basePath) {
     const { id } = req.params;
     if (!ObjectId.isValid(id)) return res.status(400).json({ error: '잘못된 이벤트 ID입니다.' });
     try {
-      const ev = await withDb(db =>
-        db.collection('eventTemple').findOne({ _id: new ObjectId(id), mallId: MALL_ID })
+      const ev = await runDb(db =>
+        db.collection(EVENT_COLL).findOne({ _id: new ObjectId(id), mallId: MALL_ID })
       );
       if (!ev) return res.status(404).json({ error: '이벤트를 찾을 수 없습니다.' });
       return res.json(ev);
@@ -1293,15 +1307,15 @@ function mountEventRoutes(basePath) {
     if (p.classification) set.classification = p.classification;
 
     try {
-      const r = await withDb(db =>
-        db.collection('eventTemple').updateOne(
+      const r = await runDb(db =>
+        db.collection(EVENT_COLL).updateOne(
           { _id: new ObjectId(id), mallId: MALL_ID },
           { $set: set }
         )
       );
       if (!r.matchedCount) return res.status(404).json({ error: '이벤트를 찾을 수 없습니다.' });
-      const updated = await withDb(db =>
-        db.collection('eventTemple').findOne({ _id: new ObjectId(id) })
+      const updated = await runDb(db =>
+        db.collection(EVENT_COLL).findOne({ _id: new ObjectId(id) })
       );
       return res.json({ success: true, data: updated });
     } catch (err) {
@@ -1315,8 +1329,8 @@ function mountEventRoutes(basePath) {
     const { id } = req.params;
     if (!ObjectId.isValid(id)) return res.status(400).json({ error: '잘못된 이벤트 ID입니다.' });
     try {
-      const r = await withDb(db =>
-        db.collection('eventTemple').deleteOne({ _id: new ObjectId(id), mallId: MALL_ID })
+      const r = await runDb(db =>
+        db.collection(EVENT_COLL).deleteOne({ _id: new ObjectId(id), mallId: MALL_ID })
       );
       if (!r.deletedCount) return res.status(404).json({ error: '이벤트를 찾을 수 없습니다.' });
       return res.json({ success: true });
@@ -1329,16 +1343,10 @@ function mountEventRoutes(basePath) {
 
 // 신규 경로
 mountEventRoutes('/eventTemple');
-// 구 경로도 임시 지원(알리아스) — 프론트 전부 변경 끝나면 제거 가능
 
 // =========================
 // Events CRUD  (Mongo collection: eventTemple)
 // =========================
-
-// 컬렉션 상수 및 withDb Fallback (상단에 withDb가 이미 있으면 그걸 씁니다)
-const EVENT_COLL = 'eventTemple';
-const _withDb = withDb;  // 그냥 별칭만 둠
-
 app.post('/api/:_any/events', async (req, res) => {
   const payload = req.body;
   if (!payload.title || typeof payload.title !== 'string') {
@@ -1354,7 +1362,7 @@ app.post('/api/:_any/events', async (req, res) => {
       mallId: MALL_ID,
       title: payload.title.trim(),
       content: payload.content || '',
-      images: payload.images,               // [{url, regions...}] 형태 가정
+      images: payload.images,               // [{url, regions...}]
       gridSize: payload.gridSize || null,
       layoutType: payload.layoutType || 'none',
       classification: payload.classification || {},
@@ -1362,9 +1370,7 @@ app.post('/api/:_any/events', async (req, res) => {
       updatedAt: now,
     };
 
-    const result = await _withDb(db =>
-      db.collection(EVENT_COLL).insertOne(doc)
-    );
+    const result = await runDb(db => db.collection(EVENT_COLL).insertOne(doc));
     res.json({ _id: result.insertedId, ...doc });
   } catch (err) {
     console.error('[CREATE EVENT ERROR]', err);
@@ -1374,7 +1380,7 @@ app.post('/api/:_any/events', async (req, res) => {
 
 app.get('/api/:_any/events', async (req, res) => {
   try {
-    const list = await _withDb(db =>
+    const list = await runDb(db =>
       db.collection(EVENT_COLL)
         .find({ mallId: MALL_ID })
         .sort({ createdAt: -1 })
@@ -1393,7 +1399,7 @@ app.get('/api/:_any/events/:id', async (req, res) => {
     return res.status(400).json({ error: '잘못된 이벤트 ID입니다.' });
   }
   try {
-    const ev = await _withDb(db =>
+    const ev = await runDb(db =>
       db.collection(EVENT_COLL).findOne({ _id: new ObjectId(id), mallId: MALL_ID })
     );
     if (!ev) return res.status(404).json({ error: '이벤트를 찾을 수 없습니다.' });
@@ -1424,7 +1430,7 @@ app.put('/api/:_any/events/:id', async (req, res) => {
   if (payload.classification) update.classification = payload.classification;
 
   try {
-    const result = await _withDb(db =>
+    const result = await runDb(db =>
       db.collection(EVENT_COLL).updateOne(
         { _id: new ObjectId(id), mallId: MALL_ID },
         { $set: update }
@@ -1433,7 +1439,7 @@ app.put('/api/:_any/events/:id', async (req, res) => {
     if (result.matchedCount === 0) {
       return res.status(404).json({ error: '이벤트를 찾을 수 없습니다.' });
     }
-    const updated = await _withDb(db =>
+    const updated = await runDb(db =>
       db.collection(EVENT_COLL).findOne({ _id: new ObjectId(id) })
     );
     res.json({ success: true, data: updated });
@@ -1454,7 +1460,7 @@ app.delete('/api/:_any/events/:id', async (req, res) => {
   const prdClick   = `prdClick_${MALL_ID}`;
 
   try {
-    const { deletedCount } = await _withDb(db =>
+    const { deletedCount } = await runDb(db =>
       db.collection(EVENT_COLL).deleteOne({ _id: eventId, mallId: MALL_ID })
     );
     if (!deletedCount) {
@@ -1462,7 +1468,7 @@ app.delete('/api/:_any/events/:id', async (req, res) => {
     }
 
     // 연관 로그 제거
-    await _withDb(async db => {
+    await runDb(async db => {
       await Promise.all([
         db.collection(visitsColl).deleteMany({ pageId: id }),
         db.collection(clicksColl).deleteMany({ pageId: id }),
@@ -1493,8 +1499,8 @@ app.post('/api/:_any/track', async (req, res) => {
     }
     if (!ObjectId.isValid(pageId)) return res.sendStatus(204);
 
-    // 이벤트 존재 확인 (eventTemple)
-    const exists = await _withDb(db =>
+    // 이벤트 존재 확인
+    const exists = await runDb(db =>
       db.collection(EVENT_COLL).findOne(
         { _id: new ObjectId(pageId) },
         { projection: { _id: 1 } }
@@ -1502,7 +1508,7 @@ app.post('/api/:_any/track', async (req, res) => {
     );
     if (!exists) return res.sendStatus(204);
 
-    // KST 기반 dateKey (간단 계산: UTC+9)
+    // KST 기반 dateKey
     const ts = new Date(timestamp);
     const kst = new Date(ts.getTime() + 9 * 60 * 60 * 1000);
     const dateKey = kst.toISOString().slice(0, 10);
@@ -1511,7 +1517,7 @@ app.post('/api/:_any/track', async (req, res) => {
     let pathOnly;
     try { pathOnly = new URL(pageUrl).pathname; } catch { pathOnly = pageUrl; }
 
-    // 상품 클릭 → prdClick_yogibo upsert (+상품명 조회)
+    // 상품 클릭 → prdClick_yogibo 집계
     if (type === 'click' && element === 'product' && productNo) {
       let productName = null;
       try {
@@ -1527,7 +1533,7 @@ app.post('/api/:_any/track', async (req, res) => {
         console.error('[PRODUCT NAME FETCH ERROR]', e?.response?.data || e);
       }
 
-      await _withDb(db =>
+      await runDb(db =>
         db.collection(`prdClick_${MALL_ID}`).updateOne(
           { pageId, productNo },
           {
@@ -1547,11 +1553,11 @@ app.post('/api/:_any/track', async (req, res) => {
       return res.sendStatus(204);
     }
 
-    // 그 외 클릭
+    // 그 외 클릭 (URL / 쿠폰 등)
     if (type === 'click') {
       if (element === 'coupon') {
         const coupons = Array.isArray(productNo) ? productNo : [productNo];
-        await _withDb(async db => {
+        await runDb(async db => {
           await Promise.all(coupons.map(cpn =>
             db.collection(`clicks_${MALL_ID}`).insertOne({
               pageId, visitorId, dateKey, pageUrl: pathOnly,
@@ -1564,7 +1570,7 @@ app.post('/api/:_any/track', async (req, res) => {
       }
 
       // element === 'url' or others
-      await _withDb(db =>
+      await runDb(db =>
         db.collection(`clicks_${MALL_ID}`).insertOne({
           pageId, visitorId, dateKey, pageUrl: pathOnly,
           referrer: referrer || null, device: device || null,
@@ -1589,7 +1595,7 @@ app.post('/api/:_any/track', async (req, res) => {
     if (type === 'view')    update2.$inc.viewCount = 1;
     if (type === 'revisit') update2.$inc.revisitCount = 1;
 
-    await _withDb(db =>
+    await runDb(db =>
       db.collection(`visits_${MALL_ID}`).updateOne(filter2, update2, { upsert: true })
     );
 
@@ -1602,7 +1608,6 @@ app.post('/api/:_any/track', async (req, res) => {
 
 // =========================
 // 카테고리 / 쿠폰 / 상품 API (Cafe24)
-// ※ apiRequest(method, url, data, params) 는 기존 구현 사용
 // =========================
 app.get('/api/:_any/categories/all', async (req, res) => {
   try {
@@ -1627,7 +1632,7 @@ app.get('/api/:_any/coupons', async (req, res) => {
     const all = [];
     let offset = 0, limit = 100;
     while (true) {
-      const url = `https://${MALL_ID}.cafe24api.com/api/v2/admin/coupons`;
+    const url = `https://${MALL_ID}.cafe24api.com/api/v2/admin/coupons`;
       const { coupons = [] } = await apiRequest('GET', url, {}, { shop_no: 1, limit, offset });
       if (!coupons.length) break;
       all.push(...coupons);
@@ -1923,7 +1928,7 @@ app.get('/api/:_any/analytics/:pageId/visitors-by-date', async (req, res) => {
   if (url) match.pageUrl = url;
 
   try {
-    const stats = await _withDb(db =>
+    const stats = await runDb(db =>
       db.collection(`visits_${MALL_ID}`).aggregate([
         { $match: match },
         { $group: { _id: { date: '$dateKey', visitorId: '$visitorId' }, viewCount: { $sum: { $ifNull: ['$viewCount', 0] } }, revisitCount: { $sum: { $ifNull: ['$revisitCount', 0] } } } },
@@ -1951,7 +1956,7 @@ app.get('/api/:_any/analytics/:pageId/clicks-by-date', async (req, res) => {
   if (url) match.pageUrl = url;
 
   try {
-    const data = await _withDb(db =>
+    const data = await runDb(db =>
       db.collection(`clicks_${MALL_ID}`).aggregate([
         { $match: match },
         { $group: { _id: { date: '$dateKey', element: '$element' }, count: { $sum: 1 } } },
@@ -1970,16 +1975,17 @@ app.get('/api/:_any/analytics/:pageId/clicks-by-date', async (req, res) => {
   }
 });
 
+// (참고용 단일 카운트 엔드포인트 – 프론트에서 사용 안 하면 무시 가능)
 app.get('/api/:_any/analytics/:pageId/url-clicks', async (req, res) => {
   const { pageId } = req.params;
   const { start_date, end_date, url } = req.query;
   if (!start_date || !end_date) return res.status(400).json({ error: 'start_date, end_date는 필수입니다.' });
 
-  const match = { pageId, type:'click', element:'product', timestamp: { $gte: new Date(start_date), $lte: new Date(end_date) } };
+  const match = { pageId, type:'click', element:'url', timestamp: { $gte: new Date(start_date), $lte: new Date(end_date) } };
   if (url) match.pageUrl = url;
 
   try {
-    const count = await _withDb(db => db.collection(`visits_${MALL_ID}`).countDocuments(match));
+    const count = await runDb(db => db.collection(`clicks_${MALL_ID}`).countDocuments(match));
     res.json({ count });
   } catch (err) {
     console.error('[URL CLICKS COUNT ERROR]', err);
@@ -1996,7 +2002,7 @@ app.get('/api/:_any/analytics/:pageId/coupon-clicks', async (req, res) => {
   if (url) match.pageUrl = url;
 
   try {
-    const count = await _withDb(db => db.collection(`visits_${MALL_ID}`).countDocuments(match));
+    const count = await runDb(db => db.collection(`clicks_${MALL_ID}`).countDocuments(match));
     res.json({ count });
   } catch (err) {
     console.error('[COUPON CLICKS COUNT ERROR]', err);
@@ -2007,7 +2013,7 @@ app.get('/api/:_any/analytics/:pageId/coupon-clicks', async (req, res) => {
 app.get('/api/:_any/analytics/:pageId/urls', async (req, res) => {
   const { pageId } = req.params;
   try {
-    const urls = await _withDb(db => db.collection(`visits_${MALL_ID}`).distinct('pageUrl', { pageId }));
+    const urls = await runDb(db => db.collection(`visits_${MALL_ID}`).distinct('pageUrl', { pageId }));
     res.json(urls);
   } catch (err) {
     console.error('[URLS DISTINCT ERROR]', err);
@@ -2018,7 +2024,7 @@ app.get('/api/:_any/analytics/:pageId/urls', async (req, res) => {
 app.get('/api/:_any/analytics/:pageId/coupons-distinct', async (req, res) => {
   const { pageId } = req.params;
   try {
-    const couponNos = await _withDb(db =>
+    const couponNos = await runDb(db =>
       db.collection(`clicks_${MALL_ID}`).distinct('couponNo', { pageId, element: 'coupon' })
     );
     res.json(couponNos);
@@ -2038,7 +2044,7 @@ app.get('/api/:_any/analytics/:pageId/devices', async (req, res) => {
   if (url) match.pageUrl = url;
 
   try {
-    const data = await _withDb(db =>
+    const data = await runDb(db =>
       db.collection(`visits_${MALL_ID}`).aggregate([
         { $match: match },
         { $group: { _id: '$device', count: { $sum: { $add: [ { $ifNull: ['$viewCount',0] }, { $ifNull: ['$revisitCount',0] } ] } } } },
@@ -2062,7 +2068,7 @@ app.get('/api/:_any/analytics/:pageId/devices-by-date', async (req, res) => {
   if (url) match.pageUrl = url;
 
   try {
-    const data = await _withDb(db =>
+    const data = await runDb(db =>
       db.collection(`visits_${MALL_ID}`).aggregate([
         { $match: match },
         { $group: { _id: { date:'$dateKey', device:'$device', visitor:'$visitorId' } } },
@@ -2086,7 +2092,7 @@ app.get('/api/:_any/analytics/:pageId/product-clicks', async (req, res) => {
   if (start_date && end_date) filter.lastClickAt = { $gte: new Date(start_date), $lte: new Date(end_date) };
 
   try {
-    const docs = await _withDb(db =>
+    const docs = await runDb(db =>
       db.collection(`prdClick_${MALL_ID}`).find(filter).sort({ clickCount: -1 }).toArray()
     );
     res.json(docs.map(d => ({ productNo: d.productNo, clicks: d.clickCount })));
@@ -2098,7 +2104,7 @@ app.get('/api/:_any/analytics/:pageId/product-clicks', async (req, res) => {
 
 app.get('/api/:_any/analytics/:pageId/product-performance', async (req, res) => {
   try {
-    const clicks = await _withDb(db =>
+    const clicks = await runDb(db =>
       db.collection(`prdClick_${MALL_ID}`).aggregate([
         { $match: { pageId: req.params.pageId } },
         { $group: { _id: '$productNo', clicks: { $sum: '$clickCount' } } }
@@ -2126,6 +2132,15 @@ app.get('/api/:_any/analytics/:pageId/product-performance', async (req, res) => 
     res.status(500).json({ error: '상품 퍼포먼스 집계 실패' });
   }
 });
+
+
+
+
+
+
+
+
+
 
 // ========== [서버 실행 및 프롬프트 초기화] ==========
 (async function initialize() {

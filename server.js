@@ -1134,11 +1134,26 @@ const FTP_HOST = 'yogibo.ftp.cafe24.com';
 const FTP_USER = 'yogibo';
 const FTP_PASS = 'korea2025!!';
 
-// 절대경로 형태로 넣되, 앞/뒤 슬래시 정리
-const FTP_REMOTE_ROOT = (process.env.FTP_REMOTE_ROOT || '/web/img/temple')
-  .replace(/\/+$/, '');             // '/web/img/temple'
-const FTP_PUBLIC_BASE = (process.env.FTP_PUBLIC_BASE || 'https://yogibo.kr/web/img/temple')
-  .replace(/\/+$/, '');             // 'https://yogibo.kr/web/img/temple'
+// 보여줄 URL 접두사
+const FTP_PUBLIC_BASE = (process.env.FTP_PUBLIC_BASE || 'https://yogibo.kr/web/img/temple').replace(/\/+$/, '');
+
+// 로그인 후 홈이 보통 /web 혹은 /web/img/temple 이므로
+// 베이스 경로는 "cd 시도만" 하고, 생성은 하지 않습니다.
+async function gotoBaseDir(client) {
+  const candidates = [
+    'img/temple',        // 홈이 /web 인 경우
+    'web/img/temple',    // 홈이 / 인 경우
+    'temple'             // 홈이 /web/img 인 경우
+  ];
+  for (const c of candidates) {
+    try {
+      await client.cd(c);
+      return true; // 성공적으로 진입
+    } catch (_) { /* 무시하고 다음 후보 시도 */ }
+  }
+  // 이미 /web/img/temple 에 있는 경우엔 위가 전부 실패할 수 있으므로 OK
+  return false;
+}
 
 app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => {
   const localPath = req.file?.path;
@@ -1155,37 +1170,24 @@ app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => 
       host: FTP_HOST,
       user: FTP_USER,
       password: FTP_PASS,
-      secure: false, // FTPS 미지원일 때 500 AUTH 방지
+      secure: false, // AUTH 지원 안 해서 FTPS 불가 → plain FTP
     });
 
-    // 1) 현재 위치 확인
-    let cwd = '';
-    try { cwd = (await client.pwd()) || ''; } catch { cwd = ''; }
+    // 1) /web/img/temple 로 이동 시도(생성 X)
+    await gotoBaseDir(client);
+    // 여기서 생성은 "uploads 이하"만 합니다.
 
-    // 2) 목표 루트가 이미 현재 경로에 포함되어 있으면 추가 이동 생략
-    const rootNoSlash = FTP_REMOTE_ROOT.replace(/^\/+/, ''); // 'web/img/temple'
-    const needDescend = !cwd.replace(/\/+$/, '').endsWith('/' + rootNoSlash);
-
-    if (needDescend) {
-      // 현재 위치에서 상대 경로로만 단계적으로 진입
-      for (const seg of rootNoSlash.split('/')) {
-        if (!seg) continue;
-        await client.ensureDir(seg);
-        await client.cd(seg);
-      }
-    }
-
-    // 3) 날짜 폴더 생성 후 이동: uploads/yogibo/YYYY/MM/DD
+    // 2) 날짜 폴더를 생성하며 진입: uploads/yogibo/YYYY/MM/DD
     const dateFolder = dayjs().format('YYYY/MM/DD');
     for (const seg of ['uploads', MALL_ID, ...dateFolder.split('/')]) {
       await client.ensureDir(seg);
       await client.cd(seg);
     }
 
-    // 4) 업로드 (현재 CWD에 파일명만)
+    // 3) 업로드 (현재 CWD는 .../uploads/yogibo/YYYY/MM/DD)
     await client.uploadFrom(localPath, filename);
 
-    // 5) 공개 URL 반환
+    // 4) 공개 URL 반환
     const url = `${FTP_PUBLIC_BASE}/uploads/${MALL_ID}/${dateFolder}/${filename}`;
     return res.json({ url });
   } catch (err) {
@@ -1196,8 +1198,6 @@ app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => 
     fs.unlink(localPath, () => {});
   }
 });
-
-
 // =========================
 // Events CRUD
 // =========================

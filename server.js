@@ -1129,18 +1129,16 @@ app.post(
 // 필요 모듈 (중복 require 있으면 이 줄들은 생략하세요)
 const ftp   = require('basic-ftp');
 
-// 고정 mallId & FTP 설정
 const MALL_ID = 'yogibo';
 const FTP_HOST = 'yogibo.ftp.cafe24.com';
 const FTP_USER = 'yogibo';
 const FTP_PASS = 'korea2025!!';
 
-// 절대 경로(FTP 루트부터)
-const FTP_REMOTE_ROOT = process.env.FTP_REMOTE_ROOT || '/web/img/temple';
-// 퍼블릭 URL 접두사(끝 슬래시 금지)
-const FTP_PUBLIC_BASE = process.env.FTP_PUBLIC_BASE || 'https://yogibo.kr/web/img/temple';
+// ✅ 절대경로 금지! 선행 슬래시 제거해서 홈 기준 상대경로로 사용
+const FTP_REMOTE_ROOT = (process.env.FTP_REMOTE_ROOT || 'web/img/temple').replace(/^\/+/, '');
+// 퍼블릭 URL 접두사(끝 슬래시 없이)
+const FTP_PUBLIC_BASE = (process.env.FTP_PUBLIC_BASE || 'https://yogibo.kr/web/img/temple').replace(/\/+$/, '');
 
-// FTPS 우선 → 실패 시 FTP 폴백
 async function connectCafe24(client) {
   try {
     await client.access({
@@ -1155,13 +1153,12 @@ async function connectCafe24(client) {
   } catch (e) {
     const msg = String(e?.message || '');
     if (/AUTH not understood|TLS|SSL/i.test(msg)) {
-      // FTPS 미지원 → Plain FTP로 재시도
       await client.access({
         host: FTP_HOST,
         user: FTP_USER,
         password: FTP_PASS,
         port: 21,
-        secure: false,
+        secure: false, // 폴백: 평문 FTP
       });
       return 'ftp';
     }
@@ -1169,7 +1166,6 @@ async function connectCafe24(client) {
   }
 }
 
-// 이미지 업로드 (FormData field: "file")
 app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => {
   const localPath = req.file?.path;
   const filename  = req.file?.filename;
@@ -1181,22 +1177,27 @@ app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => 
   client.ftp.verbose = false;
 
   try {
-    const mode = await connectCafe24(client); // 'ftps' or 'ftp'
+    const mode = await connectCafe24(client);
+    const pwd0 = await client.pwd();
+    console.log('[FTP] connected via', mode, 'PWD=', pwd0);
 
-    // 문서 루트 보장: /web/img/temple
+    // 1) 홈 기준 base 디렉터리 보장: web/img/temple
     await client.ensureDir(FTP_REMOTE_ROOT);
-    await client.cd(FTP_REMOTE_ROOT);
+    const pwd1 = await client.pwd();
+    console.log('[FTP] after ensureDir(base), PWD=', pwd1);
 
-    // 날짜 서브경로: uploads/yogibo/YYYY/MM/DD
+    // 2) 날짜 경로: web/img/temple/uploads/yogibo/YYYY/MM/DD
     const dateFolder = dayjs().format('YYYY/MM/DD');
-    const subDir     = path.posix.join('uploads', MALL_ID, dateFolder);
-    await client.ensureDir(subDir);
+    const subDirRel  = path.posix.join(FTP_REMOTE_ROOT, 'uploads', MALL_ID, dateFolder);
+    await client.ensureDir(subDirRel);
+    const pwd2 = await client.pwd();
+    console.log('[FTP] after ensureDir(sub), PWD=', pwd2);
 
-    // 업로드
-    const remotePath = path.posix.join(subDir, filename);
+    // 3) 업로드
+    const remotePath = path.posix.join(subDirRel, filename);
     await client.uploadFrom(localPath, remotePath);
 
-    // 퍼블릭 URL
+    // 4) 공개 URL
     const url = `${FTP_PUBLIC_BASE}/uploads/${MALL_ID}/${dateFolder}/${filename}`;
     return res.json({ url, mode });
   } catch (err) {
@@ -1207,10 +1208,9 @@ app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => 
     });
   } finally {
     try { client.close(); } catch {}
-    fs.unlink(localPath, () => {}); // 임시파일 정리
+    fs.unlink(localPath, () => {});
   }
 });
-
 
 // =========================
 // Events CRUD

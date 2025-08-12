@@ -1337,7 +1337,7 @@ mountEventRoutes('/eventTemple');
 
 // 컬렉션 상수 및 withDb Fallback (상단에 withDb가 이미 있으면 그걸 씁니다)
 const EVENT_COLL = 'eventTemple';
-const _withDb = (typeof withDb === 'function') ? withDb : (task) => task(db);
+const _withDb = withDb;  // 그냥 별칭만 둠
 
 app.post('/api/:_any/events', async (req, res) => {
   const payload = req.body;

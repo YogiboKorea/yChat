@@ -1139,7 +1139,7 @@ const ftp = require('basic-ftp');
 const MALL_ID = 'yogibo';
 const FTP_HOST = 'yogibo.ftp.cafe24.com';
 const FTP_USER = 'yogibo';
-const FTP_PASS = 'korea2022@@';
+const FTP_PASS = 'korea2025!!';
 
 // 문서 루트와 업로드 베이스(앞에 슬래시 넣지 마세요)
 const FTP_DOC_ROOT    = '/web';

@@ -24,8 +24,7 @@
   const directNos      = script.dataset.directNos || '';
   const ignoreText     = script.dataset.ignoreText === '1';
   const autoplayAll    = script.dataset.autoplayAll === '1';
-  // ✅ NEW: loop-all 플래그 (모든 영상 강제 반복)
-  const loopAll        = script.dataset.loopAll === '1';
+  const loopAll        = script.dataset.loopAll === '1'; // (선택) 모든 영상 강제 반복
 
   // API preconnect
   if (API_BASE) {
@@ -187,9 +186,10 @@
         const yid = b.youtubeId || parseYouTubeId(b.src);
         if (!yid) return;
 
-        // ✅ autoplay 및 loop 처리
+        // autoplay 및 loop 처리
         const willAutoplay = autoplayAll || toBool(b.autoplay);
-        const willLoop     = loopAll || toBool(b.loop);
+        // ✅ 변경된 핵심: 자동재생이 켜졌다면 강제로 loop 적용 (개별 영상 기준)
+        const willLoop     = loopAll || toBool(b.loop) || willAutoplay;
 
         const qs = new URLSearchParams({
           autoplay: willAutoplay ? '1' : '0',
@@ -530,7 +530,7 @@
       const blocks = rawBlocks.map(b => {
         const t = b.type || 'image';
         if (t === 'video') {
-          // ✅ youtubeId 보정 + autoplay/loop 강제 boolean
+          // youtubeId 보정 + autoplay/loop boolean
           const yid = b.youtubeId || parseYouTubeId(b.src);
           return {
             type: 'video',

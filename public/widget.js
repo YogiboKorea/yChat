@@ -24,6 +24,8 @@
   const directNos      = script.dataset.directNos || '';
   const ignoreText     = script.dataset.ignoreText === '1';
   const autoplayAll    = script.dataset.autoplayAll === '1';
+  // ✅ NEW: loop-all 플래그 (모든 영상 강제 반복)
+  const loopAll        = script.dataset.loopAll === '1';
 
   // API preconnect
   if (API_BASE) {
@@ -185,7 +187,10 @@
         const yid = b.youtubeId || parseYouTubeId(b.src);
         if (!yid) return;
 
+        // ✅ autoplay 및 loop 처리
         const willAutoplay = autoplayAll || toBool(b.autoplay);
+        const willLoop     = loopAll || toBool(b.loop);
+
         const qs = new URLSearchParams({
           autoplay: willAutoplay ? '1' : '0',
           mute: willAutoplay ? '1' : '0',      // 모바일 자동재생 필수
@@ -193,6 +198,13 @@
           rel: '0',
           modestbranding: '1'
         });
+
+        if (willLoop) {
+          // YouTube loop 규칙: loop=1 + playlist=<videoId>
+          qs.set('loop', '1');
+          qs.set('playlist', yid);
+        }
+
         const src = `https://www.youtube.com/embed/${yid}?${qs.toString()}`;
 
         const wrap = document.createElement('div');
@@ -518,13 +530,14 @@
       const blocks = rawBlocks.map(b => {
         const t = b.type || 'image';
         if (t === 'video') {
-          // ✅ youtubeId 보정 + autoplay 강제 boolean
+          // ✅ youtubeId 보정 + autoplay/loop 강제 boolean
           const yid = b.youtubeId || parseYouTubeId(b.src);
           return {
             type: 'video',
             youtubeId: yid,
             ratio: (b.ratio && typeof b.ratio.w === 'number' && typeof b.ratio.h === 'number') ? b.ratio : { w: 16, h: 9 },
-            autoplay: toBool(b.autoplay)
+            autoplay: toBool(b.autoplay),
+            loop: toBool(b.loop)
           };
         }
         if (t === 'text') {

@@ -493,11 +493,11 @@
     display: grid; gap: 8px; max-width: 800px; margin: 16px auto; grid-template-columns: repeat(${tabCount},1fr);
   }
   .tabs_${pageId} button { padding: 8px; font-size: 16px; border: none; background: #f5f5f5; color: #333; cursor: pointer; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tabs_${pageId} button.active { background-color:${activeColor}; color:#fff; }
+  .tabs_${pageId} button.active { background-color:${activeColor}; color:#fff; font-weight:600;}
   .main_Grid_${pageId} img { padding-bottom:10px; }
   .main_Grid_${pageId} { row-gap:50px!important; }
   .main_Grid_${pageId} li { color:#000; }
-  .main_Grid_${pageId} .prd_desc { padding-bottom:3px; font-size:14px; color:#666; }
+  .main_Grid_${pageId} .prd_desc { padding-bottom:3px; font-size:14px; color:#666; ;}
   .main_Grid_${pageId} .prd_price { font-size:16px; }
   .main_Grid_${pageId} .coupon_wrapper, .main_Grid_${pageId} .sale_wrapper { margin-top:4px; display:flex; align-items:center; }
   .main_Grid_${pageId} .prd_coupon_percent, .main_Grid_${pageId} .sale_percent { color:#ff4d4f; font-weight:500; margin-right:4px; }

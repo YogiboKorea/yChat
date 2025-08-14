@@ -137,7 +137,7 @@
   // ────────────────────────────────────────────────────────────────
   // 3) YouTube 관리: API 로드, 플레이어 생성, 오버레이 폴백, 싱글 재생 관리
   // ────────────────────────────────────────────────────────────────
-  const ytPlayers = []; // { player, placeholderEl }
+  const ytPlayers = []; // { player, placeholder }
   function loadYouTubeAPI(cb) {
     if (window.YT && window.YT.Player) return cb();
     if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
@@ -167,120 +167,150 @@
     });
   }
 
+  // 교체된 createPlayerForPlaceholder: 우선 autoplay iframe 삽입 시도 -> 실패 시 overlay -> overlay 클릭 시 YT.Player 생성
   function createPlayerForPlaceholder(placeholder, youtubeId, autoplayFlag, loopFlag, ratio) {
-    // setup aspect box
+    // setup aspect
     const aspectW = (ratio && ratio.w) || 16;
     const aspectH = (ratio && ratio.h) || 9;
     placeholder.style.position = 'relative';
     placeholder.style.width = '100%';
     placeholder.style.maxWidth = '800px';
-    // padding-top trick
     const padPct = (aspectH / aspectW) * 100;
     placeholder.style.paddingTop = `${padPct}%`;
 
-    // create inner container which will be replaced by iframe by YT.Player
+    // inner area where iframe / player will live
     const inner = document.createElement('div');
     inner.style.position = 'absolute';
     inner.style.inset = '0';
     placeholder.appendChild(inner);
 
-    // overlay (shown if autoplay blocked)
+    // overlay (shown when autoplay blocked)
     const overlay = document.createElement('div');
     overlay.className = 'widget-video-overlay';
     overlay.style.display = 'none';
     overlay.innerHTML = `<button type="button">▶ 재생</button>`;
     placeholder.appendChild(overlay);
 
-    function instantiate() {
-      try {
-        const player = new window.YT.Player(inner, {
-          videoId: youtubeId,
-          playerVars: {
-            enablejsapi: 1,
-            playsinline: 1,
-            rel: 0,
-            modestbranding: 1,
-            autoplay: autoplayFlag ? 1 : 0,
-            loop: loopFlag ? 1 : 0,
-            playlist: loopFlag ? youtubeId : undefined,
-            origin: location.origin
-          },
-          events: {
-            onReady: (e) => {
-              try {
-                const iframe = e.target.getIframe();
-                if (iframe) iframe.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture; fullscreen');
-              } catch (_) {}
-              if (autoplayFlag) {
-                // attempt mute -> play
-                try { e.target.mute && e.target.mute(); } catch (_) {}
-                try { e.target.playVideo && e.target.playVideo(); } catch (err) {
-                  overlay.style.display = '';
-                }
-                // check after short delay whether we are playing
-                setTimeout(() => {
-                  try {
-                    const state = e.target.getPlayerState ? e.target.getPlayerState() : null;
-                    if (state !== 1) overlay.style.display = '';
-                    else overlay.style.display = 'none';
-                  } catch (_) {
-                    overlay.style.display = '';
-                  }
-                }, 600);
-              }
-            },
-            onStateChange: (ev) => {
-              try {
-                if (ev.data === 1) { // playing
-                  pauseOtherPlayers(ev.target);
-                }
-              } catch (_) {}
-            },
-            onError: () => {
-              overlay.style.display = '';
-            }
-          }
-        });
-        ytPlayers.push({ player, placeholder });
-      } catch (err) {
-        overlay.style.display = '';
+    const iframeSrcFor = (id, autoplay, loop) => {
+      const params = new URLSearchParams({
+        autoplay: autoplay ? '1' : '0',
+        mute: autoplay ? '1' : '0',
+        playsinline: '1',
+        rel: '0',
+        modestbranding: '1'
+      });
+      if (loop) {
+        params.set('loop', '1');
+        params.set('playlist', id);
       }
+      return `https://www.youtube.com/embed/${id}?${params.toString()}`;
+    };
+
+    // 1) 우선 "직접 iframe 삽입(autoplay,mute,playsinline)" 시도 — iOS에서 성공 확률을 올리기 위함
+    let autoplayIframe = null;
+    if (autoplayFlag) {
+      autoplayIframe = document.createElement('iframe');
+      autoplayIframe.src = iframeSrcFor(youtubeId, true, loopFlag);
+      // allow attribute must exist *before* load for autoplay to be honored by some browsers
+      autoplayIframe.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture; fullscreen');
+      autoplayIframe.setAttribute('frameborder', '0');
+      autoplayIframe.setAttribute('allowfullscreen', '');
+      autoplayIframe.style.position = 'absolute';
+      autoplayIframe.style.inset = '0';
+      autoplayIframe.style.width = '100%';
+      autoplayIframe.style.height = '100%';
+      inner.appendChild(autoplayIframe);
+
+      // 700ms 후에도 재생되지 않으면 오버레이 띄움
+      setTimeout(() => {
+        // Can't reliably detect cross-origin playing state; show overlay as fallback
+        overlay.style.display = '';
+      }, 700);
     }
 
-    // user click overlay -> user-initiated play/unmute
+    // 2) 오버레이 클릭 시: 사용자 제스처로 YT.Player 생성(또는 기존 iframe 재사용 시도)
     overlay.addEventListener('click', () => {
-      // if player exists, unmute & play; else create then play
-      const found = ytPlayers.find(it => it.placeholder === placeholder && it.player);
-      if (found && found.player) {
-        try { found.player.unMute && found.player.unMute(); } catch (_) {}
-        try { found.player.playVideo && found.player.playVideo(); } catch (_) {}
+      // if YT.Player already created for this placeholder, just unmute & play
+      const existing = ytPlayers.find(it => it.placeholder === placeholder && it.player);
+      if (existing && existing.player) {
+        try { existing.player.unMute && existing.player.unMute(); } catch (e) {}
+        try { existing.player.playVideo && existing.player.playVideo(); } catch (e) {}
         overlay.style.display = 'none';
-      } else {
-        if (window.YT && window.YT.Player) {
-          instantiate();
-          const newItem = ytPlayers.find(it => it.placeholder === placeholder && it.player);
-          setTimeout(() => {
-            try { newItem.player.unMute && newItem.player.unMute(); } catch (_) {}
-            try { newItem.player.playVideo && newItem.player.playVideo(); } catch (_) {}
-            overlay.style.display = 'none';
-          }, 200);
-        } else {
-          loadYouTubeAPI(() => {
-            instantiate();
-            const newItem = ytPlayers.find(it => it.placeholder === placeholder && it.player);
-            setTimeout(() => {
-              try { newItem.player.unMute && newItem.player.unMute(); } catch (_) {}
-              try { newItem.player.playVideo && newItem.player.playVideo(); } catch (_) {}
-              overlay.style.display = 'none';
-            }, 200);
-          });
-        }
+        return;
       }
+
+      // remove autoplay iframe (if present) and create player with API — ensures we can control play/unmute
+      if (autoplayIframe) {
+        try { autoplayIframe.remove(); } catch (_) {}
+      }
+
+      // create YT player via API (guaranteed user gesture)
+      const instantiate = () => {
+        try {
+          const player = new window.YT.Player(inner, {
+            videoId: youtubeId,
+            playerVars: {
+              enablejsapi: 1,
+              playsinline: 1,
+              rel: 0,
+              modestbranding: 1,
+              autoplay: 1,    // user gesture already happened via overlay click
+              loop: loopFlag ? 1 : 0,
+              playlist: loopFlag ? youtubeId : undefined,
+              origin: location.origin
+            },
+            events: {
+              onReady: (e) => {
+                try { e.target.unMute && e.target.unMute(); } catch (_) {}
+                try { e.target.playVideo && e.target.playVideo(); } catch (_) {}
+              },
+              onStateChange: (ev) => {
+                try { if (ev.data === 1) pauseOtherPlayers(ev.target); } catch(_) {}
+              },
+              onError: () => { /* keep overlay hidden or show error UI */ }
+            }
+          });
+          ytPlayers.push({ player, placeholder });
+        } catch (err) {
+          console.error('YT instantiation failed', err);
+        }
+      };
+
+      if (window.YT && window.YT.Player) instantiate();
+      else loadYouTubeAPI(instantiate);
+
+      overlay.style.display = 'none';
     });
 
-    // instantiate now or queue until API ready
-    if (window.YT && window.YT.Player) instantiate();
-    else loadYouTubeAPI(instantiate);
+    // 3) 만약 autoplayFlag이 false이면 그냥 YT.Player를 (비동기) 생성하되 autoplay 시도는 하지 않음.
+    if (!autoplayFlag) {
+      const instantiateNoAutoplay = () => {
+        try {
+          const player = new window.YT.Player(inner, {
+            videoId: youtubeId,
+            playerVars: {
+              enablejsapi: 1,
+              playsinline: 1,
+              rel: 0,
+              modestbranding: 1,
+              autoplay: 0,
+              loop: loopFlag ? 1 : 0,
+              playlist: loopFlag ? youtubeId : undefined,
+              origin: location.origin
+            },
+            events: {
+              onReady: () => {},
+              onStateChange: (ev) => { try { if (ev.data === 1) pauseOtherPlayers(ev.target); } catch(_) {} },
+              onError: () => {}
+            }
+          });
+          ytPlayers.push({ player, placeholder });
+        } catch (err) {}
+      };
+
+      if (window.YT && window.YT.Player) instantiateNoAutoplay();
+      else loadYouTubeAPI(instantiateNoAutoplay);
+    }
   }
 
   function initVideoPlayers() {
@@ -636,6 +666,7 @@
     background: linear-gradient(0deg, rgba(0,0,0,0.25), rgba(0,0,0,0.25)); z-index: 5;
   }
   .widget-video-overlay button { padding: 10px 14px; font-size:16px; border-radius:6px; border:none; cursor:pointer; background: rgba(255,255,255,0.95); }
+
   @media (max-width: 400px) {
     .tabs_${pageId}{ width:95%; margin:0 auto;margin-top:20px; font-weight:bold; }
     .tabs_${pageId} button{ font-size:14px; }

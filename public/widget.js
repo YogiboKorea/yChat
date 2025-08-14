@@ -1,7 +1,7 @@
 ;(function () {
-  // =========================
-  // 0) 초기 설정 및 스크립트 찾기
-  // =========================
+  // ────────────────────────────────────────────────────────────────
+  // 0) 스크립트/설정값
+  // ────────────────────────────────────────────────────────────────
   let script = document.currentScript;
   if (!script || !script.dataset.pageId) {
     script = Array.from(document.getElementsByTagName('script')).find(s =>
@@ -13,7 +13,7 @@
     return;
   }
 
-  const API_BASE       = script.dataset.apiBase || '';
+  const API_BASE       = script.dataset.apiBase;
   const pageId         = script.dataset.pageId;
   const mallId         = script.dataset.mallId;
   const tabCount       = parseInt(script.dataset.tabCount || '0', 10);
@@ -23,14 +23,10 @@
   const couponQSAppend = couponNos ? `&coupon_no=${couponNos}` : '';
   const directNos      = script.dataset.directNos || '';
   const ignoreText     = script.dataset.ignoreText === '1';
-  const autoplayAll    = String(script.dataset.autoplayAll || '') === '1';
-  const loopAll        = String(script.dataset.loopAll || '') === '1';
+  const autoplayAll    = script.dataset.autoplayAll === '1';
+  const loopAll        = script.dataset.loopAll === '1'; // (선택) 모든 영상 강제 반복
 
-  // Optional aggressive fallback: if true, when autoplay fails in-app, open YouTube watch URL automatically.
-  // Be careful: auto-opening new tabs in some environments may be blocked or produce poor UX.
-  const AUTO_OPEN_YT_FALLBACK = false;
-
-  // Preconnect to API base if provided
+  // API preconnect
   if (API_BASE) {
     const link = document.createElement('link');
     link.rel = 'preconnect';
@@ -39,10 +35,10 @@
     document.head.appendChild(link);
   }
 
-  // =========================
-  // 1) 유틸 & 트래킹 (기존 로직 유지)
-  // =========================
-  const ua = navigator.userAgent || '';
+  // ────────────────────────────────────────────────────────────────
+  // 1) 유틸/트래킹
+  // ────────────────────────────────────────────────────────────────
+  const ua = navigator.userAgent;
   const device = /Android/i.test(ua) ? 'Android' : /iPhone|iPad|iPod/i.test(ua) ? 'iOS' : 'PC';
   const visitorId = (() => {
     const key = 'appVisitorId';
@@ -54,10 +50,10 @@
     return id;
   })();
 
-  function pad(n) { return String(n).padStart(2, '0'); }
+  const pad = n => String(n).padStart(2, '0');
   function today() {
     const d = new Date();
-    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   }
   function shouldTrack() {
     if (/[?&]track=true/.test(location.search)) return true;
@@ -67,16 +63,17 @@
     return true;
   }
   function track(payload) {
-    if (!API_BASE) return;
     fetch(`${API_BASE}/api/${mallId}/track`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     }).catch(() => {});
   }
-  if (shouldTrack()) track({ pageId, pageUrl: location.pathname, visitorId, type: 'view', device, referrer: document.referrer || 'direct', timestamp: new Date().toISOString() });
-  else track({ pageId, pageUrl: location.pathname, visitorId, type: 'revisit', device, referrer: document.referrer || 'direct', timestamp: new Date().toISOString() });
-
+  if (shouldTrack()) {
+    track({ pageId, pageUrl: location.pathname, visitorId, type: 'view', device, referrer: document.referrer || 'direct', timestamp: new Date().toISOString() });
+  } else {
+    track({ pageId, pageUrl: location.pathname, visitorId, type: 'revisit', device, referrer: document.referrer || 'direct', timestamp: new Date().toISOString() });
+  }
   document.body.addEventListener('click', (e) => {
     const el = e.target.closest('[data-track-click]');
     if (!el) return;
@@ -89,19 +86,21 @@
     track(payload);
   });
 
-  // =========================
+  // ────────────────────────────────────────────────────────────────
   // 2) 공통 헬퍼
-  // =========================
-  function escapeHtml(s = '') { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-  function toBool(v) { return v === true || v === 'true' || v === 1 || v === '1' || v === 'on'; }
+  // ────────────────────────────────────────────────────────────────
+  function escapeHtml(s = '') {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
 
+  // ✅ 유튜브 ID 파서 (URL/ID/iframe src 모두 대응)
   function parseYouTubeId(input) {
     if (!input) return null;
     const str = String(input).trim();
     if (/^[\w-]{11}$/.test(str)) return str;
     try {
       const url = new URL(str);
-      const host = url.hostname.replace('www.','');
+      const host = url.hostname.replace('www.', '');
       if (host === 'youtu.be') return url.pathname.slice(1);
       if (host.includes('youtube.com')) {
         const v = url.searchParams.get('v');
@@ -110,224 +109,36 @@
         if (m) return m[2];
       }
     } catch (_) {
+      // not a URL, try to extract from iframe src
       const m = str.match(/src=["']([^"']+)["']/i);
       if (m) return parseYouTubeId(m[1]);
     }
     return null;
   }
 
-  // in-app detection (common UA tokens)
-  function detectInAppBrowser() {
-    const ua = navigator.userAgent || '';
-    return /KAKAOTALK|NAVER|FBAN|FBAV|Instagram|Line|Messenger|Weibo|FB_IAB/i.test(ua);
-  }
-  const isInApp = detectInAppBrowser();
-  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-  // =========================
-  // 3) YouTube helper (API 로드, 플레이어 관리)
-  // =========================
-  const ytPlayers = []; // { player, placeholder }
-  function loadYouTubeAPI(cb) {
-    if (window.YT && window.YT.Player) return cb();
-    if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
-      const tag = document.createElement('script');
-      tag.src = 'https://www.youtube.com/iframe_api';
-      document.head.appendChild(tag);
-    }
-    if (!window._ytApiReadyQueue) {
-      window._ytApiReadyQueue = [];
-      const prev = window.onYouTubeIframeAPIReady;
-      window.onYouTubeIframeAPIReady = function () {
-        if (typeof prev === 'function') prev();
-        window._ytApiReadyQueue.forEach(fn => { try { fn(); } catch(_) {} });
-        window._ytApiReadyQueue = [];
-      };
-    }
-    window._ytApiReadyQueue.push(cb);
+  // truthy → boolean
+  function toBool(v) {
+    return v === true || v === 'true' || v === 1 || v === '1' || v === 'on';
   }
 
-  function pauseOtherPlayers(activePlayer) {
-    ytPlayers.forEach(item => {
-      try {
-        if (item.player && item.player !== activePlayer) {
-          item.player.pauseVideo && item.player.pauseVideo();
-        }
-      } catch (e) {}
+  const productsCache = {};
+  const storagePrefix = `widgetCache_${pageId}_`;
+
+  function fetchWithRetry(url, opts = {}, retries = 3, backoff = 1000) {
+    return fetch(url, opts).then(res => {
+      if (res.status === 429 && retries > 0) {
+        return new Promise(r => setTimeout(r, backoff)).then(() => fetchWithRetry(url, opts, retries - 1, backoff * 2));
+      }
+      if (!res.ok) throw res;
+      return res;
     });
   }
 
-  // =========================
-  // 4) createPlayerForPlaceholder (autoplay aggressive 시도 + overlay 폴백)
-  // =========================
-  function createPlayerForPlaceholder(placeholder, youtubeId, autoplayFlag, loopFlag, ratio) {
-    // aspect & container 설정
-    const aspectW = (ratio && ratio.w) || 16;
-    const aspectH = (ratio && ratio.h) || 9;
-    placeholder.style.position = 'relative';
-    placeholder.style.width = '100%';
-    placeholder.style.maxWidth = '800px';
-    const padPct = (aspectH / aspectW) * 100;
-    placeholder.style.paddingTop = `${padPct}%`;
-
-    // inner: iframe 또는 YT.Player가 들어갈 곳
-    const inner = document.createElement('div');
-    inner.style.position = 'absolute';
-    inner.style.inset = '0';
-    placeholder.appendChild(inner);
-
-    // overlay: 재생 실패 시 사용자 제스처 유도
-    const overlay = document.createElement('div');
-    overlay.className = 'widget-video-overlay';
-    overlay.style.display = 'none';
-    overlay.innerHTML = `<button type="button">▶ 재생</button>`;
-    placeholder.appendChild(overlay);
-
-    // overlay 이벤트: click + touchend (인앱 터치에 대응)
-    const overlayActivate = (ev) => {
-      ev && ev.preventDefault && ev.preventDefault();
-      ev && ev.stopPropagation && ev.stopPropagation();
-
-      // 이미 player가 있으면 재생 시도
-      const existing = ytPlayers.find(it => it.placeholder === placeholder && it.player);
-      if (existing && existing.player) {
-        try { existing.player.unMute && existing.player.unMute(); } catch (_) {}
-        try { existing.player.playVideo && existing.player.playVideo(); } catch (_) {}
-        overlay.style.display = 'none';
-        return;
-      }
-
-      // remove any autoplay iframe and instantiate controlled player
-      if (inner._autoplayIframe) {
-        try { inner._autoplayIframe.remove(); } catch (_) {}
-        inner._autoplayIframe = null;
-      }
-
-      const instantiate = () => {
-        try {
-          const player = new window.YT.Player(inner, {
-            videoId: youtubeId,
-            playerVars: {
-              enablejsapi: 1,
-              playsinline: 1,
-              rel: 0,
-              modestbranding: 1,
-              autoplay: 1,
-              loop: loopFlag ? 1 : 0,
-              playlist: loopFlag ? youtubeId : undefined,
-              origin: location.origin
-            },
-            events: {
-              onReady: (e) => {
-                try { e.target.unMute && e.target.unMute(); } catch(_) {}
-                try { e.target.playVideo && e.target.playVideo(); } catch(_) {}
-              },
-              onStateChange: (ev) => {
-                try { if (ev.data === 1) pauseOtherPlayers(ev.target); } catch(_) {}
-              },
-              onError: (err) => {
-                console.debug('widget: YT.Player onError', err);
-                // fallback: show overlay (remains)
-                overlay.style.display = '';
-              }
-            }
-          });
-          ytPlayers.push({ player, placeholder });
-        } catch (err) {
-          console.debug('widget: YT.Player instantiate failed', err);
-          overlay.style.display = '';
-        }
-      };
-
-      if (window.YT && window.YT.Player) instantiate();
-      else loadYouTubeAPI(instantiate);
-
-      overlay.style.display = 'none';
-    };
-    overlay.addEventListener('click', overlayActivate);
-    overlay.addEventListener('touchend', overlayActivate, { passive: false });
-
-    // helper: 소스 URL 생성
-    const iframeSrcFor = (id, autoplay, loop) => {
-      const params = new URLSearchParams({
-        autoplay: autoplay ? '1' : '0',
-        mute: autoplay ? '1' : '0',
-        playsinline: '1',
-        rel: '0',
-        modestbranding: '1'
-      });
-      if (loop) { params.set('loop','1'); params.set('playlist', id); }
-      return `https://www.youtube.com/embed/${id}?${params.toString()}`;
-    };
-
-    // 1) autoplay 시도: 우선 iframe 직접 삽입(muted + playsinline), allow 속성 포함 (성공 확률 증가)
-    let autoplayIframe = null;
-    if (autoplayFlag) {
-      autoplayIframe = document.createElement('iframe');
-      autoplayIframe.src = iframeSrcFor(youtubeId, true, loopFlag);
-      autoplayIframe.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture; fullscreen');
-      autoplayIframe.setAttribute('frameborder', '0');
-      autoplayIframe.setAttribute('allowfullscreen', '');
-      autoplayIframe.style.position = 'absolute';
-      autoplayIframe.style.inset = '0';
-      autoplayIframe.style.width = '100%';
-      autoplayIframe.style.height = '100%';
-      inner.appendChild(autoplayIframe);
-      inner._autoplayIframe = autoplayIframe;
-
-      // 브라우저가 재생 허용했는지 확인할 수 없으므로 타임아웃을 두고 폴백 표시
-      // 모바일 Safari 등에서는 muted+playsinline이면 되지만, 인앱은 차단될 수 있음
-      setTimeout(() => {
-        // 만약 YT.Player 제어 객체가 생성되어 재생 중이라면 overlay 숨김
-        const hasPlayer = ytPlayers.find(it => it.placeholder === placeholder && it.player);
-        if (hasPlayer) {
-          overlay.style.display = 'none';
-          return;
-        }
-        // show overlay as fallback for user gesture
-        overlay.style.display = '';
-        // If in-app and AUTO_OPEN_YT_FALLBACK true, consider opening youtube URL automatically
-        if (isInApp && AUTO_OPEN_YT_FALLBACK) {
-          const ytUrl = `https://youtu.be/${youtubeId}`;
-          try { window.open(ytUrl, '_blank'); } catch (e) {}
-        }
-      }, 800); // 800ms: 가벼운 대기
-    } else {
-      // autoplay false: 바로 YT.Player (no autoplay)
-      const instantiateNoAutoplay = () => {
-        try {
-          const player = new window.YT.Player(inner, {
-            videoId: youtubeId,
-            playerVars: {
-              enablejsapi: 1,
-              playsinline: 1,
-              rel: 0,
-              modestbranding: 1,
-              autoplay: 0,
-              loop: loopFlag ? 1 : 0,
-              playlist: loopFlag ? youtubeId : undefined,
-              origin: location.origin
-            },
-            events: {
-              onReady: () => {},
-              onStateChange: (ev) => { try { if (ev.data === 1) pauseOtherPlayers(ev.target); } catch(_) {} },
-              onError: () => {}
-            }
-          });
-          ytPlayers.push({ player, placeholder });
-        } catch (err) {
-          console.debug('widget: YT instantiateNoAutoplay error', err);
-        }
-      };
-      if (window.YT && window.YT.Player) instantiateNoAutoplay();
-      else loadYouTubeAPI(instantiateNoAutoplay);
-    }
-  }
-
-  // =========================
-  // 5) 블록 렌더(텍스트/이미지/비디오) — 비디오: placeholder
-  // =========================
+  // ────────────────────────────────────────────────────────────────
+  // 3) 블록 렌더(텍스트/이미지/영상) — “순서대로”
+  // ────────────────────────────────────────────────────────────────
   function getRootContainer() {
+    // 1순위: #evt-root, 2순위: #evt-images, 3순위: 동적 생성
     let root = document.getElementById('evt-root');
     if (!root) root = document.getElementById('evt-images');
     if (!root) {
@@ -335,16 +146,21 @@
       root.id = 'evt-root';
       document.body.insertBefore(root, document.body.firstChild);
     }
+    // 혹시 기존 #evt-text가 있으면 비워 중복 제거
     const textDiv = document.getElementById('evt-text');
     if (textDiv) textDiv.innerHTML = '';
+    // 비우고 시작
     root.innerHTML = '';
     return root;
   }
 
   function renderBlocks(blocks) {
     const root = getRootContainer();
+
     blocks.forEach((b) => {
       const type = b.type || 'image';
+
+      // TEXT
       if (type === 'text') {
         if (ignoreText) return;
         const st = b.style || {};
@@ -352,44 +168,98 @@
         wrapper.style.textAlign = st.align || 'center';
         wrapper.style.marginTop = `${st.mt ?? 16}px`;
         wrapper.style.marginBottom = `${st.mb ?? 16}px`;
+
         const inner = document.createElement('div');
         inner.style.fontSize = `${st.fontSize || 18}px`;
         inner.style.fontWeight = st.fontWeight || 'normal';
         inner.style.color = st.color || '#333';
         inner.innerHTML = escapeHtml(b.text || '').replace(/\n/g, '<br/>');
+
         wrapper.appendChild(inner);
         root.appendChild(wrapper);
         return;
       }
+
+      // VIDEO
       if (type === 'video') {
         const ratio = b.ratio || { w: 16, h: 9 };
         const yid = b.youtubeId || parseYouTubeId(b.src);
         if (!yid) return;
+
+        // autoplay 및 loop 처리
         const willAutoplay = autoplayAll || toBool(b.autoplay);
-        const willLoop = loopAll || toBool(b.loop) || willAutoplay;
-        const wrapper = document.createElement('div');
-        wrapper.style.position = 'relative';
-        wrapper.style.margin = '0 auto';
-        wrapper.style.width = '100%';
-        wrapper.style.maxWidth = '800px';
-        const ph = document.createElement('div');
-        ph.setAttribute('data-widget-video-placeholder', '1');
-        ph.dataset.youtubeId = yid;
-        ph.dataset.autoplay = willAutoplay ? '1' : '0';
-        ph.dataset.loop = willLoop ? '1' : '0';
-        ph.dataset.aspectW = String(ratio.w || 16);
-        ph.dataset.aspectH = String(ratio.h || 9);
-        wrapper.appendChild(ph);
-        root.appendChild(wrapper);
-        continue;
+        // ✅ 변경된 핵심: 자동재생이 켜졌다면 강제로 loop 적용 (개별 영상 기준)
+        const willLoop     = loopAll || toBool(b.loop) || willAutoplay;
+
+        const qs = new URLSearchParams({
+          autoplay: willAutoplay ? '1' : '0',
+          mute: willAutoplay ? '1' : '0',      // 모바일 자동재생 필수
+          playsinline: '1',                    // iOS 인라인 재생
+          rel: '0',
+          modestbranding: '1'
+        });
+
+        if (willLoop) {
+          // YouTube loop 규칙: loop=1 + playlist=<videoId>
+          qs.set('loop', '1');
+          qs.set('playlist', yid);
+        }
+
+        const src = `https://www.youtube.com/embed/${yid}?${qs.toString()}`;
+
+        const wrap = document.createElement('div');
+        wrap.style.position = 'relative';
+        wrap.style.width = '100%';
+        wrap.style.maxWidth = '800px';
+        wrap.style.margin = '0 auto';
+
+        // aspect-ratio 속성(미지원 브라우저 대비)
+        if ('aspectRatio' in wrap.style) {
+          wrap.style.aspectRatio = `${ratio.w}/${ratio.h}`;
+          const iframe = document.createElement('iframe');
+          iframe.src = src;
+          iframe.title = `youtube-${yid}`;
+          iframe.style.position = 'absolute';
+          iframe.style.inset = '0';
+          iframe.style.width = '100%';
+          iframe.style.height = '100%';
+          iframe.style.border = '0';
+          iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+          iframe.setAttribute('allowfullscreen', '');
+          wrap.appendChild(iframe);
+          root.appendChild(wrap);
+          return;
+        }
+
+        // 패딩박스 방식
+        const innerBox = document.createElement('div');
+        innerBox.style.position = 'relative';
+        innerBox.style.width = '100%';
+        innerBox.style.paddingTop = `${(ratio.h / ratio.w) * 100}%`;
+        const iframe = document.createElement('iframe');
+        iframe.src = src;
+        iframe.title = `youtube-${yid}`;
+        iframe.style.position = 'absolute';
+        iframe.style.inset = '0';
+        iframe.style.width = '100%';
+        iframe.style.height = '100%';
+        iframe.style.border = '0';
+        iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+        iframe.setAttribute('allowfullscreen', '');
+        innerBox.appendChild(iframe);
+        wrap.appendChild(innerBox);
+        root.appendChild(wrap);
+        return;
       }
-      // image
+
+      // IMAGE
       {
         const wrap = document.createElement('div');
         wrap.style.position = 'relative';
         wrap.style.margin = '0 auto';
         wrap.style.width = '100%';
         wrap.style.maxWidth = '800px';
+
         const img = document.createElement('img');
         img.src = b.src;
         img.style.maxWidth = '100%';
@@ -397,185 +267,49 @@
         img.style.display = 'block';
         img.style.margin = '0 auto';
         wrap.appendChild(img);
+
         (b.regions || []).forEach(r => {
-          const l = (r.xRatio * 100).toFixed(2), t = (r.yRatio * 100).toFixed(2), w = (r.wRatio * 100).toFixed(2), h = (r.hRatio * 100).toFixed(2);
+          const l = (r.xRatio * 100).toFixed(2);
+          const t = (r.yRatio * 100).toFixed(2);
+          const w = (r.wRatio * 100).toFixed(2);
+          const h = (r.hRatio * 100).toFixed(2);
+
           if (r.coupon) {
             const btn = document.createElement('button');
             btn.dataset.trackClick = 'coupon';
-            btn.style.position='absolute'; btn.style.left=`${l}%`; btn.style.top=`${t}%`; btn.style.width=`${w}%`; btn.style.height=`${h}%`;
-            btn.style.border='none'; btn.style.cursor='pointer'; btn.style.opacity='0';
+            btn.style.position = 'absolute';
+            btn.style.left = `${l}%`;
+            btn.style.top = `${t}%`;
+            btn.style.width = `${w}%`;
+            btn.style.height = `${h}%`;
+            btn.style.border = 'none';
+            btn.style.cursor = 'pointer';
+            btn.style.opacity = '0'; // 보이지 않게(맵핑만)
             btn.addEventListener('click', () => downloadCoupon(r.coupon));
             wrap.appendChild(btn);
           } else if (r.href) {
             const a = document.createElement('a');
             a.dataset.trackClick = 'url';
-            a.style.position='absolute'; a.style.left=`${l}%`; a.style.top=`${t}%`; a.style.width=`${w}%`; a.style.height=`${h}%`;
-            a.href = /^https?:\/\//.test(r.href) ? r.href : `https://${r.href}`; a.target='_blank'; a.rel='noreferrer';
+            a.style.position = 'absolute';
+            a.style.left = `${l}%`;
+            a.style.top = `${t}%`;
+            a.style.width = `${w}%`;
+            a.style.height = `${h}%`;
+            a.href = /^https?:\/\//.test(r.href) ? r.href : `https://${r.href}`;
+            a.target = '_blank';
+            a.rel = 'noreferrer';
             wrap.appendChild(a);
           }
         });
+
         root.appendChild(wrap);
       }
     });
-
-    // init players for placeholders
-    initVideoPlayers();
   }
 
-  // =========================
-  // 6) video placeholders 초기화 및 autoplay-first 시도
-  // =========================
-  function initVideoPlayers() {
-    const placeholders = Array.from(document.querySelectorAll('[data-widget-video-placeholder]'));
-    placeholders.forEach(ph => {
-      const yid = ph.dataset.youtubeId;
-      if (!yid) {
-        const overlay = document.createElement('div');
-        overlay.className = 'widget-video-overlay';
-        overlay.style.display = '';
-        overlay.innerHTML = `<button type="button">유효한 동영상 ID가 없습니다</button>`;
-        ph.appendChild(overlay);
-        return;
-      }
-      const autoplayFlag = ph.dataset.autoplay === '1';
-      const loopFlag = ph.dataset.loop === '1';
-      const ratio = { w: parseInt(ph.dataset.aspectW || '16',10), h: parseInt(ph.dataset.aspectH || '9',10) };
-      createPlayerForPlaceholder(ph, yid, autoplayFlag, loopFlag, ratio);
-    });
-
-    // aggressive autoplay attempt for first visible autoplay-target video
-    attemptAutoplayForFirstVisible();
-  }
-
-  // 화면 가시성 유틸
-  function whenVisible(el, cb) {
-    if ('IntersectionObserver' in window) {
-      const io = new IntersectionObserver((entries, observer) => {
-        entries.forEach(en => {
-          if (en.isIntersecting) {
-            try { cb(); } catch(_) {}
-            observer.disconnect();
-          }
-        });
-      }, { threshold: 0.25 });
-      io.observe(el);
-    } else {
-      cb();
-    }
-  }
-
-  // 공격적 자동재생 시도 (페이지 내 첫번째 autoplay 대상만)
-  function attemptAutoplayForFirstVisible() {
-    try {
-      const placeholders = Array.from(document.querySelectorAll('[data-widget-video-placeholder]'))
-        .filter(ph => ph.dataset.autoplay === '1');
-      if (!placeholders.length) return;
-
-      const ph = placeholders[0];
-      whenVisible(ph, () => {
-        console.debug('widget: attemptAutoplayForFirstVisible start', { isInApp, isIOS });
-        const yid = ph.dataset.youtubeId;
-        const willLoop = ph.dataset.loop === '1';
-        const inner = ph.querySelector('div') || ph;
-
-        // create muted autoplay iframe (fast path)
-        const ifr = document.createElement('iframe');
-        const params = new URLSearchParams({
-          autoplay: '1',
-          mute: '1',
-          playsinline: '1',
-          rel: '0',
-          modestbranding: '1'
-        });
-        if (willLoop) { params.set('loop','1'); params.set('playlist', yid); }
-        ifr.src = `https://www.youtube.com/embed/${yid}?${params.toString()}`;
-        ifr.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture; fullscreen');
-        ifr.setAttribute('frameborder', '0');
-        ifr.style.position = 'absolute';
-        ifr.style.inset = '0';
-        ifr.style.width = '100%';
-        ifr.style.height = '100%';
-        inner.appendChild(ifr);
-        inner._autoplayIframe = ifr;
-
-        // try to create YT.Player immediately (muted) to increase chance
-        const tryInstantiate = () => {
-          const instantiate = () => {
-            try {
-              const player = new window.YT.Player(inner, {
-                videoId: yid,
-                playerVars: {
-                  enablejsapi: 1,
-                  playsinline: 1,
-                  rel: 0,
-                  modestbranding: 1,
-                  autoplay: 1,
-                  loop: willLoop ? 1 : 0,
-                  playlist: willLoop ? yid : undefined,
-                  origin: location.origin
-                },
-                events: {
-                  onReady: (e) => {
-                    try { e.target.mute && e.target.mute(); } catch(_) {}
-                    try { e.target.playVideo && e.target.playVideo(); } catch(_) {}
-                  },
-                  onStateChange: (ev) => { try { if (ev.data === 1) pauseOtherPlayers(ev.target); } catch(_) {} },
-                  onError: (err) => { console.debug('widget autoplay player error', err); }
-                }
-              });
-              ytPlayers.push({ player, placeholder: ph });
-            } catch (err) {
-              console.debug('widget: autoplay instantiate failed', err);
-            }
-          };
-          if (window.YT && window.YT.Player) instantiate();
-          else loadYouTubeAPI(instantiate);
-        };
-
-        tryInstantiate();
-
-        // 1초 뒤에 재생 유무 확인 불가하므로 오버레이 노출 — 사용자가 직접 재생할 수 있게
-        setTimeout(() => {
-          // If some player is already registered and playing, hide overlay
-          const active = ytPlayers.find(it => it.placeholder === ph && it.player);
-          if (active) {
-            // We cannot reliably check cross-origin playing state, but presence of player is a good sign.
-            const overlay = ph.querySelector('.widget-video-overlay');
-            if (overlay) overlay.style.display = 'none';
-            return;
-          }
-          // otherwise show overlay for manual play
-          const overlay = ph.querySelector('.widget-video-overlay');
-          if (overlay) overlay.style.display = '';
-          // If in-app and user desires, optionally open youtube fallback
-          if (isInApp && AUTO_OPEN_YT_FALLBACK) {
-            const ytUrl = `https://youtu.be/${yid}`;
-            try { window.open(ytUrl, '_blank'); } catch (e) {}
-          }
-          console.debug('widget: autoplay likely blocked or uncertain; overlay shown');
-        }, 1000);
-      });
-    } catch (e) {
-      console.debug('attemptAutoplayForFirstVisible error', e);
-    }
-  }
-
-  // =========================
-  // 7) 상품 그리드 (기존 로직)
-  // =========================
-  const productsCache = {};
-  const storagePrefix = `widgetCache_${pageId}_`;
-
-  function fetchWithRetry(url, opts = {}, retries = 3, backoff = 1000) {
-    return fetch(url, opts).then(res => {
-      if (res.status === 429 && retries > 0) {
-        return new Promise(r => setTimeout(r, backoff)).then(() => fetchWithRetry(url, opts, retries-1, backoff*2));
-      }
-      if (!res.ok) throw res;
-      return res;
-    });
-  }
-
+  // ────────────────────────────────────────────────────────────────
+  // 4) 상품 그리드
+  // ────────────────────────────────────────────────────────────────
   function loadPanel(ul) {
     const cols     = parseInt(ul.dataset.gridSize, 10) || 1;
     const limit    = ul.dataset.count || 300;
@@ -584,13 +318,19 @@
     const cacheKey = ulDirect ? `direct_${ulDirect}` : (category ? `cat_${category}` : null);
     const storageKey = cacheKey ? storagePrefix + cacheKey : null;
 
+    // 캐시
     if (storageKey) {
       const stored = localStorage.getItem(storageKey);
       if (stored) {
-        try { const prods = JSON.parse(stored); renderProducts(ul, prods, cols); return; } catch (_) {}
+        try {
+          const prods = JSON.parse(stored);
+          renderProducts(ul, prods, cols);
+          return;
+        } catch {}
       }
     }
 
+    // 스피너
     const spinner = document.createElement('div');
     spinner.className = 'grid-spinner';
     ul.parentNode.insertBefore(spinner, ul);
@@ -599,42 +339,72 @@
       spinner.remove();
       const errDiv = document.createElement('div');
       errDiv.style.textAlign = 'center';
-      errDiv.innerHTML = `<p style="color:#f00;">상품 로드에 실패했습니다.</p><button style="padding:6px 12px;cursor:pointer;">다시 시도</button>`;
-      errDiv.querySelector('button').onclick = () => { errDiv.remove(); loadPanel(ul); };
+      errDiv.innerHTML = `
+        <p style="color:#f00;">상품 로드에 실패했습니다.</p>
+        <button style="padding:6px 12px;cursor:pointer;">다시 시도</button>
+      `;
+      errDiv.querySelector('button').onclick = () => {
+        errDiv.remove();
+        loadPanel(ul);
+      };
       ul.parentNode.insertBefore(errDiv, ul);
     };
 
     if (ulDirect) {
       const ids = ulDirect.split(',').map(s => s.trim()).filter(Boolean);
-      Promise.all(ids.map(no => fetchWithRetry(`${API_BASE}/api/${mallId}/products/${no}${couponQSStart}`).then(r => r.json())))
+      Promise.all(ids.map(no =>
+        fetchWithRetry(`${API_BASE}/api/${mallId}/products/${no}${couponQSStart}`).then(r => r.json())
+      ))
       .then(raw => raw.map(p => ({
-        product_no: p.product_no, product_name: p.product_name, summary_description: p.summary_description || '',
-        price: p.price, list_image: p.list_image, sale_price: p.sale_price || null,
-        benefit_price: p.benefit_price || null, benefit_percentage: p.benefit_percentage || null
+        product_no:          p.product_no,
+        product_name:        p.product_name,
+        summary_description: p.summary_description || '',
+        price:               p.price,
+        list_image:          p.list_image,
+        sale_price:          p.sale_price    || null,
+        benefit_price:       p.benefit_price || null,
+        benefit_percentage:  p.benefit_percentage || null
       })))
       .then(products => {
-        if (cacheKey) { productsCache[cacheKey] = products; localStorage.setItem(storageKey, JSON.stringify(products)); }
+        if (cacheKey) {
+          productsCache[cacheKey] = products;
+          localStorage.setItem(storageKey, JSON.stringify(products));
+        }
         renderProducts(ul, products, cols);
         spinner.remove();
-      }).catch(showError);
+      })
+      .catch(showError);
+
     } else if (category) {
       const prodUrl = `${API_BASE}/api/${mallId}/categories/${category}/products?limit=${limit}${couponQSAppend}`;
       const perfUrl = `${API_BASE}/api/${mallId}/analytics/${pageId}/product-performance?category_no=${category}`;
+
       Promise.all([
         fetchWithRetry(prodUrl).then(r => r.json()).then(json => Array.isArray(json) ? json : (json.products || [])),
         fetchWithRetry(perfUrl).then(r => r.json()).then(json => Array.isArray(json) ? json : (json.data || []))
-      ]).then(([rawProducts, clicksData]) => {
-        const clickMap = clicksData.reduce((m,c)=>{ m[c.productNo]=c.clicks; return m; }, {});
+      ])
+      .then(([rawProducts, clicksData]) => {
+        const clickMap = clicksData.reduce((m, c) => { m[c.productNo] = c.clicks; return m; }, {});
         const products = rawProducts.map(p => ({
-          product_no: p.product_no, product_name: p.product_name, summary_description: p.summary_description || '',
-          price: p.price, list_image: p.list_image, sale_price: p.sale_price || null,
-          benefit_price: p.benefit_price || null, benefit_percentage: p.benefit_percentage || null,
-          clicks: clickMap[p.product_no] || 0
+          product_no:          p.product_no,
+          product_name:        p.product_name,
+          summary_description: p.summary_description || '',
+          price:               p.price,
+          list_image:          p.list_image,
+          sale_price:          p.sale_price    || null,
+          benefit_price:       p.benefit_price || null,
+          benefit_percentage:  p.benefit_percentage || null,
+          clicks:              clickMap[p.product_no] || 0
         }));
-        if (cacheKey) { productsCache[cacheKey] = products; localStorage.setItem(storageKey, JSON.stringify(products)); }
+        if (cacheKey) {
+          productsCache[cacheKey] = products;
+          localStorage.setItem(storageKey, JSON.stringify(products));
+        }
         renderProducts(ul, products, cols);
         spinner.remove();
-      }).catch(showError);
+      })
+      .catch(showError);
+
     } else {
       spinner.remove();
     }
@@ -659,84 +429,145 @@
     }
 
     const items = products.map(p => {
-      const origPrice = p.price;
-      const priceText = formatKRW(origPrice);
-      const saleText = p.sale_price != null ? formatKRW(p.sale_price) : null;
-      const couponText = p.benefit_price != null ? formatKRW(p.benefit_price) : null;
+      const origPrice   = p.price;
+      const priceText   = formatKRW(origPrice);
+      const saleText    = p.sale_price    != null ? formatKRW(p.sale_price)    : null;
+      const couponText  = p.benefit_price != null ? formatKRW(p.benefit_price) : null;
       const salePercent = saleText ? Math.round((origPrice - p.sale_price) / origPrice * 100) : null;
+
       return `
         <li style="list-style:none;">
-          <a href="/product/detail.html?product_no=${p.product_no}" class="prd_link" style="text-decoration:none;color:inherit;" data-track-click="product" data-product-no="${p.product_no}" target="_blank" rel="noopener noreferrer">
+          <a href="/product/detail.html?product_no=${p.product_no}"
+             class="prd_link"
+             style="text-decoration:none;color:inherit;"
+             data-track-click="product"
+             data-product-no="${p.product_no}"
+             target="_blank" rel="noopener noreferrer">
             <img src="${p.list_image}" alt="${p.product_name}" style="width:100%;display:block;" />
-            <div class="prd_desc" style="font-size:14px;color:#666;padding:4px 0;">${p.summary_description || ''}</div>
-            <div class="prd_name" style="font-weight:500;padding-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;">${p.product_name}</div>
+            <div class="prd_desc" style="font-size:14px;color:#666;padding:4px 0;">
+              ${p.summary_description || ''}
+            </div>
+            <div class="prd_name" style="font-weight:500;padding-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;">
+              ${p.product_name}
+            </div>
           </a>
           <div class="prd_price"${couponText ? ' style="display:none;"' : ''} style="font-size:16px;font-weight:500;">
-            ${ saleText ? `<span class="sale_price">${saleText}</span>${salePercent>0 ? `<div class="sale_wrapper" style="display:inline-block;margin-right:4px;"><span class="sale_percent" style="color:#ff4d4f;">${salePercent}%</span></div>` : ''}` : `<span>${priceText}</span>`}
+            ${
+              saleText
+                ? `<span class="sale_price">${saleText}</span>
+                   ${salePercent > 0
+                      ? `<div class="sale_wrapper" style="display:inline-block;margin-right:4px;">
+                           <span class="sale_percent" style="color:#ff4d4f;">${salePercent}%</span>
+                         </div>` : ``}`
+                : `<span>${priceText}</span>`
+            }
           </div>
-          ${ couponText ? `<div class="coupon_wrapper" style="margin-top:4px;display:flex;align-items:center;"><span class="prd_coupon_percent" style="color:#ff4d4f;font-weight:500;margin-right:4px;">${p.benefit_percentage}%</span><span class="prd_coupon" style="font-weight:500;">${couponText}</span></div>` : '' }
+          ${
+            couponText
+              ? `<div class="coupon_wrapper" style="margin-top:4px;display:flex;align-items:center;">
+                   <span class="prd_coupon_percent" style="color:#ff4d4f;font-weight:500;margin-right:4px;">${p.benefit_percentage}%</span>
+                   <span class="prd_coupon" style="font-weight:500;">${couponText}</span>
+                 </div>` : ``
+          }
         </li>`;
     }).join('');
+
     ul.innerHTML = items;
   }
 
-  // =========================
-  // 8) CSS 주입 (overlay 포함)
-  // =========================
+  // ────────────────────────────────────────────────────────────────
+  // 5) CSS 주입
+  // ────────────────────────────────────────────────────────────────
   const style = document.createElement('style');
   style.textContent = `
-  .grid-spinner{width:40px;height:40px;border:4px solid #f3f3f3;border-top:4px solid ${activeColor};border-radius:50%;animation:spin_${pageId} 1s linear infinite;margin:20px auto;}
-  @keyframes spin_${pageId}{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+  .grid-spinner {
+    width: 40px; height: 40px; border: 4px solid #f3f3f3;
+    border-top: 4px solid ${activeColor};
+    border-radius: 50%; animation: spin_${pageId} 1s linear infinite; margin: 20px auto;
+  }
+  @keyframes spin_${pageId} { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg);} }
   .main_Grid_${pageId}{padding-top:10px;padding-bottom:30px}
   .main_Grid_${pageId} .prd_name{-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;}
   .product_list_widget{padding:20px 0;}
-  .tabs_${pageId}{display:grid;gap:8px;max-width:800px;margin:16px auto;grid-template-columns:repeat(${tabCount},1fr);}
-  .tabs_${pageId} button{padding:8px;font-size:16px;border:none;background:#f5f5f5;color:#333;cursor:pointer;border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .tabs_${pageId} button.active{background-color:${activeColor};color:#fff;}
-  .main_Grid_${pageId} img{padding-bottom:10px}
-  .main_Grid_${pageId}{row-gap:50px!important}
-  .main_Grid_${pageId} li{color:#000}
-  .main_Grid_${pageId} .prd_desc{padding-bottom:3px;font-size:14px;color:#666}
-  .main_Grid_${pageId} .prd_price{font-size:16px}
-  .main_Grid_${pageId} .coupon_wrapper,.main_Grid_${pageId} .sale_wrapper{margin-top:4px;display:flex;align-items:center}
-  .main_Grid_${pageId} .prd_coupon_percent,.main_Grid_${pageId} .sale_percent{color:#ff4d4f;font-weight:500;margin-right:4px}
-  .main_Grid_${pageId} .sale_price,.main_Grid_${pageId} .prd_coupon{font-weight:500}
-
-  [data-widget-video-placeholder]{position:relative;background:#000;overflow:hidden}
-  .widget-video-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(0deg,rgba(0,0,0,0.25),rgba(0,0,0,0.25));z-index:5}
-  .widget-video-overlay button{padding:10px 14px;font-size:16px;border-radius:6px;border:none;cursor:pointer;background:rgba(255,255,255,0.95)}
-  @media (max-width:400px){ .tabs_${pageId}{width:95%;margin:0 auto;margin-top:20px;font-weight:bold} .tabs_${pageId} button{font-size:14px} .main_Grid_${pageId}{width:95%;margin:0 auto;row-gap:30px!important} .main_Grid_${pageId} .prd_desc{font-size:12px;padding-bottom:5px} .main_Grid_${pageId} .prd_price{font-size:15px} .main_Grid_${pageId} .sale_percent,.main_Grid_${pageId} .prd_coupon_percent{font-size:15px} }
-  `;
+  .tabs_${pageId} {
+    display: grid; gap: 8px; max-width: 800px; margin: 16px auto; grid-template-columns: repeat(${tabCount},1fr);
+  }
+  .tabs_${pageId} button { padding: 8px; font-size: 16px; border: none; background: #f5f5f5; color: #333; cursor: pointer; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tabs_${pageId} button.active { background-color:${activeColor}; color:#fff; }
+  .main_Grid_${pageId} img { padding-bottom:10px; }
+  .main_Grid_${pageId} { row-gap:50px!important; }
+  .main_Grid_${pageId} li { color:#000; }
+  .main_Grid_${pageId} .prd_desc { padding-bottom:3px; font-size:14px; color:#666; }
+  .main_Grid_${pageId} .prd_price { font-size:16px; }
+  .main_Grid_${pageId} .coupon_wrapper, .main_Grid_${pageId} .sale_wrapper { margin-top:4px; display:flex; align-items:center; }
+  .main_Grid_${pageId} .prd_coupon_percent, .main_Grid_${pageId} .sale_percent { color:#ff4d4f; font-weight:500; margin-right:4px; }
+  .main_Grid_${pageId} .sale_price, .main_Grid_${pageId} .prd_coupon { font-weight:500; }
+  @media (max-width: 400px) {
+    .tabs_${pageId}{ width:95%; margin:0 auto;margin-top:20px; font-weight:bold; }
+    .tabs_${pageId} button{ font-size:14px; }
+    .main_Grid_${pageId}{ width:95%; margin:0 auto; row-gap:30px!important; }
+    .main_Grid_${pageId} .prd_desc{ font-size:12px; padding-bottom:5px; }
+    .main_Grid_${pageId} .prd_price{ font-size:15px; }
+    .main_Grid_${pageId} .sale_percent, .main_Grid_${pageId} .prd_coupon_percent{ font-size:15px; }
+  }`;
   document.head.appendChild(style);
 
-  // =========================
-  // 9) 데이터 로드 및 실행
-  // =========================
+  // ────────────────────────────────────────────────────────────────
+  // 6) 데이터 로드 & 실행
+  // ────────────────────────────────────────────────────────────────
   fetch(`${API_BASE}/api/${mallId}/events/${pageId}`)
     .then(res => res.json())
     .then(ev => {
+      // blocks 우선, 없으면 images를 image-block으로 변환
       const rawBlocks = Array.isArray(ev?.content?.blocks) && ev.content.blocks.length
         ? ev.content.blocks
-        : (ev.images || []).map(img => ({ type: 'image', src: img.src, regions: img.regions || [] }));
+        : (ev.images || []).map(img => ({
+            type: 'image',
+            src: img.src,
+            regions: img.regions || []
+          }));
 
       const blocks = rawBlocks.map(b => {
         const t = b.type || 'image';
         if (t === 'video') {
+          // youtubeId 보정 + autoplay/loop boolean
           const yid = b.youtubeId || parseYouTubeId(b.src);
-          return { type: 'video', youtubeId: yid, ratio: (b.ratio && typeof b.ratio.w === 'number' && typeof b.ratio.h === 'number') ? b.ratio : { w:16,h:9 }, autoplay: toBool(b.autoplay), loop: toBool(b.loop) };
+          return {
+            type: 'video',
+            youtubeId: yid,
+            ratio: (b.ratio && typeof b.ratio.w === 'number' && typeof b.ratio.h === 'number') ? b.ratio : { w: 16, h: 9 },
+            autoplay: toBool(b.autoplay),
+            loop: toBool(b.loop)
+          };
         }
-        if (t === 'text') return { type: 'text', text: b.text || '', style: b.style || {} };
-        return { type: 'image', src: b.src, regions: (b.regions || []).map(r => ({ xRatio: r.xRatio, yRatio: r.yRatio, wRatio: r.wRatio, hRatio: r.hRatio, href: r.href, coupon: r.coupon })) };
+        if (t === 'text') {
+          return {
+            type: 'text',
+            text: b.text || '',
+            style: b.style || {}
+          };
+        }
+        return {
+          type: 'image',
+          src: b.src,
+          regions: (b.regions || []).map(r => ({
+            xRatio: r.xRatio, yRatio: r.yRatio, wRatio: r.wRatio, hRatio: r.hRatio,
+            href: r.href, coupon: r.coupon
+          }))
+        };
       });
 
+      // 1) 블록(텍스트/이미지/영상) 순서대로 렌더
       renderBlocks(blocks);
+
+      // 2) 상품 그리드 로드
       document.querySelectorAll(`ul.main_Grid_${pageId}`).forEach(ul => loadPanel(ul));
     })
     .catch(err => console.error('EVENT LOAD ERROR', err));
 
-  // =========================
-  // 10) 탭 전환 / 쿠폰 다운로드
-  // =========================
+  // ────────────────────────────────────────────────────────────────
+  // 7) 탭 전환/쿠폰 다운로드
+  // ────────────────────────────────────────────────────────────────
   window.showTab = (id, btn) => {
     document.querySelectorAll(`.tab-content_${pageId}`).forEach(el => el.style.display = 'none');
     document.querySelectorAll(`.tabs_${pageId} button`).forEach(b => b.classList.remove('active'));

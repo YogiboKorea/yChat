@@ -1136,7 +1136,7 @@ const FTP_PASS = 'korea2025!!';
 
 
 // 퍼블릭 URL 접두사 (중복 슬래시 방지)
-const FTP_PUBLIC_BASE = (process.env.FTP_PUBLIC_BASE || 'https://yogibo.kr/web/img/temple').replace(/\/+$/,'');
+const FTP_PUBLIC_BASE = (process.env.FTP_PUBLIC_BASE || 'http://yogibo.openhost.cafe24.com/web/img/').replace(/\/+$/,'');
 
 
 // 업로드 엔드포인트 (이 블록만 교체)

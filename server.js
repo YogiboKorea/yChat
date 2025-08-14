@@ -1142,8 +1142,8 @@ const FTP_PUBLIC_BASE = (process.env.FTP_PUBLIC_BASE || 'http://yogibo.openhost.
 // 업로드 엔드포인트 (이 블록만 교체)
 app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => {
   const localPath = req.file?.path;
-  const filename  = req.file?.filename;
-  if (!localPath || !filename) {
+  const originalName = req.file?.originalname || req.file?.filename || 'upload';
+  if (!localPath) {
     return res.status(400).json({ error: '파일이 없습니다.' });
   }
 
@@ -1155,17 +1155,15 @@ app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => 
       host: FTP_HOST,
       user: FTP_USER,
       password: FTP_PASS,
-      secure: false,            // Cafe24 일반 FTP
+      secure: false,
     });
 
     const pwd0 = await client.pwd().catch(() => '(pwd error)');
     console.log('[FTP] login PWD:', pwd0);
 
-    // 날짜 suffix: yogibo/YYYY/MM/DD
     const ymd = dayjs().format('YYYY/MM/DD');
     const relSuffix = `${MALL_ID}/${ymd}`;
 
-    // 📌 상대경로 베이스 후보 (상단 트리 스샷 기준)
     const baseCandidates = [
       'web/img/temple/uploads',
       'img/temple/uploads',
@@ -1175,13 +1173,26 @@ app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => 
     let usedBase = null;
     let finalPwd = null;
 
+    // 확장자 추출 (안전하게 처리)
+    const ext = (() => {
+      try {
+        const e = path.extname(originalName || '').toLowerCase();
+        return e || '.jpg';
+      } catch (e) {
+        return '.jpg';
+      }
+    })();
+
+    // 랜덤 파일명 생성기
+    const genRandomName = () => `${crypto.randomBytes(12).toString('hex')}_${Date.now()}${ext}`;
+
     for (const base of baseCandidates) {
       try {
-        // 항상 시작 지점으로 돌아가려 시도 (에러 무시)
+        // 항상 루트 또는 초기 pwd로 복귀 시도(실패 무시)
         try { await client.cd('/'); } catch {}
         try { await client.cd(pwd0); } catch {}
 
-        // 상대경로로 베이스 진입 시도
+        // base 디렉터리 진입 시도
         await client.cd(base);
         console.log('[FTP] cd base OK:', base, 'pwd:', await client.pwd());
 
@@ -1190,25 +1201,53 @@ app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => 
         finalPwd = await client.pwd();
         console.log('[FTP] ensured subdir, pwd:', finalPwd);
 
-        // 업로드 (현재 디렉터리에 filename 저장)
-        await client.uploadFrom(localPath, filename);
+        // 파일명 충돌 방지: 업로드 전 동일 이름 존재 여부 확인(최대 시도 5회)
+        let ftpFilename = null;
+        const maxAttempts = 5;
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+          const candidate = genRandomName();
+          let exists = false;
+          try {
+            // size()가 존재하면 파일 존재, 없으면 예외 발생
+            await client.size(candidate);
+            exists = true;
+          } catch (err) {
+            // 대부분의 FTP 서버는 존재하지 않으면 에러를 던짐 -> 존재하지 않음으로 간주
+            exists = false;
+          }
+          if (!exists) {
+            ftpFilename = candidate;
+            break;
+          }
+        }
 
-        // 검증용: 사이즈/리스트
+        if (!ftpFilename) {
+          // 모든 시도에서 충돌이 발생(매우 희박)하면 타임스탬프 기반 보정
+          ftpFilename = `${crypto.randomBytes(6).toString('hex')}_${Date.now()}${ext}`;
+        }
+
+        // 실제 업로드 (현재 디렉터리에 ftpFilename으로 저장)
+        await client.uploadFrom(localPath, ftpFilename);
+
+        // 검증용: 사이즈/리스트 (가능하면)
         let size = -1;
-        try { size = await client.size(filename); } catch {}
+        try { size = await client.size(ftpFilename); } catch {}
         const listing = await client.list().catch(() => []);
-        console.log('[FTP] uploaded:', `${finalPwd}/${filename}`, 'size:', size);
+
+        console.log('[FTP] uploaded:', `${finalPwd}/${ftpFilename}`, 'size:', size);
         console.log('[FTP] list in final dir:', listing.map(i => i.name));
 
         usedBase = base;
-        // 공개 URL 생성
-        const url = `${FTP_PUBLIC_BASE}/uploads/${relSuffix}/${filename}`.replace(/([^:]\/)\/+/g, '$1');
+
+        // 공개 URL 생성 (경로 중복 슬래시 제거)
+        const url = `${FTP_PUBLIC_BASE}/uploads/${relSuffix}/${ftpFilename}`.replace(/([^:]\/)\/+/g, '$1');
 
         return res.json({
           url,
           ftpBase: usedBase,
           ftpDir: finalPwd,
-          ftpPath: `${finalPwd}/${filename}`,
+          ftpPath: `${finalPwd}/${ftpFilename}`,
+          ftpFilename,
           size,
         });
       } catch (e) {
@@ -1229,6 +1268,7 @@ app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => 
     return res.status(500).json({ error: '이미지 업로드 실패(FTP)', detail: err?.message || String(err) });
   } finally {
     try { client.close(); } catch {}
+    // 로컬 임시 파일 삭제
     fs.unlink(localPath, () => {});
   }
 });

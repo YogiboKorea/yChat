@@ -296,8 +296,8 @@
             a.style.width = `${w}%`;
             a.style.height = `${h}%`;
             a.href = /^https?:\/\//.test(r.href) ? r.href : `https://${r.href}`;
-            a.target = '_blank';
-            a.rel = 'noreferrer';
+            // a.target = '_blank';
+            // a.rel = 'noreferrer';
             wrap.appendChild(a);
           }
         });

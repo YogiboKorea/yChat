@@ -675,7 +675,7 @@
         tabButton.click();
         const target = document.getElementById(tabId);
         if (target) {
-          scrollToElementOffset(target, 100);
+          scrollToElementOffset(target, 150);
         } else {
           setTimeout(() => {
             const t2 = document.getElementById(tabId);

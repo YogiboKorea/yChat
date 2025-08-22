@@ -257,9 +257,9 @@
 
         (b.regions || []).forEach(r => {
           const l = (r.xRatio * 100).toFixed(2);
-          const t = (r.yRatio * 100).toFixed(02);
-          const w = (r.wRatio * 100).toFixed(02);
-          const h = (r.hRatio * 100).toFixed(02);
+          const t = (r.yRatio * 100).toFixed(2);
+          const w = (r.wRatio * 100).toFixed(2);
+          const h = (r.hRatio * 100).toFixed(2);
 
           if (r.coupon) {
             const btn = document.createElement('button');
@@ -597,8 +597,8 @@
           type: 'image',
           src: b.src,
           regions: (b.regions || []).map(r => ({
-            xRatio: r.xRatio, yRatio: r.yRatio, wRatio: r.wRatio, hRatio: r.hRatio,
-            href: r.href, coupon: r.coupon
+            xRatio: r.xRatio, yRatio: r.yRatio, wRatio: r.wRatio,
+            hRatio: r.hRatio, href: r.href, coupon: r.coupon
           }))
         };
       });
@@ -627,8 +627,27 @@
   // ────────────────────────────────────────────────────────────────
   // 8) 탭-링크 핸들러 (data-href / href에 #tab-1 또는 tab:1 저장되어 있을 때 동작)
   //    - widget.js를 수정하지 않고도 "링크에 탭 아이디"를 넣어 탭 이동을 가능하게 함
+  //    - 탭 위치보다 100px 위로 스크롤되도록 설정됨
   // ────────────────────────────────────────────────────────────────
   (function attachTabHandler() {
+    function scrollToElementOffset(el, offset = 100) {
+      if (!el) return;
+      const top = Math.max(0, el.getBoundingClientRect().top + window.scrollY - offset);
+      window.scrollTo({ top, behavior: 'smooth' });
+    }
+
+    function scrollPanelAfterShow(tabId, offset = 100) {
+      const tryScroll = (attemptsLeft) => {
+        const panel = document.getElementById(tabId);
+        if (panel) {
+          scrollToElementOffset(panel, offset);
+        } else if (attemptsLeft > 0) {
+          setTimeout(() => tryScroll(attemptsLeft - 1), 80);
+        }
+      };
+      tryScroll(6);
+    }
+
     function normalizeTabId(raw) {
       if (!raw) return null;
       raw = String(raw).trim();
@@ -641,42 +660,42 @@
 
     function activateTab(tabId) {
       if (!tabId) return false;
-      // 1) 우선 전역 showTab 사용
+
       try {
         if (typeof window.showTab === 'function') {
-          // 시그니처가 (id, btn) 인 경우 btn을 찾을 수 있으면 전달
           const btn = document.querySelector(`.tabs_${pageId} button[onclick*="${tabId}"], .tabs_${pageId} button[data-target="#${tabId}"], .tabs_${pageId} button[data-tab="${tabId}"]`);
           window.showTab(tabId, btn || undefined);
-          const panel = document.getElementById(tabId);
-          if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          scrollPanelAfterShow(tabId, 100);
           return true;
         }
-      } catch (e) {
-        // ignore
-      }
+      } catch (e) { /* ignore */ }
 
-      // 2) 탭 버튼 클릭 트리거 시도
       const tabButton = document.querySelector(`.tabs_${pageId} button[onclick*="${tabId}"], .tabs_${pageId} button[data-tab="${tabId}"], .tabs_${pageId} button[data-target="#${tabId}"]`);
       if (tabButton) {
         tabButton.click();
         const target = document.getElementById(tabId);
-        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (target) {
+          scrollToElementOffset(target, 100);
+        } else {
+          setTimeout(() => {
+            const t2 = document.getElementById(tabId);
+            if (t2) scrollToElementOffset(t2, 100);
+          }, 80);
+        }
         return true;
       }
 
-      // 3) fallback: 탭 콘텐츠 직접 제어
       const targetEl = document.getElementById(tabId);
       if (targetEl) {
         document.querySelectorAll(`.tab-content_${pageId}`).forEach(el => el.style.display = 'none');
         targetEl.style.display = 'block';
-        // 버튼 active 처리 (있다면)
         document.querySelectorAll(`.tabs_${pageId} button`).forEach(b => b.classList.remove('active'));
         const maybeBtn = Array.from(document.querySelectorAll(`.tabs_${pageId} button`)).find(b => {
           const oc = b.getAttribute('onclick') || '';
           return oc.includes(tabId);
         });
         if (maybeBtn) maybeBtn.classList.add('active');
-        targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        scrollToElementOffset(targetEl, 100);
         return true;
       }
 
@@ -686,12 +705,10 @@
     document.addEventListener('click', function (ev) {
       const el = ev.target.closest('a, button, [data-href]');
       if (!el) return;
-      // 우선 data-href (관리자가 저장한 raw), 그 다음 href 속성 검사
       const raw = el.getAttribute('data-href') || el.getAttribute('href') || (el.dataset && el.dataset.href);
       if (!raw) return;
       const normalized = normalizeTabId(raw);
-      if (!normalized) return; // 일반 링크는 무시
-      // 탭 링크라면 기본 동작 막고 탭 활성화 시도
+      if (!normalized) return;
       ev.preventDefault();
       ev.stopPropagation();
       const ok = activateTab(normalized);

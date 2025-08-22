@@ -597,8 +597,8 @@
           type: 'image',
           src: b.src,
           regions: (b.regions || []).map(r => ({
-            xRatio: r.xRatio, yRatio: r.yRatio, wRatio: r.wRatio,
-            hRatio: r.hRatio, href: r.href, coupon: r.coupon
+            xRatio: r.xRatio, yRatio: r.yRatio, wRatio: r.wRatio, hRatio: r.hRatio,
+            href: r.href, coupon: r.coupon
           }))
         };
       });
@@ -627,25 +627,33 @@
   // ────────────────────────────────────────────────────────────────
   // 8) 탭-링크 핸들러 (data-href / href에 #tab-1 또는 tab:1 저장되어 있을 때 동작)
   //    - widget.js를 수정하지 않고도 "링크에 탭 아이디"를 넣어 탭 이동을 가능하게 함
-  //    - 탭 위치보다 100px 위로 스크롤되도록 설정됨
+  //    - 탭 위치보다 SCROLL_OFFSET px 위로 스크롤됨
   // ────────────────────────────────────────────────────────────────
   (function attachTabHandler() {
-    function scrollToElementOffset(el, offset = 100) {
+    const SCROLL_OFFSET = 100; // 타겟보다 위로 얼마(px) 올릴지: 변경하려면 이 값 수정
+
+    function scrollToElementOffset(el, offset = SCROLL_OFFSET) {
       if (!el) return;
       const top = Math.max(0, el.getBoundingClientRect().top + window.scrollY - offset);
       window.scrollTo({ top, behavior: 'smooth' });
     }
 
-    function scrollPanelAfterShow(tabId, offset = 100) {
-      const tryScroll = (attemptsLeft) => {
+    function tryScrollPanel(tabId, offset = SCROLL_OFFSET, attempts = 6, interval = 80) {
+      const attempt = () => {
         const panel = document.getElementById(tabId);
         if (panel) {
           scrollToElementOffset(panel, offset);
-        } else if (attemptsLeft > 0) {
-          setTimeout(() => tryScroll(attemptsLeft - 1), 80);
+          return true;
         }
+        return false;
       };
-      tryScroll(6);
+      if (!attempt()) {
+        let tries = 0;
+        const timer = setInterval(() => {
+          tries += 1;
+          if (attempt() || tries >= attempts) clearInterval(timer);
+        }, interval);
+      }
     }
 
     function normalizeTabId(raw) {
@@ -661,30 +669,36 @@
     function activateTab(tabId) {
       if (!tabId) return false;
 
+      // 1) 우선 window.showTab 사용 (있다면 가장 안전)
       try {
         if (typeof window.showTab === 'function') {
           const btn = document.querySelector(`.tabs_${pageId} button[onclick*="${tabId}"], .tabs_${pageId} button[data-target="#${tabId}"], .tabs_${pageId} button[data-tab="${tabId}"]`);
           window.showTab(tabId, btn || undefined);
-          scrollPanelAfterShow(tabId, 100);
+          tryScrollPanel(tabId, SCROLL_OFFSET);
           return true;
         }
-      } catch (e) { /* ignore */ }
+      } catch (e) {
+        // ignore
+      }
 
+      // 2) 탭 버튼 클릭 트리거 시도
       const tabButton = document.querySelector(`.tabs_${pageId} button[onclick*="${tabId}"], .tabs_${pageId} button[data-tab="${tabId}"], .tabs_${pageId} button[data-target="#${tabId}"]`);
       if (tabButton) {
         tabButton.click();
         const target = document.getElementById(tabId);
         if (target) {
-          scrollToElementOffset(target, 150);
+          scrollToElementOffset(target, SCROLL_OFFSET);
         } else {
+          // 비동기 렌더/DOM 반영 대비 약간 후에 재시도
           setTimeout(() => {
             const t2 = document.getElementById(tabId);
-            if (t2) scrollToElementOffset(t2, 100);
+            if (t2) scrollToElementOffset(t2, SCROLL_OFFSET);
           }, 80);
         }
         return true;
       }
 
+      // 3) fallback: 탭 콘텐츠 직접 제어
       const targetEl = document.getElementById(tabId);
       if (targetEl) {
         document.querySelectorAll(`.tab-content_${pageId}`).forEach(el => el.style.display = 'none');
@@ -695,7 +709,7 @@
           return oc.includes(tabId);
         });
         if (maybeBtn) maybeBtn.classList.add('active');
-        scrollToElementOffset(targetEl, 100);
+        scrollToElementOffset(targetEl, SCROLL_OFFSET);
         return true;
       }
 
@@ -705,10 +719,12 @@
     document.addEventListener('click', function (ev) {
       const el = ev.target.closest('a, button, [data-href]');
       if (!el) return;
+      // 우선 data-href (관리자가 저장한 raw), 그 다음 href 속성 검사
       const raw = el.getAttribute('data-href') || el.getAttribute('href') || (el.dataset && el.dataset.href);
       if (!raw) return;
       const normalized = normalizeTabId(raw);
-      if (!normalized) return;
+      if (!normalized) return; // 일반 링크는 무시
+      // 탭 링크라면 기본 동작 막고 탭 활성화 시도
       ev.preventDefault();
       ev.stopPropagation();
       const ok = activateTab(normalized);

@@ -131,6 +131,53 @@
     });
   }
 
+  // --- anchor helper: header offset, finder, smooth scroll ---
+  function headerOffset() {
+    // 사이트에 맞춰 커스터마이즈하세요 ('.site-header', '#header' 등)
+    const headerSelectors = ['.site-header', 'header', '#header', '.fixed-header'];
+    for (const sel of headerSelectors) {
+      const el = document.querySelector(sel);
+      if (el) {
+        const st = window.getComputedStyle(el);
+        if (st.position === 'fixed' || st.position === 'sticky' || el.offsetHeight > 0) {
+          return el.offsetHeight || 0;
+        }
+      }
+    }
+    return 0;
+  }
+
+  function findTargetElement(href) {
+    if (!href) return null;
+    // fragment-only
+    if (href.startsWith('#')) {
+      const id = href.slice(1);
+      return document.getElementById(id) || document.querySelector(`[name="${id}"]`) || document.querySelector(`[data-anchor="${id}"]`);
+    }
+    // try parse url relative to current
+    try {
+      const resolved = new URL(href, location.href);
+      if (resolved.origin === location.origin && resolved.pathname === location.pathname && resolved.hash) {
+        const id = resolved.hash.slice(1);
+        return document.getElementById(id) || document.querySelector(`[name="${id}"]`) || document.querySelector(`[data-anchor="${id}"]`);
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  function smoothScrollTo(elem) {
+    if (!elem) return;
+    const offset = headerOffset();
+    const y = elem.getBoundingClientRect().top + window.scrollY - offset;
+    // smooth scroll
+    window.scrollTo({ top: y, behavior: 'smooth' });
+    // update hash without jumping
+    try {
+      const id = elem.id || elem.getAttribute('name') || elem.getAttribute('data-anchor');
+      if (id) history.replaceState && history.replaceState(null, '', '#' + id);
+    } catch (_) {}
+  }
+
   // ────────────────────────────────────────────────────────────────
   // 3) 블록 렌더(텍스트/이미지/영상)
   // ────────────────────────────────────────────────────────────────
@@ -257,9 +304,9 @@
 
         (b.regions || []).forEach(r => {
           const l = (r.xRatio * 100).toFixed(2);
-          const t = (r.yRatio * 100).toFixed(2);
-          const w = (r.wRatio * 100).toFixed(2);
-          const h = (r.hRatio * 100).toFixed(2);
+          const t = (r.yRatio * 100).toFixed(02);
+          const w = (r.wRatio * 100).toFixed(02);
+          const h = (r.hRatio * 100).toFixed(02);
 
           if (r.coupon) {
             const btn = document.createElement('button');
@@ -277,13 +324,25 @@
           } else if (r.href) {
             const a = document.createElement('a');
             a.dataset.trackClick = 'url';
+            // store raw href for our click-handler and for analytics
+            a.dataset.regionHref = String(r.href);
             a.style.position = 'absolute';
             a.style.left = `${l}%`;
             a.style.top = `${t}%`;
             a.style.width = `${w}%`;
             a.style.height = `${h}%`;
-            a.href = /^https?:\/\//.test(r.href) ? r.href : `https://${r.href}`;
-            // 링크 기본 동작(같은 탭/새탭은 필요에 따라 설정하세요)
+            a.style.display = 'block';
+            a.style.textDecoration = 'none';
+            a.style.cursor = 'pointer';
+            // keep href attribute for right-click/copy fallback; resolve relative safely
+            try {
+              const resolved = new URL(String(r.href), location.href).href;
+              a.href = resolved;
+            } catch (err) {
+              // fallback: use raw
+              a.href = String(r.href);
+            }
+            // don't set target here — widget-level logic will decide
             wrap.appendChild(a);
           }
         });
@@ -574,15 +633,84 @@
         return {
           type: 'image',
           src: b.src,
-          regions: (b.regions || []).map(r => ({
+          regions: (b.regions || []).map(r => (({
             xRatio: r.xRatio, yRatio: r.yRatio, wRatio: r.wRatio, hRatio: r.hRatio,
             href: r.href, coupon: r.coupon
-          }))
+          })))
         };
       });
 
       renderBlocks(blocks);
       document.querySelectorAll(`ul.main_Grid_${pageId}`).forEach(ul => loadPanel(ul));
+
+      // === attach click delegation for region links (scope = root) ===
+      try {
+        const root = getRootContainer();
+        root.addEventListener('click', function (ev) {
+          const a = ev.target.closest && ev.target.closest('a[data-region-href], a[data-track-click="url"]');
+          if (!a) return;
+          const rawHref = a.dataset.regionHref || a.getAttribute('href') || '';
+          if (!rawHref) return;
+
+          // allow middle-click or ctrl/cmd to open new tab
+          const wantsNewTab = ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.button === 1;
+          // if anchor explicitly has target="_blank", let browser handle it
+          if (a.target === '_blank' && wantsNewTab) return;
+
+          let resolvedHref;
+          try { resolvedHref = new URL(rawHref, location.href); } catch (e) { resolvedHref = null; }
+
+          // 1) same-origin & same-path + hash -> in-page target
+          if (resolvedHref && resolvedHref.origin === location.origin && resolvedHref.pathname === location.pathname && resolvedHref.hash) {
+            const target = findTargetElement(rawHref);
+            if (target) {
+              ev.preventDefault();
+              if (wantsNewTab) {
+                window.open(resolvedHref.href, '_blank');
+                return;
+              }
+              smoothScrollTo(target);
+              return;
+            }
+          }
+
+          // 2) fragment-only (#id)
+          if (rawHref.startsWith('#')) {
+            const target = findTargetElement(rawHref);
+            if (target) {
+              ev.preventDefault();
+              if (wantsNewTab) {
+                try {
+                  const full = new URL(rawHref, location.href).href;
+                  window.open(full, '_blank');
+                } catch (_) {
+                  window.open(location.href + rawHref, '_blank');
+                }
+                return;
+              }
+              smoothScrollTo(target);
+              return;
+            }
+            // if no target found, allow default navigation to fragment (browser behaviour)
+            return;
+          }
+
+          // 3) same-page without hash (e.g. '/current/path') -> allow default (or could replaceState)
+          // 4) external host -> allow default (user agent will navigate)
+          // For safety, if wantsNewTab, open in new tab
+          if (wantsNewTab) {
+            ev.preventDefault();
+            try {
+              const urlStr = resolvedHref ? resolvedHref.href : rawHref;
+              window.open(urlStr, '_blank');
+            } catch (_) {
+              window.open(rawHref, '_blank');
+            }
+          }
+        }, { passive: false });
+      } catch (e) {
+        // ignore
+      }
     })
     .catch(err => console.error('EVENT LOAD ERROR', err));
 

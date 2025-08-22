@@ -630,7 +630,7 @@
   //    - 탭 위치보다 SCROLL_OFFSET px 위로 스크롤됨
   // ────────────────────────────────────────────────────────────────
   (function attachTabHandler() {
-    const SCROLL_OFFSET = 100; // 타겟보다 위로 얼마(px) 올릴지: 변경하려면 이 값 수정
+    const SCROLL_OFFSET = 150; // 타겟보다 위로 얼마(px) 올릴지: 변경하려면 이 값 수정
 
     function scrollToElementOffset(el, offset = SCROLL_OFFSET) {
       if (!el) return;

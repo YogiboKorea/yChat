@@ -257,9 +257,9 @@
 
         (b.regions || []).forEach(r => {
           const l = (r.xRatio * 100).toFixed(2);
-          const t = (r.yRatio * 100).toFixed(2);
-          const w = (r.wRatio * 100).toFixed(2);
-          const h = (r.hRatio * 100).toFixed(2);
+          const t = (r.yRatio * 100).toFixed(02);
+          const w = (r.wRatio * 100).toFixed(02);
+          const h = (r.hRatio * 100).toFixed(02);
 
           if (r.coupon) {
             const btn = document.createElement('button');
@@ -275,6 +275,13 @@
             btn.addEventListener('click', () => downloadCoupon(r.coupon));
             wrap.appendChild(btn);
           } else if (r.href) {
+            // r.href may be:
+            //  - external URL (https://...)
+            //  - bare host/path (example.com/path)
+            //  - anchor/tab (#tab-1) or 'tab:1' etc.
+            const rawHref = String(r.href || '').trim();
+            const isTab = /^#?tab[:\s\-]?\d+$/i.test(rawHref);
+
             const a = document.createElement('a');
             a.dataset.trackClick = 'url';
             a.style.position = 'absolute';
@@ -282,8 +289,23 @@
             a.style.top = `${t}%`;
             a.style.width = `${w}%`;
             a.style.height = `${h}%`;
-            a.href = /^https?:\/\//.test(r.href) ? r.href : `https://${r.href}`;
-            // 링크 기본 동작(같은 탭/새탭은 필요에 따라 설정하세요)
+            a.style.display = 'block';
+            a.style.textDecoration = 'none';
+            a.style.cursor = 'pointer';
+            // Preserve raw (for delegated handler) and set href carefully:
+            a.setAttribute('data-href', rawHref);
+
+            if (isTab) {
+              // tab link: prevent real navigation; handler will intercept data-href
+              a.href = 'javascript:void(0)';
+            } else {
+              // normal URL: ensure scheme
+              const hrefValue = /^https?:\/\//i.test(rawHref) ? rawHref : `https://${rawHref}`;
+              a.href = hrefValue;
+              a.target = '_blank';
+              a.rel = 'noopener noreferrer';
+            }
+
             wrap.appendChild(a);
           }
         });
@@ -601,4 +623,82 @@
       window.open(url + `&opener_url=${encodeURIComponent(location.href)}`, '_blank');
     });
   };
+
+  // ────────────────────────────────────────────────────────────────
+  // 8) 탭-링크 핸들러 (data-href / href에 #tab-1 또는 tab:1 저장되어 있을 때 동작)
+  //    - widget.js를 수정하지 않고도 "링크에 탭 아이디"를 넣어 탭 이동을 가능하게 함
+  // ────────────────────────────────────────────────────────────────
+  (function attachTabHandler() {
+    function normalizeTabId(raw) {
+      if (!raw) return null;
+      raw = String(raw).trim();
+      if (raw.startsWith('#')) raw = raw.slice(1);
+      const m = raw.match(/^tab[:\s\-]?(\d+)$/i);
+      if (m) return 'tab-' + m[1];
+      if (/^tab-\d+$/i.test(raw)) return raw;
+      return null;
+    }
+
+    function activateTab(tabId) {
+      if (!tabId) return false;
+      // 1) 우선 전역 showTab 사용
+      try {
+        if (typeof window.showTab === 'function') {
+          // 시그니처가 (id, btn) 인 경우 btn을 찾을 수 있으면 전달
+          const btn = document.querySelector(`.tabs_${pageId} button[onclick*="${tabId}"], .tabs_${pageId} button[data-target="#${tabId}"], .tabs_${pageId} button[data-tab="${tabId}"]`);
+          window.showTab(tabId, btn || undefined);
+          const panel = document.getElementById(tabId);
+          if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          return true;
+        }
+      } catch (e) {
+        // ignore
+      }
+
+      // 2) 탭 버튼 클릭 트리거 시도
+      const tabButton = document.querySelector(`.tabs_${pageId} button[onclick*="${tabId}"], .tabs_${pageId} button[data-tab="${tabId}"], .tabs_${pageId} button[data-target="#${tabId}"]`);
+      if (tabButton) {
+        tabButton.click();
+        const target = document.getElementById(tabId);
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return true;
+      }
+
+      // 3) fallback: 탭 콘텐츠 직접 제어
+      const targetEl = document.getElementById(tabId);
+      if (targetEl) {
+        document.querySelectorAll(`.tab-content_${pageId}`).forEach(el => el.style.display = 'none');
+        targetEl.style.display = 'block';
+        // 버튼 active 처리 (있다면)
+        document.querySelectorAll(`.tabs_${pageId} button`).forEach(b => b.classList.remove('active'));
+        const maybeBtn = Array.from(document.querySelectorAll(`.tabs_${pageId} button`)).find(b => {
+          const oc = b.getAttribute('onclick') || '';
+          return oc.includes(tabId);
+        });
+        if (maybeBtn) maybeBtn.classList.add('active');
+        targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return true;
+      }
+
+      return false;
+    }
+
+    document.addEventListener('click', function (ev) {
+      const el = ev.target.closest('a, button, [data-href]');
+      if (!el) return;
+      // 우선 data-href (관리자가 저장한 raw), 그 다음 href 속성 검사
+      const raw = el.getAttribute('data-href') || el.getAttribute('href') || (el.dataset && el.dataset.href);
+      if (!raw) return;
+      const normalized = normalizeTabId(raw);
+      if (!normalized) return; // 일반 링크는 무시
+      // 탭 링크라면 기본 동작 막고 탭 활성화 시도
+      ev.preventDefault();
+      ev.stopPropagation();
+      const ok = activateTab(normalized);
+      if (!ok) {
+        console.warn('[widget.js] Tab target not found for', normalized);
+      }
+    }, { passive: false });
+  })();
+
 })();

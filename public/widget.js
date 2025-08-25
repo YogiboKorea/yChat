@@ -97,7 +97,7 @@
     return true;
   }
 
-  // 트래킹: 응답 코드가 특정 에러면 visitorId 초기화 시도 (서버가 'invalid visitor'로 응답할 경우)
+  // 트래킹: 응답 코드가 특정 에러면 visitorId 초기화 시도 (서버가 'invalid visitor'로 응답한 경우)
   function track(payload) {
     fetch(`${API_BASE}/api/${mallId}/track`, {
       method: 'POST',
@@ -662,7 +662,7 @@
     if (btn) btn.classList.add('active');
   };
 
-  // ---- 수정된 downloadCoupon: 여러 쿠폰을 하나의 링크로 합쳐서 한 번에 호출합니다. ----
+  // ---- 수정된 downloadCoupon: multiple coupons passed as single comma-separated coupon_no value ----
   window.downloadCoupon = coupons => {
     // coupons may be array or comma-separated string
     let list = [];
@@ -673,16 +673,10 @@
     }
     if (list.length === 0) return;
 
-    // If single coupon, keep previous behavior
-    if (list.length === 1) {
-      const url = `/exec/front/newcoupon/IssueDownload?coupon_no=${encodeURIComponent(list[0])}`;
-      window.open(url + `&opener_url=${encodeURIComponent(location.href)}`, '_blank');
-      return;
-    }
-
-    // Multiple coupons -> build single URL with repeated coupon_no params (one window)
-    const params = list.map(cpn => `coupon_no=${encodeURIComponent(cpn)}`).join('&');
-    const url = `/exec/front/newcoupon/IssueDownload?${params}`;
+    // Build single comma-joined value, encode once
+    const joined = list.join(',');
+    const encoded = encodeURIComponent(joined);
+    const url = `/exec/front/newcoupon/IssueDownload?coupon_no=${encoded}`;
     window.open(url + `&opener_url=${encodeURIComponent(location.href)}`, '_blank');
   };
 

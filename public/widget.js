@@ -36,53 +36,16 @@
   }
 
   // ────────────────────────────────────────────────────────────────
-  // 1) 유틸/트래킹 (visitorId 초기화/검증 로직 포함)
+  // 1) 유틸/트래킹 (visitorId 영구 저장 제거)
   // ────────────────────────────────────────────────────────────────
   const ua = navigator.userAgent;
   const device = /Android/i.test(ua) ? 'Android' : /iPhone|iPad|iPod/i.test(ua) ? 'iOS' : 'PC';
 
-  // VISITOR_KEY 전역 정의 (track 함수에서 사용)
-  const VISITOR_KEY = 'appVisitorId';
-
-  // 유효성 검사: 너무 짧거나 "undefined"/"null" 등의 잘못된 값은 실패로 간주
-  function isValidVisitorId(v) {
-    if (!v) return false;
-    const s = String(v).trim();
-    if (!s) return false;
-    if (s === 'undefined' || s === 'null') return false;
-    if (s.length < 8) return false;
-    // 허용: UUID-like 또는 timestamp+random or alnum 포함
-    if (/^[0-9a-fA-F-]{8,}$/.test(s)) return true;
-    if (/[a-zA-Z0-9]/.test(s)) return true;
-    return false;
-  }
-
-  // 강제 초기화 쿼리 파라: ?reset_visitor=1 로 강제 재생성 가능
-  const forcedReset = /[?&]reset_visitor=1/.test(location.search);
-
-  // reset 함수 (외부에서 호출 가능)
-  function resetVisitorId() {
-    try { localStorage.removeItem(VISITOR_KEY); } catch (e) { /* ignore */ }
-    const newId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + Math.random();
-    try { localStorage.setItem(VISITOR_KEY, newId); } catch (e) { /* ignore */ }
-    // return so callers can use it
-    return newId;
-  }
-  // expose for manual trigger from console if 필요
-  window.resetVisitorId = resetVisitorId;
-
-  // visitorId 초기화/검증/획득
-  const visitorId = (() => {
-    let id = null;
-    try { id = localStorage.getItem(VISITOR_KEY); } catch (e) { id = null; }
-    if (!isValidVisitorId(id) || forcedReset) {
-      // invalid or forced -> regen
-      const newId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + Math.random();
-      try { localStorage.setItem(VISITOR_KEY, newId); } catch (e) { /* ignore */ }
-      return newId;
-    }
-    return id;
-  })();
+  // visitorId: 더 이상 localStorage/cookie에 저장하지 않음.
+  // 매 페이지 로드(또는 스크립트 실행 시) 새로 생성되는 '휘발성' id 사용.
+  const visitorId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : String(Date.now()) + '-' + Math.random().toString(36).slice(2);
 
   const pad = n => String(n).padStart(2, '0');
   function today() {
@@ -91,26 +54,20 @@
   }
   function shouldTrack() {
     if (/[?&]track=true/.test(location.search)) return true;
+    // tracked key still uses visitorId (ephemeral) to avoid repeated hits within same tab load
     const key = `tracked_${pageId}_${visitorId}_${today()}`;
     if (sessionStorage.getItem(key)) return false;
     sessionStorage.setItem(key, '1');
     return true;
   }
 
-  // 트래킹: 응답 코드가 특정 에러면 visitorId 초기화 시도 (서버가 'invalid visitor'로 응답한 경우)
+  // 트래킹: 더 이상 visitorId 재생성/저장 로직 없음 (영구저장 제거 목적)
   function track(payload) {
     fetch(`${API_BASE}/api/${mallId}/track`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-    })
-      .then(res => {
-        // 서버에서 "잘못된 visitor"로 판단해 400/401/403 등을 보내면 재생성 시도
-        if (!res.ok && [400, 401, 403].includes(res.status)) {
-          try { resetVisitorId(); } catch (e) { /* ignore */ }
-        }
-      })
-      .catch(() => {});
+    }).catch(() => {});
   }
 
   if (shouldTrack()) {

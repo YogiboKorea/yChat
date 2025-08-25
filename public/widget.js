@@ -36,16 +36,50 @@
   }
 
   // ────────────────────────────────────────────────────────────────
-  // 1) 유틸/트래킹
+  // 1) 유틸/트래킹 (visitorId 초기화/검증 로직 포함)
   // ────────────────────────────────────────────────────────────────
   const ua = navigator.userAgent;
   const device = /Android/i.test(ua) ? 'Android' : /iPhone|iPad|iPod/i.test(ua) ? 'iOS' : 'PC';
+
+  // VISITOR_KEY 전역 정의 (track 함수에서 사용)
+  const VISITOR_KEY = 'appVisitorId';
+
+  // 유효성 검사: 너무 짧거나 "undefined"/"null" 등의 잘못된 값은 실패로 간주
+  function isValidVisitorId(v) {
+    if (!v) return false;
+    const s = String(v).trim();
+    if (!s) return false;
+    if (s === 'undefined' || s === 'null') return false;
+    if (s.length < 8) return false;
+    // 허용: UUID-like 또는 timestamp+random or alnum 포함
+    if (/^[0-9a-fA-F-]{8,}$/.test(s)) return true;
+    if (/[a-zA-Z0-9]/.test(s)) return true;
+    return false;
+  }
+
+  // 강제 초기화 쿼리 파라: ?reset_visitor=1 로 강제 재생성 가능
+  const forcedReset = /[?&]reset_visitor=1/.test(location.search);
+
+  // reset 함수 (외부에서 호출 가능)
+  function resetVisitorId() {
+    try { localStorage.removeItem(VISITOR_KEY); } catch (e) { /* ignore */ }
+    const newId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + Math.random();
+    try { localStorage.setItem(VISITOR_KEY, newId); } catch (e) { /* ignore */ }
+    // return so callers can use it
+    return newId;
+  }
+  // expose for manual trigger from console if 필요
+  window.resetVisitorId = resetVisitorId;
+
+  // visitorId 초기화/검증/획득
   const visitorId = (() => {
-    const key = 'appVisitorId';
-    let id = localStorage.getItem(key);
-    if (!id) {
-      id = (crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + Math.random();
-      localStorage.setItem(key, id);
+    let id = null;
+    try { id = localStorage.getItem(VISITOR_KEY); } catch (e) { id = null; }
+    if (!isValidVisitorId(id) || forcedReset) {
+      // invalid or forced -> regen
+      const newId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + Math.random();
+      try { localStorage.setItem(VISITOR_KEY, newId); } catch (e) { /* ignore */ }
+      return newId;
     }
     return id;
   })();
@@ -62,18 +96,29 @@
     sessionStorage.setItem(key, '1');
     return true;
   }
+
+  // 트래킹: 응답 코드가 특정 에러면 visitorId 초기화 시도 (서버가 'invalid visitor'로 응답할 경우)
   function track(payload) {
     fetch(`${API_BASE}/api/${mallId}/track`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-    }).catch(() => {});
+    })
+      .then(res => {
+        // 서버에서 "잘못된 visitor"로 판단해 400/401/403 등을 보내면 재생성 시도
+        if (!res.ok && [400, 401, 403].includes(res.status)) {
+          try { resetVisitorId(); } catch (e) { /* ignore */ }
+        }
+      })
+      .catch(() => {});
   }
+
   if (shouldTrack()) {
     track({ pageId, pageUrl: location.pathname, visitorId, type: 'view', device, referrer: document.referrer || 'direct', timestamp: new Date().toISOString() });
   } else {
     track({ pageId, pageUrl: location.pathname, visitorId, type: 'revisit', device, referrer: document.referrer || 'direct', timestamp: new Date().toISOString() });
   }
+
   document.body.addEventListener('click', (e) => {
     const el = e.target.closest('[data-track-click]');
     if (!el) return;
@@ -616,12 +661,29 @@
     if (panel) panel.style.display = 'block';
     if (btn) btn.classList.add('active');
   };
+
+  // ---- 수정된 downloadCoupon: 여러 쿠폰을 하나의 링크로 합쳐서 한 번에 호출합니다. ----
   window.downloadCoupon = coupons => {
-    const list = Array.isArray(coupons) ? coupons : [coupons];
-    list.forEach(cpn => {
-      const url = `/exec/front/newcoupon/IssueDownload?coupon_no=${cpn}`;
+    // coupons may be array or comma-separated string
+    let list = [];
+    if (Array.isArray(coupons)) {
+      list = coupons.map(c => String(c).trim()).filter(Boolean);
+    } else {
+      list = String(coupons || '').split(',').map(s => s.trim()).filter(Boolean);
+    }
+    if (list.length === 0) return;
+
+    // If single coupon, keep previous behavior
+    if (list.length === 1) {
+      const url = `/exec/front/newcoupon/IssueDownload?coupon_no=${encodeURIComponent(list[0])}`;
       window.open(url + `&opener_url=${encodeURIComponent(location.href)}`, '_blank');
-    });
+      return;
+    }
+
+    // Multiple coupons -> build single URL with repeated coupon_no params (one window)
+    const params = list.map(cpn => `coupon_no=${encodeURIComponent(cpn)}`).join('&');
+    const url = `/exec/front/newcoupon/IssueDownload?${params}`;
+    window.open(url + `&opener_url=${encodeURIComponent(location.href)}`, '_blank');
   };
 
   // ────────────────────────────────────────────────────────────────

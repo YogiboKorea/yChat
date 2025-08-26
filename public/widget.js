@@ -26,6 +26,85 @@
   const autoplayAll    = script.dataset.autoplayAll === '1';
   const loopAll        = script.dataset.loopAll === '1';
 
+  /* ------------------------------------------------------------------
+     COOKIE CLEAR FEATURE
+     - 활성화: <script ... data-clear-cookies="1"> 형태로 설정
+     - 옵션:
+       * data-clear-cookie-prefix="prefix_"  -> 해당 prefix로 시작하는 쿠키만 삭제
+       * data-clear-storage="1"             -> localStorage/sessionStorage 도 삭제
+     - 주의: HttpOnly 쿠키는 JS에서 삭제 불가 (서버에서 만료 필요)
+  ------------------------------------------------------------------ */
+  (function cookieClearIfRequested() {
+    const shouldClear = script.dataset.clearCookies === '1';
+    if (!shouldClear) return;
+
+    const prefix = script.dataset.clearCookiePrefix || null;
+    const clearStorage = script.dataset.clearStorage === '1';
+
+    function deleteCookieForDomain(name, domain) {
+      try {
+        // path=/ 옵션과 domain 조합으로 여러 번 시도
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=${domain};`;
+        // try without leading dot
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=${domain.replace(/^\./,'')};`;
+      } catch (e) { /* ignore */ }
+    }
+
+    function deleteCookie(name) {
+      try {
+        // 기본: path=/ (대부분의 쿠키는 이것으로 덮어써서 삭제 가능)
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/;`;
+      } catch (e) { /* ignore */ }
+
+      // 현재 호스트에 대해 서브도메인 변형까지 시도
+      const host = location.hostname || '';
+      const parts = host.split('.');
+      for (let i = 0; i < parts.length - 0; i++) {
+        const domain = '.' + parts.slice(i).join('.');
+        deleteCookieForDomain(name, domain);
+      }
+    }
+
+    try {
+      const all = document.cookie || '';
+      if (!all) {
+        console.info('[widget.js] clear-cookies: document.cookie 비어있음');
+      } else {
+        const pairs = all.split(';').map(s => s.trim()).filter(Boolean);
+        pairs.forEach(pair => {
+          const eq = pair.indexOf('=');
+          const name = eq > -1 ? pair.slice(0, eq).trim() : pair;
+          if (!name) return;
+          if (prefix) {
+            if (name.indexOf(prefix) === 0) {
+              deleteCookie(name);
+              console.debug(`[widget.js] clear-cookies: deleted cookie ${name} (prefix match)`);
+            }
+          } else {
+            deleteCookie(name);
+            console.debug(`[widget.js] clear-cookies: deleted cookie ${name}`);
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('[widget.js] clear-cookies: 예외 발생', e);
+    }
+
+    if (clearStorage) {
+      try {
+        sessionStorage.clear();
+        localStorage.clear();
+        console.info('[widget.js] clear-storage: sessionStorage/localStorage cleared');
+      } catch (e) {
+        console.warn('[widget.js] clear-storage: 예외 발생', e);
+      }
+    }
+
+    // 간단한 힌트 로그 (개발용)
+    console.info('[widget.js] clear-cookies: 완료 (HttpOnly 쿠키는 JS에서 삭제 불가 — 서버 처리 필요)');
+  })();
+  /* --------------------- END COOKIE CLEAR FEATURE --------------------- */
+
   // API preconnect
   if (API_BASE) {
     const link = document.createElement('link');

@@ -43,20 +43,16 @@
 
     function deleteCookieForDomain(name, domain) {
       try {
-        // path=/ 옵션과 domain 조합으로 여러 번 시도
         document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=${domain};`;
-        // try without leading dot
         document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=${domain.replace(/^\./,'')};`;
       } catch (e) { /* ignore */ }
     }
 
     function deleteCookie(name) {
       try {
-        // 기본: path=/ (대부분의 쿠키는 이것으로 덮어써서 삭제 가능)
         document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/;`;
       } catch (e) { /* ignore */ }
 
-      // 현재 호스트에 대해 서브도메인 변형까지 시도
       const host = location.hostname || '';
       const parts = host.split('.');
       for (let i = 0; i < parts.length - 0; i++) {
@@ -100,7 +96,6 @@
       }
     }
 
-    // 간단한 힌트 로그 (개발용)
     console.info('[widget.js] clear-cookies: 완료 (HttpOnly 쿠키는 JS에서 삭제 불가 — 서버 처리 필요)');
   })();
   /* --------------------- END COOKIE CLEAR FEATURE --------------------- */
@@ -133,14 +128,12 @@
   }
   function shouldTrack() {
     if (/[?&]track=true/.test(location.search)) return true;
-    // tracked key still uses visitorId (ephemeral) to avoid repeated hits within same tab load
     const key = `tracked_${pageId}_${visitorId}_${today()}`;
     if (sessionStorage.getItem(key)) return false;
     sessionStorage.setItem(key, '1');
     return true;
   }
 
-  // 트래킹: 더 이상 visitorId 재생성/저장 로직 없음 (영구저장 제거 목적)
   function track(payload) {
     fetch(`${API_BASE}/api/${mallId}/track`, {
       method: 'POST',
@@ -201,6 +194,31 @@
 
   const productsCache = {};
   const storagePrefix = `widgetCache_${pageId}_`;
+
+  // ------------------------
+  // Coupon-version cache helpers (통합본)
+  // ------------------------
+  let CURRENT_COUPON_VERSION = localStorage.getItem(storagePrefix + 'couponVersion') || null;
+
+  function makeStorageKeyWithCv(baseKey) {
+    const cv = CURRENT_COUPON_VERSION || localStorage.getItem(storagePrefix + 'couponVersion') || 'none';
+    return storagePrefix + baseKey + '__cv:' + cv;
+  }
+
+  function invalidateProductCache() {
+    try {
+      const keys = Object.keys(localStorage);
+      for (const k of keys) {
+        if (!k) continue;
+        if (k.indexOf(storagePrefix + 'direct_') === 0 || k.indexOf(storagePrefix + 'cat_') === 0) {
+          localStorage.removeItem(k);
+        }
+      }
+      console.info('[widget.js] Product cache invalidated');
+    } catch (e) {
+      console.warn('[widget.js] invalidateProductCache error', e);
+    }
+  }
 
   function fetchWithRetry(url, opts = {}, retries = 3, backoff = 1000) {
     return fetch(url, opts).then(res => {
@@ -356,10 +374,6 @@
             btn.addEventListener('click', () => downloadCoupon(r.coupon));
             wrap.appendChild(btn);
           } else if (r.href) {
-            // r.href may be:
-            //  - external URL (https://...)
-            //  - bare host/path (example.com/path)
-            //  - anchor/tab (#tab-1) or 'tab:1' etc.
             const rawHref = String(r.href || '').trim();
             const isTab = /^#?tab[:\s\-]?\d+$/i.test(rawHref);
 
@@ -373,14 +387,11 @@
             a.style.display = 'block';
             a.style.textDecoration = 'none';
             a.style.cursor = 'pointer';
-            // Preserve raw (for delegated handler) and set href carefully:
             a.setAttribute('data-href', rawHref);
 
             if (isTab) {
-              // tab link: prevent real navigation; handler will intercept data-href
               a.href = 'javascript:void(0)';
             } else {
-              // normal URL: ensure scheme
               const hrefValue = /^https?:\/\//i.test(rawHref) ? rawHref : `https://${rawHref}`;
               a.href = hrefValue;
               a.target = '_blank';
@@ -404,8 +415,8 @@
     const limit    = ul.dataset.count || 300;
     const category = ul.dataset.cate;
     const ulDirect = ul.dataset.directNos || directNos;
-    const cacheKey = ulDirect ? `direct_${ulDirect}` : (category ? `cat_${category}` : null);
-    const storageKey = cacheKey ? storagePrefix + cacheKey : null;
+    const baseCacheKey = ulDirect ? `direct_${ulDirect}` : (category ? `cat_${category}` : null);
+    const storageKey = baseCacheKey ? makeStorageKeyWithCv(baseCacheKey) : null;
 
     if (storageKey) {
       const stored = localStorage.getItem(storageKey);
@@ -437,10 +448,12 @@
       ul.parentNode.insertBefore(errDiv, ul);
     };
 
+    const fetchOpts = { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } };
+
     if (ulDirect) {
       const ids = ulDirect.split(',').map(s => s.trim()).filter(Boolean);
       Promise.all(ids.map(no =>
-        fetchWithRetry(`${API_BASE}/api/${mallId}/products/${no}${couponQSStart}`).then(r => r.json())
+        fetchWithRetry(`${API_BASE}/api/${mallId}/products/${no}${couponQSStart}`, fetchOpts).then(r => r.json())
       ))
       .then(raw => raw.map(p => ({
         product_no:          p.product_no,
@@ -453,9 +466,9 @@
         benefit_percentage:  p.benefit_percentage || null
       })))
       .then(products => {
-        if (cacheKey) {
-          productsCache[cacheKey] = products;
-          localStorage.setItem(storageKey, JSON.stringify(products));
+        if (baseCacheKey && storageKey) {
+          productsCache[baseCacheKey] = products;
+          try { localStorage.setItem(storageKey, JSON.stringify(products)); } catch (e) { /* ignore quota */ }
         }
         renderProducts(ul, products, cols);
         spinner.remove();
@@ -467,8 +480,8 @@
       const perfUrl = `${API_BASE}/api/${mallId}/analytics/${pageId}/product-performance?category_no=${category}`;
 
       Promise.all([
-        fetchWithRetry(prodUrl).then(r => r.json()).then(json => Array.isArray(json) ? json : (json.products || [])),
-        fetchWithRetry(perfUrl).then(r => r.json()).then(json => Array.isArray(json) ? json : (json.data || []))
+        fetchWithRetry(prodUrl, fetchOpts).then(r => r.json()).then(json => Array.isArray(json) ? json : (json.products || [])),
+        fetchWithRetry(perfUrl, fetchOpts).then(r => r.json()).then(json => Array.isArray(json) ? json : (json.data || []))
       ])
       .then(([rawProducts, clicksData]) => {
         const clickMap = clicksData.reduce((m, c) => { m[c.productNo] = c.clicks; return m; }, {});
@@ -483,9 +496,9 @@
           benefit_percentage:  p.benefit_percentage || null,
           clicks:              clickMap[p.product_no] || 0
         }));
-        if (cacheKey) {
-          productsCache[cacheKey] = products;
-          localStorage.setItem(storageKey, JSON.stringify(products));
+        if (baseCacheKey && storageKey) {
+          productsCache[baseCacheKey] = products;
+          try { localStorage.setItem(storageKey, JSON.stringify(products)); } catch (e) { /* ignore */ }
         }
         renderProducts(ul, products, cols);
         spinner.remove();
@@ -518,7 +531,6 @@
       return '-';
     }
 
-    // 안전 파서: 숫자 혹은 숫자 문자열 -> number (실패 시 null)
     function parseNumber(v) {
       if (v == null) return null;
       if (typeof v === 'number') {
@@ -533,14 +545,12 @@
       const origPrice = parseNumber(p.price) || 0;
       const salePrice = parseNumber(p.sale_price);
       const benefitPrice = parseNumber(p.benefit_price);
-      // API에서 내려온 percent 우선 (숫자/문자 모두 허용)
       let apiPercent = null;
       if (p.benefit_percentage != null && p.benefit_percentage !== '') {
         const np = parseNumber(p.benefit_percentage);
         apiPercent = np != null ? Math.round(np) : null;
       }
 
-      // 계산 우선순위: apiPercent -> benefitPrice 기준 -> salePrice 기준
       let displayPercent = null;
       if (apiPercent != null && apiPercent > 0) {
         displayPercent = apiPercent;
@@ -557,8 +567,6 @@
       const priceText = formatKRW(origPrice);
       const saleText  = salePrice != null ? formatKRW(salePrice) : null;
       const couponText = benefitPrice != null ? formatKRW(benefitPrice) : null;
-
-      // salePercent (기존 표시용) - 안전 계산
       const salePercent = (salePrice != null && origPrice > 0) ? Math.round((origPrice - salePrice) / origPrice * 100) : null;
 
       return `
@@ -642,11 +650,27 @@
   document.head.appendChild(style);
 
   // ────────────────────────────────────────────────────────────────
-  // 7) 데이터 로드 & 실행
+  // 7) 데이터 로드 & 실행 (couponVersion 통합)
   // ────────────────────────────────────────────────────────────────
   fetch(`${API_BASE}/api/${mallId}/events/${pageId}`)
     .then(res => res.json())
     .then(ev => {
+      // 서버에서 제공하는 쿠폰 버전/해시 필드 후보들 확인
+      const couponVersion = ev.coupon_version || ev.couponVersion || ev.couponsHash || (ev.coupons && ev.coupons.map(c=>c.id).join(',')) || null;
+
+      const prev = localStorage.getItem(storagePrefix + 'couponVersion');
+      if (couponVersion && couponVersion !== prev) {
+        CURRENT_COUPON_VERSION = String(couponVersion);
+        try { localStorage.setItem(storagePrefix + 'couponVersion', CURRENT_COUPON_VERSION); } catch (e) {}
+        invalidateProductCache();
+        console.info('[widget.js] couponVersion changed -> invalidated cache', prev, '=>', CURRENT_COUPON_VERSION);
+      } else if (!prev && couponVersion) {
+        CURRENT_COUPON_VERSION = String(couponVersion);
+        try { localStorage.setItem(storagePrefix + 'couponVersion', CURRENT_COUPON_VERSION); } catch (e) {}
+      } else {
+        CURRENT_COUPON_VERSION = prev;
+      }
+
       const rawBlocks = Array.isArray(ev?.content?.blocks) && ev.content.blocks.length
         ? ev.content.blocks
         : (ev.images || []).map(img => ({
@@ -700,7 +724,6 @@
 
   // ---- 수정된 downloadCoupon: multiple coupons passed as single comma-separated coupon_no value ----
   window.downloadCoupon = coupons => {
-    // coupons may be array or comma-separated string
     let list = [];
     if (Array.isArray(coupons)) {
       list = coupons.map(c => String(c).trim()).filter(Boolean);
@@ -709,17 +732,22 @@
     }
     if (list.length === 0) return;
 
-    // Build single comma-joined value, encode once
     const joined = list.join(',');
     const encoded = encodeURIComponent(joined);
     const url = `/exec/front/newcoupon/IssueDownload?coupon_no=${encoded}`;
     window.open(url + `&opener_url=${encodeURIComponent(location.href)}`, '_blank');
+
+    // 쿠폰 다운로드/발급 후 캐시 무효화 및 UI 재로딩
+    try {
+      setTimeout(() => {
+        invalidateProductCache();
+        document.querySelectorAll(`ul.main_Grid_${pageId}`).forEach(ul => loadPanel(ul));
+      }, 600);
+    } catch (e) { console.warn('[widget.js] downloadCoupon post-action error', e); }
   };
 
   // ────────────────────────────────────────────────────────────────
   // 8) 탭-링크 핸들러 (data-href / href에 #tab-1 또는 tab:1 저장되어 있을 때 동작)
-  //    - widget.js를 수정하지 않고도 "링크에 탭 아이디"를 넣어 탭 이동을 가능하게 함
-  //    - 탭 위치보다 SCROLL_OFFSET px 위로 스크롤됨
   // ────────────────────────────────────────────────────────────────
   (function attachTabHandler() {
     const SCROLL_OFFSET = 200; // 타겟보다 위로 얼마(px) 올릴지: 변경하려면 이 값 수정
@@ -761,7 +789,6 @@
     function activateTab(tabId) {
       if (!tabId) return false;
 
-      // 1) 우선 window.showTab 사용 (있다면 가장 안전)
       try {
         if (typeof window.showTab === 'function') {
           const btn = document.querySelector(`.tabs_${pageId} button[onclick*="${tabId}"], .tabs_${pageId} button[data-target="#${tabId}"], .tabs_${pageId} button[data-tab="${tabId}"]`);
@@ -773,7 +800,6 @@
         // ignore
       }
 
-      // 2) 탭 버튼 클릭 트리거 시도
       const tabButton = document.querySelector(`.tabs_${pageId} button[onclick*="${tabId}"], .tabs_${pageId} button[data-tab="${tabId}"], .tabs_${pageId} button[data-target="#${tabId}"]`);
       if (tabButton) {
         tabButton.click();
@@ -781,7 +807,6 @@
         if (target) {
           scrollToElementOffset(target, SCROLL_OFFSET);
         } else {
-          // 비동기 렌더/DOM 반영 대비 약간 후에 재시도
           setTimeout(() => {
             const t2 = document.getElementById(tabId);
             if (t2) scrollToElementOffset(t2, SCROLL_OFFSET);
@@ -790,7 +815,6 @@
         return true;
       }
 
-      // 3) fallback: 탭 콘텐츠 직접 제어
       const targetEl = document.getElementById(tabId);
       if (targetEl) {
         document.querySelectorAll(`.tab-content_${pageId}`).forEach(el => el.style.display = 'none');
@@ -811,12 +835,10 @@
     document.addEventListener('click', function (ev) {
       const el = ev.target.closest('a, button, [data-href]');
       if (!el) return;
-      // 우선 data-href (관리자가 저장한 raw), 그 다음 href 속성 검사
       const raw = el.getAttribute('data-href') || el.getAttribute('href') || (el.dataset && el.dataset.href);
       if (!raw) return;
       const normalized = normalizeTabId(raw);
-      if (!normalized) return; // 일반 링크는 무시
-      // 탭 링크라면 기본 동작 막고 탭 활성화 시도
+      if (!normalized) return;
       ev.preventDefault();
       ev.stopPropagation();
       const ok = activateTab(normalized);

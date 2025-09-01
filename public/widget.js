@@ -13,7 +13,7 @@
     return;
   }
 
-  const API_BASE       = script.dataset.apiBase;
+  const API_BASE       = script.dataset.apiBase || '';
   const pageId         = script.dataset.pageId;
   const mallId         = script.dataset.mallId;
   const tabCount       = parseInt(script.dataset.tabCount || '0', 10);
@@ -26,41 +26,30 @@
   const autoplayAll    = script.dataset.autoplayAll === '1';
   const loopAll        = script.dataset.loopAll === '1';
 
+  // 새 옵션 설명
+  // data-clear-cookies="1"              : 초기화 시 기존 쿠키 삭제 (JS에서 접근 가능한 쿠키만 가능)
+  // data-clear-cookie-prefix="prefix_"  : prefix로 시작하는 쿠키만 삭제
+  // data-clear-storage="1"              : sessionStorage/localStorage 삭제
+  // data-refresh-cookies="1"            : 이벤트 응답(ev)에 포함된 ev.refreshCookies를 클라이언트에서 설정
+  // data-refresh-cookies-endpoint="..." : 서버 endpoint를 호출해서 서버가 Set-Cookie로 쿠키를 내려주도록 시도 (credentials: include)
+
   /* ------------------------------------------------------------------
-     COOKIE CLEAR FEATURE
-     - 활성화: <script ... data-clear-cookies="1"> 형태로 설정
-     - 옵션:
-       * data-clear-cookie-prefix="prefix_"  -> 해당 prefix로 시작하는 쿠키만 삭제
-       * data-clear-storage="1"             -> localStorage/sessionStorage 도 삭제
-     - 주의: HttpOnly 쿠키는 JS에서 삭제 불가 (서버에서 만료 필요)
+     COOKIE CLEAR & REFRESH FEATURE
   ------------------------------------------------------------------ */
-  (function cookieClearIfRequested() {
-    const shouldClear = script.dataset.clearCookies === '1';
-    if (!shouldClear) return;
-
-    const prefix = script.dataset.clearCookiePrefix || null;
-    const clearStorage = script.dataset.clearStorage === '1';
-
-    function deleteCookieForDomain(name, domain) {
+  function deleteCookie(name) {
+    try { document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/;`; } catch (e) {}
+    const host = location.hostname || '';
+    const parts = host.split('.');
+    for (let i = 0; i < parts.length - 0; i++) {
+      const domain = '.' + parts.slice(i).join('.');
       try {
         document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=${domain};`;
         document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=${domain.replace(/^\./,'')};`;
-      } catch (e) { /* ignore */ }
+      } catch (e) {}
     }
+  }
 
-    function deleteCookie(name) {
-      try {
-        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/;`;
-      } catch (e) { /* ignore */ }
-
-      const host = location.hostname || '';
-      const parts = host.split('.');
-      for (let i = 0; i < parts.length - 0; i++) {
-        const domain = '.' + parts.slice(i).join('.');
-        deleteCookieForDomain(name, domain);
-      }
-    }
-
+  function clearCookiesAndStorage(prefix = null, clearStorage = false) {
     try {
       const all = document.cookie || '';
       if (!all) {
@@ -87,15 +76,45 @@
     }
 
     if (clearStorage) {
-      try {
-        sessionStorage.clear();
-        localStorage.clear();
-        console.info('[widget.js] clear-storage: sessionStorage/localStorage cleared');
-      } catch (e) {
-        console.warn('[widget.js] clear-storage: 예외 발생', e);
-      }
+      try { sessionStorage.clear(); localStorage.clear(); console.info('[widget.js] clear-storage: cleared'); }
+      catch (e) { console.warn('[widget.js] clear-storage: 예외', e); }
     }
+  }
 
+  function setCookieClient(name, value, opts = {}) {
+    if (!name) return;
+    const parts = [];
+    parts.push(`${encodeURIComponent(name)}=${encodeURIComponent(String(value))}`);
+    parts.push(`path=${opts.path || '/'}`);
+    if (opts.domain) parts.push(`domain=${opts.domain}`);
+    if (opts.maxAge != null) parts.push(`max-age=${Number(opts.maxAge)}`);
+    if (opts.expires) {
+      const expires = (opts.expires instanceof Date) ? opts.expires.toUTCString() : String(opts.expires);
+      parts.push(`expires=${expires}`);
+    }
+    if (opts.secure) parts.push('secure');
+    if (opts.sameSite) parts.push(`SameSite=${opts.sameSite}`);
+    document.cookie = parts.join('; ');
+  }
+
+  async function tryServerSetCookiesByEndpoint(endpoint) {
+    if (!endpoint) return false;
+    try {
+      await fetch(endpoint, { method: 'GET', credentials: 'include' });
+      console.info('[widget.js] refresh-cookies: endpoint requested (credentials: include)');
+      return true;
+    } catch (e) {
+      console.warn('[widget.js] refresh-cookies: endpoint request failed', e);
+      return false;
+    }
+  }
+
+  (function cookieClearIfRequested() {
+    const shouldClear = script.dataset.clearCookies === '1';
+    if (!shouldClear) return;
+    const prefix = script.dataset.clearCookiePrefix || null;
+    const clearStorage = script.dataset.clearStorage === '1';
+    clearCookiesAndStorage(prefix, clearStorage);
     console.info('[widget.js] clear-cookies: 완료 (HttpOnly 쿠키는 JS에서 삭제 불가 — 서버 처리 필요)');
   })();
   /* --------------------- END COOKIE CLEAR FEATURE --------------------- */
@@ -110,13 +129,11 @@
   }
 
   // ────────────────────────────────────────────────────────────────
-  // 1) 유틸/트래킹 (visitorId 영구 저장 제거)
+  // 1) 유틸/트래킹
   // ────────────────────────────────────────────────────────────────
   const ua = navigator.userAgent;
   const device = /Android/i.test(ua) ? 'Android' : /iPhone|iPad|iPod/i.test(ua) ? 'iOS' : 'PC';
 
-  // visitorId: 더 이상 localStorage/cookie에 저장하지 않음.
-  // 매 페이지 로드(또는 스크립트 실행 시) 새로 생성되는 '휘발성' id 사용.
   const visitorId = (typeof crypto !== 'undefined' && crypto.randomUUID)
     ? crypto.randomUUID()
     : String(Date.now()) + '-' + Math.random().toString(36).slice(2);
@@ -135,6 +152,7 @@
   }
 
   function track(payload) {
+    if (!API_BASE) return;
     fetch(`${API_BASE}/api/${mallId}/track`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -194,10 +212,6 @@
 
   const productsCache = {};
   const storagePrefix = `widgetCache_${pageId}_`;
-
-  // ------------------------
-  // Coupon-version cache helpers (통합본)
-  // ------------------------
   let CURRENT_COUPON_VERSION = localStorage.getItem(storagePrefix + 'couponVersion') || null;
 
   function makeStorageKeyWithCv(baseKey) {
@@ -455,7 +469,8 @@
       Promise.all(ids.map(no =>
         fetchWithRetry(`${API_BASE}/api/${mallId}/products/${no}${couponQSStart}`, fetchOpts).then(r => r.json())
       ))
-      .then(raw => raw.map(p => ({
+      .then(raw => raw.map(p => (typeof p === 'object' ? p : {}).product_no ? p : {}))
+      .then(products => products.map(p => ({
         product_no:          p.product_no,
         product_name:        p.product_name,
         summary_description: p.summary_description || '',
@@ -485,7 +500,7 @@
       ])
       .then(([rawProducts, clicksData]) => {
         const clickMap = clicksData.reduce((m, c) => { m[c.productNo] = c.clicks; return m; }, {});
-        const products = rawProducts.map(p => ({
+        const products = rawProducts.map(p => (typeof p === 'object' ? p : {})).map(p => ({
           product_no:          p.product_no,
           product_name:        p.product_name,
           summary_description: p.summary_description || '',
@@ -498,7 +513,7 @@
         }));
         if (baseCacheKey && storageKey) {
           productsCache[baseCacheKey] = products;
-          try { localStorage.setItem(storageKey, JSON.stringify(products)); } catch (e) { /* ignore */ }
+          try { localStorage.setItem(storageKey, JSON.stringify(products)); } catch (e) { /* ignore quota */ }
         }
         renderProducts(ul, products, cols);
         spinner.remove();
@@ -582,7 +597,7 @@
               ${p.summary_description || ''}
             </div>
             <div class="prd_name" style="font-weight:500;padding-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;">
-              ${p.product_name}
+              ${escapeHtml(p.product_name || '')}
             </div>
           </a>
 
@@ -650,14 +665,13 @@
   document.head.appendChild(style);
 
   // ────────────────────────────────────────────────────────────────
-  // 7) 데이터 로드 & 실행 (couponVersion 통합)
+  // 7) 데이터 로드 & 실행 (couponVersion 통합) + 쿠키 갱신 처리
   // ────────────────────────────────────────────────────────────────
   fetch(`${API_BASE}/api/${mallId}/events/${pageId}`)
     .then(res => res.json())
-    .then(ev => {
-      // 서버에서 제공하는 쿠폰 버전/해시 필드 후보들 확인
+    .then(async ev => {
+      // couponVersion 관리
       const couponVersion = ev.coupon_version || ev.couponVersion || ev.couponsHash || (ev.coupons && ev.coupons.map(c=>c.id).join(',')) || null;
-
       const prev = localStorage.getItem(storagePrefix + 'couponVersion');
       if (couponVersion && couponVersion !== prev) {
         CURRENT_COUPON_VERSION = String(couponVersion);
@@ -671,6 +685,45 @@
         CURRENT_COUPON_VERSION = prev;
       }
 
+      // ---------- 쿠키 갱신 처리 ----------
+      try {
+        if (script.dataset.refreshCookies === '1' && Array.isArray(ev.refreshCookies) && ev.refreshCookies.length) {
+          // 삭제 옵션 적용
+          const prefix = script.dataset.clearCookiePrefix || null;
+          const clearStorage = script.dataset.clearStorage === '1';
+          clearCookiesAndStorage(prefix, clearStorage);
+
+          // ev.refreshCookies : [{ name, value, path, domain, maxAge, expires, secure, sameSite, httpOnly }]
+          ev.refreshCookies.forEach(c => {
+            if (c.httpOnly) {
+              console.info('[widget.js] refresh-cookies: cookie marked HttpOnly, skip client-side set:', c.name);
+              return;
+            }
+            setCookieClient(c.name, c.value || '', {
+              path: c.path || '/',
+              domain: c.domain,
+              maxAge: c.maxAge != null ? c.maxAge : undefined,
+              expires: c.expires || undefined,
+              secure: c.secure || undefined,
+              sameSite: c.sameSite || undefined
+            });
+            console.info('[widget.js] refresh-cookies: set cookie', c.name);
+          });
+        } else if (script.dataset.refreshCookiesEndpoint) {
+          const endpoint = script.dataset.refreshCookiesEndpoint;
+          if (script.dataset.clearCookies === '1') {
+            const prefix = script.dataset.clearCookiePrefix || null;
+            const clearStorage = script.dataset.clearStorage === '1';
+            clearCookiesAndStorage(prefix, clearStorage);
+          }
+          await tryServerSetCookiesByEndpoint(endpoint);
+        }
+      } catch (e) {
+        console.warn('[widget.js] refresh-cookies: 예외', e);
+      }
+      // ---------- end 쿠키 갱신 처리 ----------
+
+      // blocks 준비/렌더
       const rawBlocks = Array.isArray(ev?.content?.blocks) && ev.content.blocks.length
         ? ev.content.blocks
         : (ev.images || []).map(img => ({
@@ -722,7 +775,6 @@
     if (btn) btn.classList.add('active');
   };
 
-  // ---- 수정된 downloadCoupon: multiple coupons passed as single comma-separated coupon_no value ----
   window.downloadCoupon = coupons => {
     let list = [];
     if (Array.isArray(coupons)) {
@@ -737,7 +789,6 @@
     const url = `/exec/front/newcoupon/IssueDownload?coupon_no=${encoded}`;
     window.open(url + `&opener_url=${encodeURIComponent(location.href)}`, '_blank');
 
-    // 쿠폰 다운로드/발급 후 캐시 무효화 및 UI 재로딩
     try {
       setTimeout(() => {
         invalidateProductCache();
@@ -809,7 +860,7 @@
         } else {
           setTimeout(() => {
             const t2 = document.getElementById(tabId);
-            if (t2) scrollToElementOffset(t2, SCROLL_OFFSET);
+            if (t2) tryScrollPanel(tabId, SCROLL_OFFSET);
           }, 80);
         }
         return true;
@@ -848,4 +899,4 @@
     }, { passive: false });
   })();
 
-})();
+})(); // end IIFE

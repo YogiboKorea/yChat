@@ -219,21 +219,16 @@
     return storagePrefix + baseKey + '__cv:' + cv;
   }
 
-  // === 보강된 invalidateProductCache: 로컬스토리지 + 메모리 캐시 완전 초기화 ===
   function invalidateProductCache() {
     try {
-      const keys = Object.keys(localStorage || {});
+      const keys = Object.keys(localStorage);
       for (const k of keys) {
         if (!k) continue;
-        if (k.indexOf(storagePrefix) === 0 || k.indexOf('direct_') === 0 || k.indexOf('cat_') === 0) {
-          try { localStorage.removeItem(k); } catch (e) { /* ignore */ }
+        if (k.indexOf(storagePrefix + 'direct_') === 0 || k.indexOf(storagePrefix + 'cat_') === 0) {
+          localStorage.removeItem(k);
         }
       }
-      // 메모리 캐시 비우기
-      try {
-        for (const p of Object.keys(productsCache)) delete productsCache[p];
-      } catch (e) {}
-      console.info('[widget.js] Product cache invalidated (localStorage + memory cleared)');
+      console.info('[widget.js] Product cache invalidated');
     } catch (e) {
       console.warn('[widget.js] invalidateProductCache error', e);
     }
@@ -378,7 +373,7 @@
           const t = (r.yRatio * 100).toFixed(2);
           const w = (r.wRatio * 100).toFixed(2);
           const h = (r.hRatio * 100).toFixed(2);
-
+//데이터 업데이트
           if (r.coupon) {
             const btn = document.createElement('button');
             btn.dataset.trackClick = 'coupon';
@@ -474,7 +469,7 @@
       Promise.all(ids.map(no =>
         fetchWithRetry(`${API_BASE}/api/${mallId}/products/${no}${couponQSStart}`, fetchOpts).then(r => r.json())
       ))
-      .then(raw => raw.map(p => (typeof p === 'object' ? p : {})))
+      .then(raw => raw.map(p => (typeof p === 'object' ? p : {}).product_no ? p : {}))
       .then(products => products.map(p => ({
         product_no:          p.product_no,
         product_name:        p.product_name,
@@ -780,8 +775,7 @@
     if (btn) btn.classList.add('active');
   };
 
-  // === 보강된 downloadCoupon ===
-  window.downloadCoupon = async (coupons) => {
+  window.downloadCoupon = coupons => {
     let list = [];
     if (Array.isArray(coupons)) {
       list = coupons.map(c => String(c).trim()).filter(Boolean);
@@ -792,78 +786,15 @@
 
     const joined = list.join(',');
     const encoded = encodeURIComponent(joined);
+    const url = `/exec/front/newcoupon/IssueDownload?coupon_no=${encoded}`;
+    window.open(url + `&opener_url=${encodeURIComponent(location.href)}`, '_blank');
 
-    // 1) 우선 시도: 서버가 발급 API를 제공하면 fetch로 직접 발급 (권장)
-    // 예: POST /api/{mallId}/coupons/issue  -> { success: true, couponVersion: '...' }
-    const issueApi = `${API_BASE}/api/${mallId}/coupons/issue`;
     try {
-      const res = await fetch(issueApi, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ coupon_no: list })
-      });
-
-      if (res.ok) {
-        const json = await res.json();
-        // 서버가 couponVersion을 반환하면 바로 반영
-        const newCv = json && (json.couponVersion || json.couponsHash || json.coupon_version);
-        if (newCv) {
-          CURRENT_COUPON_VERSION = String(newCv);
-          try { localStorage.setItem(storagePrefix + 'couponVersion', CURRENT_COUPON_VERSION); } catch (e) {}
-        }
-
-        // 캐시 무효화 & 패널 재로딩
+      setTimeout(() => {
         invalidateProductCache();
         document.querySelectorAll(`ul.main_Grid_${pageId}`).forEach(ul => loadPanel(ul));
-        return;
-      }
-      // non-2xx면 fallback으로 진행
-    } catch (e) {
-      // fetch 실패(엔드포인트 없음 등) -> fallback 처리
-      console.info('[widget.js] coupon issue API not available or failed, fallback to popup+poll', e);
-    }
-
-    // 2) Fallback: 기존 방식(팝업 열기) + 이벤트 폴링으로 couponVersion 변화 관찰
-    const popupUrl = `/exec/front/newcoupon/IssueDownload?coupon_no=${encoded}&opener_url=${encodeURIComponent(location.href)}`;
-    const popup = window.open(popupUrl, '_blank');
-
-    const prevCv = localStorage.getItem(storagePrefix + 'couponVersion') || CURRENT_COUPON_VERSION || null;
-    const maxAttempts = 40;            // 총 시도 횟수 (변경 가능)
-    const intervalMs = 700;            // 폴링 간격
-    let attempts = 0;
-
-    const poller = setInterval(async () => {
-      attempts += 1;
-      try {
-        const r = await fetch(`${API_BASE}/api/${mallId}/events/${pageId}`, { cache: 'no-store', credentials: 'include' });
-        if (r.ok) {
-          const ev = await r.json();
-          const newCv = ev.coupon_version || ev.couponVersion || ev.couponsHash || (ev.coupons && ev.coupons.map(c => c.id).join(',')) || null;
-          if (newCv && String(newCv) !== String(prevCv)) {
-            // 변경 감지 -> 반영
-            CURRENT_COUPON_VERSION = String(newCv);
-            try { localStorage.setItem(storagePrefix + 'couponVersion', CURRENT_COUPON_VERSION); } catch (e) {}
-            invalidateProductCache();
-            document.querySelectorAll(`ul.main_Grid_${pageId}`).forEach(ul => loadPanel(ul));
-
-            clearInterval(poller);
-            try { if (popup && !popup.closed) popup.close(); } catch (e) {}
-            return;
-          }
-        }
-      } catch (e) {
-        // ignore errors during poll
-      }
-
-      if (attempts >= maxAttempts) {
-        clearInterval(poller);
-        // 최후의 보루: 강제 캐시무효화 및 재로딩
-        invalidateProductCache();
-        document.querySelectorAll(`ul.main_Grid_${pageId}`).forEach(ul => loadPanel(ul));
-        try { if (popup && !popup.closed) popup.close(); } catch (e) {}
-      }
-    }, intervalMs);
+      }, 600);
+    } catch (e) { console.warn('[widget.js] downloadCoupon post-action error', e); }
   };
 
   // ────────────────────────────────────────────────────────────────

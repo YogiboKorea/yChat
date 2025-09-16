@@ -373,7 +373,7 @@
           const t = (r.yRatio * 100).toFixed(2);
           const w = (r.wRatio * 100).toFixed(2);
           const h = (r.hRatio * 100).toFixed(2);
-//데이터 업데이트//초기화
+//데이터 업데이트//초기화11
           if (r.coupon) {
             const btn = document.createElement('button');
             btn.dataset.trackClick = 'coupon';

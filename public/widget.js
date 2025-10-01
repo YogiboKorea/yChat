@@ -373,7 +373,7 @@
             const t = (r.yRatio * 100).toFixed(2);
             const w = (r.wRatio * 100).toFixed(2);
             const h = (r.hRatio * 100).toFixed(2);
-  //데이터 업데이트//초기화1144
+  
             if (r.coupon) {
               const btn = document.createElement('button');
               btn.dataset.trackClick = 'coupon';
@@ -601,7 +601,6 @@
               </div>
             </a>
   
-            {/* ▼▼▼▼▼ 수정된 부분 ▼▼▼▼▼ */}
             <div class="prd_price"${couponText ? ' style="display:none;"' : ''} style="font-size:16px;font-weight:500;">
               ${
                 saleText
@@ -616,11 +615,13 @@
                   : `<span>${priceText}</span>`
               }
             </div>
-            {/* ▲▲▲▲▲ 수정된 부분 ▲▲▲▲▲ */}
   
             ${
               couponText
                 ? `<div class="coupon_wrapper" style="margin-top:4px;display:flex;align-items:center;">
+                           <span class="original_price" style="text-decoration: line-through; color: #999; margin-right: 6px;">
+                             ${priceText}
+                           </span>
                      ${displayPercent ? `<span class="prd_coupon_percent" style="color:#ff4d4f;font-weight:500;margin-right:4px;">${displayPercent}%</span>` : ''}
                      <span class="prd_coupon" style="font-weight:500;">${couponText}</span>
                    </div>`

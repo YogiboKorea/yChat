@@ -13,24 +13,24 @@
     return;
   }
 
-  const API_BASE       = script.dataset.apiBase || '';
-  const pageId         = script.dataset.pageId;
-  const mallId         = script.dataset.mallId;
-  const tabCount       = parseInt(script.dataset.tabCount || '0', 10);
-  const activeColor    = script.dataset.activeColor || '#1890ff';
-  const couponNos      = script.dataset.couponNos || '';
-  const couponQSStart  = couponNos ? `?coupon_no=${couponNos}` : '';
+  const API_BASE = script.dataset.apiBase || '';
+  const pageId = script.dataset.pageId;
+  const mallId = script.dataset.mallId;
+  const tabCount = parseInt(script.dataset.tabCount || '0', 10);
+  const activeColor = script.dataset.activeColor || '#1890ff';
+  const couponNos = script.dataset.couponNos || '';
+  const couponQSStart = couponNos ? `?coupon_no=${couponNos}` : '';
   const couponQSAppend = couponNos ? `&coupon_no=${couponNos}` : '';
-  const directNos      = script.dataset.directNos || '';
-  const ignoreText     = script.dataset.ignoreText === '1';
-  const autoplayAll    = script.dataset.autoplayAll === '1';
-  const loopAll        = script.dataset.loopAll === '1';
+  const directNos = script.dataset.directNos || '';
+  const ignoreText = script.dataset.ignoreText === '1';
+  const autoplayAll = script.dataset.autoplayAll === '1';
+  const loopAll = script.dataset.loopAll === '1';
 
   // 새 옵션 설명
-  // data-clear-cookies="1"              : 초기화 시 기존 쿠키 삭제 (JS에서 접근 가능한 쿠키만 가능)
-  // data-clear-cookie-prefix="prefix_"  : prefix로 시작하는 쿠키만 삭제
-  // data-clear-storage="1"              : sessionStorage/localStorage 삭제
-  // data-refresh-cookies="1"            : 이벤트 응답(ev)에 포함된 ev.refreshCookies를 클라이언트에서 설정
+  // data-clear-cookies="1" : 초기화 시 기존 쿠키 삭제 (JS에서 접근 가능한 쿠키만 가능)
+  // data-clear-cookie-prefix="prefix_" : prefix로 시작하는 쿠키만 삭제
+  // data-clear-storage="1" : sessionStorage/localStorage 삭제
+  // data-refresh-cookies="1" : 이벤트 응답(ev)에 포함된 ev.refreshCookies를 클라이언트에서 설정
   // data-refresh-cookies-endpoint="..." : 서버 endpoint를 호출해서 서버가 Set-Cookie로 쿠키를 내려주도록 시도 (credentials: include)
 
   /* ------------------------------------------------------------------
@@ -292,7 +292,7 @@
         if (!yid) return;
 
         const willAutoplay = autoplayAll || toBool(b.autoplay);
-        const willLoop     = loopAll || toBool(b.loop) || willAutoplay;
+        const willLoop = loopAll || toBool(b.loop) || willAutoplay;
 
         const qs = new URLSearchParams({
           autoplay: willAutoplay ? '1' : '0',
@@ -373,7 +373,7 @@
           const t = (r.yRatio * 100).toFixed(2);
           const w = (r.wRatio * 100).toFixed(2);
           const h = (r.hRatio * 100).toFixed(2);
-//데이터 업데이트//초기화1144
+
           if (r.coupon) {
             const btn = document.createElement('button');
             btn.dataset.trackClick = 'coupon';
@@ -425,8 +425,8 @@
   // 4) 상품 그리드
   // ────────────────────────────────────────────────────────────────
   function loadPanel(ul) {
-    const cols     = parseInt(ul.dataset.gridSize, 10) || 1;
-    const limit    = ul.dataset.count || 300;
+    const cols = parseInt(ul.dataset.gridSize, 10) || 1;
+    const limit = ul.dataset.count || 300;
     const category = ul.dataset.cate;
     const ulDirect = ul.dataset.directNos || directNos;
     const baseCacheKey = ulDirect ? `direct_${ulDirect}` : (category ? `cat_${category}` : null);
@@ -471,14 +471,14 @@
       ))
       .then(raw => raw.map(p => (typeof p === 'object' ? p : {}).product_no ? p : {}))
       .then(products => products.map(p => ({
-        product_no:          p.product_no,
-        product_name:        p.product_name,
+        product_no: p.product_no,
+        product_name: p.product_name,
         summary_description: p.summary_description || '',
-        price:               p.price,
-        list_image:          p.list_image,
-        sale_price:          p.sale_price    || null,
-        benefit_price:       p.benefit_price || null,
-        benefit_percentage:  p.benefit_percentage || null
+        price: p.price,
+        list_image: p.list_image,
+        sale_price: p.sale_price || null,
+        benefit_price: p.benefit_price || null,
+        benefit_percentage: p.benefit_percentage || null
       })))
       .then(products => {
         if (baseCacheKey && storageKey) {
@@ -501,15 +501,15 @@
       .then(([rawProducts, clicksData]) => {
         const clickMap = clicksData.reduce((m, c) => { m[c.productNo] = c.clicks; return m; }, {});
         const products = rawProducts.map(p => (typeof p === 'object' ? p : {})).map(p => ({
-          product_no:          p.product_no,
-          product_name:        p.product_name,
+          product_no: p.product_no,
+          product_name: p.product_name,
           summary_description: p.summary_description || '',
-          price:               p.price,
-          list_image:          p.list_image,
-          sale_price:          p.sale_price    || null,
-          benefit_price:       p.benefit_price || null,
-          benefit_percentage:  p.benefit_percentage || null,
-          clicks:              clickMap[p.product_no] || 0
+          price: p.price,
+          list_image: p.list_image,
+          sale_price: p.sale_price || null,
+          benefit_price: p.benefit_price || null,
+          benefit_percentage: p.benefit_percentage || null,
+          clicks: clickMap[p.product_no] || 0
         }));
         if (baseCacheKey && storageKey) {
           productsCache[baseCacheKey] = products;
@@ -580,7 +580,7 @@
       }
 
       const priceText = formatKRW(origPrice);
-      const saleText  = salePrice != null ? formatKRW(salePrice) : null;
+      const saleText = salePrice != null ? formatKRW(salePrice) : null;
       const couponText = benefitPrice != null ? formatKRW(benefitPrice) : null;
       const salePercent = (salePrice != null && origPrice > 0) ? Math.round((origPrice - salePrice) / origPrice * 100) : null;
 
@@ -600,22 +600,26 @@
               ${escapeHtml(p.product_name || '')}
             </div>
           </a>
-
           <div class="prd_price"${couponText ? ' style="display:none;"' : ''} style="font-size:16px;font-weight:500;">
             ${
               saleText
-                ? `<span class="sale_price">${saleText}</span>
+                ? `<span class="original_price" style="text-decoration: line-through; color: #999; margin-right: 6px;">
+                     ${priceText}
+                   </span>
+                   <span class="sale_price">${saleText}</span>
                    ${salePercent && salePercent > 0
-                      ? `<div class="sale_wrapper" style="display:inline-block;margin-right:4px;">
-                           <span class="sale_percent" style="color:#ff4d4f;">${salePercent}%</span>
-                         </div>` : ``}`
+                     ? `<div class="sale_wrapper" style="display:inline-block;margin-right:4px;">
+                          <span class="sale_percent" style="color:#ff4d4f;">${salePercent}%</span>
+                        </div>` : ``}`
                 : `<span>${priceText}</span>`
             }
           </div>
-
           ${
             couponText
               ? `<div class="coupon_wrapper" style="margin-top:4px;display:flex;align-items:center;">
+                   <span class="original_price" style="text-decoration: line-through; color: #999; margin-right: 6px;">
+                     ${priceText}
+                   </span>
                    ${displayPercent ? `<span class="prd_coupon_percent" style="color:#ff4d4f;font-weight:500;margin-right:4px;">${displayPercent}%</span>` : ''}
                    <span class="prd_coupon" style="font-weight:500;">${couponText}</span>
                  </div>`

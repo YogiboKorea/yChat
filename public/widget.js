@@ -26,16 +26,9 @@
   const autoplayAll = script.dataset.autoplayAll === '1';
   const loopAll = script.dataset.loopAll === '1';
 
-  // 새 옵션 설명
-  // data-clear-cookies="1" : 초기화 시 기존 쿠키 삭제 (JS에서 접근 가능한 쿠키만 가능)
-  // data-clear-cookie-prefix="prefix_" : prefix로 시작하는 쿠키만 삭제
-  // data-clear-storage="1" : sessionStorage/localStorage 삭제
-  // data-refresh-cookies="1" : 이벤트 응답(ev)에 포함된 ev.refreshCookies를 클라이언트에서 설정
-  // data-refresh-cookies-endpoint="..." : 서버 endpoint를 호출해서 서버가 Set-Cookie로 쿠키를 내려주도록 시도 (credentials: include)
-
   /* ------------------------------------------------------------------
      COOKIE CLEAR & REFRESH FEATURE
-  ------------------------------------------------------------------ */
+   ------------------------------------------------------------------ */
   function deleteCookie(name) {
     try { document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/;`; } catch (e) {}
     const host = location.hostname || '';
@@ -604,27 +597,25 @@
             ${
               saleText
                 ? `<span class="original_price" style="text-decoration: line-through; color: #999; margin-right: 6px;width:100%;display:block;font-size:12px;">
-                     ${priceText}
-                   </span>
-                   ${salePercent && salePercent > 0
-                     ? `<div class="sale_wrapper" style="display:inline-block;margin-left:4px;">
-                          <span class="sale_percent" style="color:#ff4d4f;font-weight:bold">${salePercent}%</span>
-                        </div>` : ``}
-                      <span class="sale_price">${saleText}</span>   
-                  `
-                    
+                    ${priceText}
+                  </span>
+                  <span class="sale_price">${saleText}</span>
+                  ${salePercent && salePercent > 0
+                    ? `<div class="sale_wrapper" style="display:inline-block;margin-right:4px;">
+                         <span class="sale_percent" style="color:#ff4d4f;">${salePercent}%</span>
+                       </div>` : ``}`
                 : `<span>${priceText}</span>`
             }
           </div>
           ${
             couponText
               ? `<div class="coupon_wrapper" style="margin-top:4px;display:flex;align-items:center;">
-                   <span class="original_price" style="text-decoration: line-through; color: #999; margin-right: 6px;display:block;font-size:12px;width:100%;">
-                     ${priceText}
-                   </span>
-                   ${displayPercent ? `<span class="prd_coupon_percent" style="color:#ff4d4f;font-weight:blod;margin-right:4px;">${displayPercent}%</span>` : ''}
-                   <span class="prd_coupon" style="font-weight:500;">${couponText}</span>
-                 </div>`
+                  <span class="original_price" style="text-decoration: line-through; color: #999; margin-right: 6px;display:block;font-size:12px;width:100%;">
+                    ${priceText}
+                  </span>
+                  ${displayPercent ? `<span class="prd_coupon_percent" style="color:#ff4d4f;font-weight:500;margin-right:4px;">${displayPercent}%</span>` : ''}
+                  <span class="prd_coupon" style="font-weight:500;">${couponText}</span>
+                </div>`
               : ``
           }
         </li>`;
@@ -638,8 +629,6 @@
   // ────────────────────────────────────────────────────────────────
   const style = document.createElement('style');
   style.textContent = `
-
-  
   .grid-spinner {
     width: 40px; height: 40px; border: 4px solid #f3f3f3;
     border-top: 4px solid ${activeColor};
@@ -660,7 +649,7 @@
   .main_Grid_${pageId} .prd_desc { padding-bottom:3px; font-size:14px; color:#666; ;}
   .main_Grid_${pageId} .prd_price { font-size:16px; }
   .main_Grid_${pageId} .coupon_wrapper, .main_Grid_${pageId} .sale_wrapper { margin-top:4px; display:flex; align-items:center; }
-  .main_Grid_${pageId} .prd_coupon_percent, .main_Grid_${pageId} .sale_percent { color:#ff4d4f;font-weight:bold; font-weight:500; margin-right:4px; }
+  .main_Grid_${pageId} .prd_coupon_percent, .main_Grid_${pageId} .sale_percent { color:#ff4d4f; font-weight:500; margin-right:4px; }
   .main_Grid_${pageId} .sale_price, .main_Grid_${pageId} .prd_coupon { font-weight:500; }
   @media (max-width: 400px) {
     .tabs_${pageId}{ width:95%; margin:0 auto;margin-top:20px; font-weight:bold; }
@@ -672,110 +661,122 @@
   }`;
   document.head.appendChild(style);
 
-  // ────────────────────────────────────────────────────────────────
-  // 7) 데이터 로드 & 실행 (couponVersion 통합) + 쿠키 갱신 처리
-  // ────────────────────────────────────────────────────────────────
-  const cacheBuster = `?t=${new Date().getTime()}`;
-  fetch(`${API_BASE}/api/${mallId}/events/${pageId}${cacheBuster}`)
-    .then(res => res.json())
-    .then(async ev => {
-      // couponVersion 관리
-      const couponVersion = ev.coupon_version || ev.couponVersion || ev.couponsHash || (ev.coupons && ev.coupons.map(c=>c.id).join(',')) || null;
-      const prev = localStorage.getItem(storagePrefix + 'couponVersion');
-      if (couponVersion && couponVersion !== prev) {
-        CURRENT_COUPON_VERSION = String(couponVersion);
-        try { localStorage.setItem(storagePrefix + 'couponVersion', CURRENT_COUPON_VERSION); } catch (e) {}
-        invalidateProductCache();
-        console.info('[widget.js] couponVersion changed -> invalidated cache', prev, '=>', CURRENT_COUPON_VERSION);
-      } else if (!prev && couponVersion) {
-        CURRENT_COUPON_VERSION = String(couponVersion);
-        try { localStorage.setItem(storagePrefix + 'couponVersion', CURRENT_COUPON_VERSION); } catch (e) {}
-      } else {
-        CURRENT_COUPON_VERSION = prev;
-      }
+  // ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+  // 7) 데이터 처리 및 화면 렌더링 함수 (재사용을 위해 분리)
+  // ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
 
-      // ---------- 쿠키 갱신 처리 ----------
-      try {
-        if (script.dataset.refreshCookies === '1' && Array.isArray(ev.refreshCookies) && ev.refreshCookies.length) {
-          // 삭제 옵션 적용
+  async function processPageData(ev) {
+    // couponVersion 관리
+    const couponVersion = ev.coupon_version || ev.couponVersion || ev.couponsHash || (ev.coupons && ev.coupons.map(c => c.id).join(',')) || null;
+    const prev = localStorage.getItem(storagePrefix + 'couponVersion');
+    if (couponVersion && couponVersion !== prev) {
+      CURRENT_COUPON_VERSION = String(couponVersion);
+      try { localStorage.setItem(storagePrefix + 'couponVersion', CURRENT_COUPON_VERSION); } catch (e) {}
+      invalidateProductCache();
+      console.info('[widget.js] couponVersion changed -> invalidated cache', prev, '=>', CURRENT_COUPON_VERSION);
+    } else if (!prev && couponVersion) {
+      CURRENT_COUPON_VERSION = String(couponVersion);
+      try { localStorage.setItem(storagePrefix + 'couponVersion', CURRENT_COUPON_VERSION); } catch (e) {}
+    } else {
+      CURRENT_COUPON_VERSION = prev;
+    }
+
+    // ---------- 쿠키 갱신 처리 ----------
+    try {
+      if (script.dataset.refreshCookies === '1' && Array.isArray(ev.refreshCookies) && ev.refreshCookies.length) {
+        const prefix = script.dataset.clearCookiePrefix || null;
+        const clearStorage = script.dataset.clearStorage === '1';
+        clearCookiesAndStorage(prefix, clearStorage);
+        ev.refreshCookies.forEach(c => {
+          if (c.httpOnly) {
+            console.info('[widget.js] refresh-cookies: cookie marked HttpOnly, skip client-side set:', c.name);
+            return;
+          }
+          setCookieClient(c.name, c.value || '', {
+            path: c.path || '/',
+            domain: c.domain,
+            maxAge: c.maxAge != null ? c.maxAge : undefined,
+            expires: c.expires || undefined,
+            secure: c.secure || undefined,
+            sameSite: c.sameSite || undefined
+          });
+          console.info('[widget.js] refresh-cookies: set cookie', c.name);
+        });
+      } else if (script.dataset.refreshCookiesEndpoint) {
+        const endpoint = script.dataset.refreshCookiesEndpoint;
+        if (script.dataset.clearCookies === '1') {
           const prefix = script.dataset.clearCookiePrefix || null;
           const clearStorage = script.dataset.clearStorage === '1';
           clearCookiesAndStorage(prefix, clearStorage);
-
-          // ev.refreshCookies : [{ name, value, path, domain, maxAge, expires, secure, sameSite, httpOnly }]
-          ev.refreshCookies.forEach(c => {
-            if (c.httpOnly) {
-              console.info('[widget.js] refresh-cookies: cookie marked HttpOnly, skip client-side set:', c.name);
-              return;
-            }
-            setCookieClient(c.name, c.value || '', {
-              path: c.path || '/',
-              domain: c.domain,
-              maxAge: c.maxAge != null ? c.maxAge : undefined,
-              expires: c.expires || undefined,
-              secure: c.secure || undefined,
-              sameSite: c.sameSite || undefined
-            });
-            console.info('[widget.js] refresh-cookies: set cookie', c.name);
-          });
-        } else if (script.dataset.refreshCookiesEndpoint) {
-          const endpoint = script.dataset.refreshCookiesEndpoint;
-          if (script.dataset.clearCookies === '1') {
-            const prefix = script.dataset.clearCookiePrefix || null;
-            const clearStorage = script.dataset.clearStorage === '1';
-            clearCookiesAndStorage(prefix, clearStorage);
-          }
-          await tryServerSetCookiesByEndpoint(endpoint);
         }
-      } catch (e) {
-        console.warn('[widget.js] refresh-cookies: 예외', e);
+        await tryServerSetCookiesByEndpoint(endpoint);
       }
-      // ---------- end 쿠키 갱신 처리 ----------
+    } catch (e) {
+      console.warn('[widget.js] refresh-cookies: 예외', e);
+    }
+    // ---------- end 쿠키 갱신 처리 ----------
 
-      // blocks 준비/렌더
-      const rawBlocks = Array.isArray(ev?.content?.blocks) && ev.content.blocks.length
-        ? ev.content.blocks
-        : (ev.images || []).map(img => ({
-            type: 'image',
-            src: img.src,
-            regions: img.regions || []
-          }));
-
-      const blocks = rawBlocks.map(b => {
-        const t = b.type || 'image';
-        if (t === 'video') {
-          const yid = b.youtubeId || parseYouTubeId(b.src);
-          return {
-            type: 'video',
-            youtubeId: yid,
-            ratio: (b.ratio && typeof b.ratio.w === 'number' && typeof b.ratio.h === 'number') ? b.ratio : { w: 16, h: 9 },
-            autoplay: toBool(b.autoplay),
-            loop: toBool(b.loop)
-          };
-        }
-        if (t === 'text') {
-          return {
-            type: 'text',
-            text: b.text || '',
-            style: b.style || {}
-          };
-        }
-        return {
+    // blocks 준비/렌더
+    const rawBlocks = Array.isArray(ev?.content?.blocks) && ev.content.blocks.length
+      ? ev.content.blocks
+      : (ev.images || []).map(img => ({
           type: 'image',
-          src: b.src,
-          regions: (b.regions || []).map(r => ({
-            xRatio: r.xRatio, yRatio: r.yRatio, wRatio: r.wRatio, hRatio: r.hRatio,
-            href: r.href, coupon: r.coupon
-          }))
+          src: img.src,
+          regions: img.regions || []
+        }));
+
+    const blocks = rawBlocks.map(b => {
+      const t = b.type || 'image';
+      if (t === 'video') {
+        const yid = b.youtubeId || parseYouTubeId(b.src);
+        return {
+          type: 'video',
+          youtubeId: yid,
+          ratio: (b.ratio && typeof b.ratio.w === 'number' && typeof b.ratio.h === 'number') ? b.ratio : { w: 16, h: 9 },
+          autoplay: toBool(b.autoplay),
+          loop: toBool(b.loop)
         };
-      });
+      }
+      if (t === 'text') {
+        return {
+          type: 'text',
+          text: b.text || '',
+          style: b.style || {}
+        };
+      }
+      return {
+        type: 'image',
+        src: b.src,
+        regions: (b.regions || []).map(r => ({
+          xRatio: r.xRatio, yRatio: r.yRatio, wRatio: r.wRatio, hRatio: r.hRatio,
+          href: r.href, coupon: r.coupon
+        }))
+      };
+    });
 
-      renderBlocks(blocks);
-      document.querySelectorAll(`ul.main_Grid_${pageId}`).forEach(ul => loadPanel(ul));
-    })
-    .catch(err => console.error('EVENT LOAD ERROR', err));
+    renderBlocks(blocks);
+    document.querySelectorAll(`ul.main_Grid_${pageId}`).forEach(ul => loadPanel(ul));
+  }
+  
+  // ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+  // 8) API 호출 함수
+  // ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
 
-  // 탭 전환 / 쿠폰 다운로드
+  async function fetchAndRender() {
+    try {
+      const cacheBuster = `?t=${new Date().getTime()}`;
+      const response = await fetch(`${API_BASE}/api/${mallId}/events/${pageId}${cacheBuster}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const eventData = await response.json();
+      await processPageData(eventData);
+    } catch (err) {
+      console.error('EVENT LOAD ERROR', err);
+    }
+  }
+
+  // 탭 전환 / 쿠폰 다운로드 (기존 코드 유지)
   window.showTab = (id, btn) => {
     document.querySelectorAll(`.tab-content_${pageId}`).forEach(el => el.style.display = 'none');
     document.querySelectorAll(`.tabs_${pageId} button`).forEach(b => b.classList.remove('active'));
@@ -807,10 +808,10 @@
   };
 
   // ────────────────────────────────────────────────────────────────
-  // 8) 탭-링크 핸들러 (data-href / href에 #tab-1 또는 tab:1 저장되어 있을 때 동작)
+  // 8) 탭-링크 핸들러 (기존 코드 유지)
   // ────────────────────────────────────────────────────────────────
   (function attachTabHandler() {
-    const SCROLL_OFFSET = 200; // 타겟보다 위로 얼마(px) 올릴지: 변경하려면 이 값 수정
+    const SCROLL_OFFSET = 200;
 
     function scrollToElementOffset(el, offset = SCROLL_OFFSET) {
       if (!el) return;
@@ -856,9 +857,7 @@
           tryScrollPanel(tabId, SCROLL_OFFSET);
           return true;
         }
-      } catch (e) {
-        // ignore
-      }
+      } catch (e) {}
 
       const tabButton = document.querySelector(`.tabs_${pageId} button[onclick*="${tabId}"], .tabs_${pageId} button[data-tab="${tabId}"], .tabs_${pageId} button[data-target="#${tabId}"]`);
       if (tabButton) {
@@ -906,6 +905,23 @@
         console.warn('[widget.js] Tab target not found for', normalized);
       }
     }, { passive: false });
+  })();
+
+  // ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+  // 9) 주기적 데이터 갱신 (Polling) 시작
+  // ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+  (function initializeAndStartPolling() {
+    // 💡 아래 시간(ms 단위)을 조절하여 데이터 갱신 주기를 변경할 수 있습니다. (현재 30초)
+    // 1분 = 60000, 5분 = 300000
+    const POLLING_INTERVAL_MS = 30000; 
+    
+    // 1. 페이지 로드 시 즉시 데이터 로드
+    fetchAndRender();
+
+    // 2. 설정된 시간 간격으로 주기적 로드 시작
+    setInterval(fetchAndRender, POLLING_INTERVAL_MS);
+
+    console.log(`[widget.js] Polling started. Refreshing every ${POLLING_INTERVAL_MS / 1000} seconds.`);
   })();
 
 })(); // end IIFE

@@ -608,7 +608,7 @@
                    </span>
                    ${salePercent && salePercent > 0
                      ? `<div class="sale_wrapper" style="display:inline-block;margin-left:4px;">
-                          <span class="sale_percent" style="color:#ff4d4f;">${salePercent}%</span>
+                          <span class="sale_percent" style="color:#ff4d4f;font-weight:bold">${salePercent}%</span>
                         </div>` : ``}
                       <span class="sale_price">${saleText}</span>   
                   `
@@ -622,7 +622,7 @@
                    <span class="original_price" style="text-decoration: line-through; color: #999; margin-right: 6px;display:block;font-size:12px;width:100%;">
                      ${priceText}
                    </span>
-                   ${displayPercent ? `<span class="prd_coupon_percent" style="color:#ff4d4f;font-weight:500;margin-right:4px;">${displayPercent}%</span>` : ''}
+                   ${displayPercent ? `<span class="prd_coupon_percent" style="color:#ff4d4f;font-weight:blod;margin-right:4px;">${displayPercent}%</span>` : ''}
                    <span class="prd_coupon" style="font-weight:500;">${couponText}</span>
                  </div>`
               : ``
@@ -660,7 +660,7 @@
   .main_Grid_${pageId} .prd_desc { padding-bottom:3px; font-size:14px; color:#666; ;}
   .main_Grid_${pageId} .prd_price { font-size:16px; }
   .main_Grid_${pageId} .coupon_wrapper, .main_Grid_${pageId} .sale_wrapper { margin-top:4px; display:flex; align-items:center; }
-  .main_Grid_${pageId} .prd_coupon_percent, .main_Grid_${pageId} .sale_percent { color:#ff4d4f; font-weight:500; margin-right:4px; }
+  .main_Grid_${pageId} .prd_coupon_percent, .main_Grid_${pageId} .sale_percent { color:#ff4d4f;font-weight:bold; font-weight:500; margin-right:4px; }
   .main_Grid_${pageId} .sale_price, .main_Grid_${pageId} .prd_coupon { font-weight:500; }
   @media (max-width: 400px) {
     .tabs_${pageId}{ width:95%; margin:0 auto;margin-top:20px; font-weight:bold; }

@@ -386,12 +386,10 @@
       return isFinite(n) ? n : null;
     };
     ul.innerHTML = products.map(p => {
-      // ✨✨✨ START: MODIFIED SECTION ✨✨✨
       const origPrice = parseNumber(p.price) || 0;
       const salePrice = parseNumber(p.sale_price);
       const benefitPrice = parseNumber(p.benefit_price);
 
-      // ✅ 수정된 부분: salePrice가 존재하고, origPrice보다 실제로 작을 때만 isSale을 true로 설정합니다.
       const isSale = salePrice != null && salePrice < origPrice;
 
       const apiPercent = parseNumber(p.benefit_percentage);
@@ -401,12 +399,11 @@
       else if (isSale) displayPercent = Math.round((origPrice - salePrice) / origPrice * 100);
 
       const priceText = formatKRW(origPrice);
-      // ✅ 수정된 부분: isSale이 true일 때만 saleText를 생성합니다.
       const saleText = isSale ? formatKRW(salePrice) : null;
-      const couponText = benefitPrice != null ? formatKRW(benefitPrice) : null;
-      // ✅ 수정된 부분: isSale이 true일 때만 salePercent를 계산합니다.
+      const couponText = benefitPrice != null && benefitPrice < origPrice ? formatKRW(benefitPrice) : null;
       const salePercent = isSale ? Math.round((origPrice - salePrice) / origPrice * 100) : null;
-
+      
+      // ✨✨✨ START: MODIFIED SECTION ✨✨✨
       return `
         <li style="list-style:none;">
           <a href="/product/detail.html?product_no=${p.product_no}" class="prd_link" style="text-decoration:none;color:inherit;" data-track-click="product" data-product-no="${p.product_no}" target="_blank" rel="noopener noreferrer">
@@ -415,16 +412,17 @@
             <div class="prd_name" style="font-weight:500;padding-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(p.product_name || '')}</div>
           </a>
           <div class="prd_price"${couponText ? ' style="display:none;"' : ''} style="font-size:16px;font-weight:500;">
-            ${ // ✅ 수정된 부분: saleText 대신 isSale을 조건으로 사용합니다.
+            ${
               isSale
-                ? `<span class="original_price" style="text-decoration: line-through; color: #999; margin-right: 6px;width:100%;display:block;font-size:12px;">${priceText}</span><span class="sale_price">${saleText}</span>`
+                ? `<span class="original_price" style="text-decoration: line-through; color: #999; margin-right: 6px;width:100%;display:block;font-size:12px;">${priceText}</span>
+                   ${(salePercent > 0) ? `<span class="sale_percent" style="color:#ff4d4f;font-weight:bold;margin-right:4px;">${salePercent}%</span>` : ''}
+                   <span class="sale_price">${saleText}</span>`
                 : `<span>${priceText}</span>`
             }
-            ${(salePercent > 0) ? `<div class="sale_wrapper" style="display:inline-block;margin-right:4px;"><span class="sale_percent" style="color:#ff4d4f;">${salePercent}%</span></div>` : ''}
           </div>
-          ${couponText ? `<div class="coupon_wrapper" style=""><span class="original_price" style="text-decoration: line-through; color: #999; margin-right: 6px;display:block;font-size:12px;width:100%;">${priceText}</span>` + (displayPercent ? `<span class="prd_coupon_percent" style="color:#ff4d4f;font-weight:500;margin-right:4px;">${displayPercent}%</span>` : '') + `<span class="prd_coupon" style="font-weight:500;">${couponText}</span></div>` : ''}
+          ${couponText ? `<div class="coupon_wrapper" style="margin-top:4px;"><span class="original_price" style="text-decoration: line-through; color: #999; margin-right: 6px;display:block;font-size:12px;width:100%;">${priceText}</span>` + (displayPercent ? `<span class="prd_coupon_percent" style="color:#ff4d4f;font-weight:500;margin-right:4px;">${displayPercent}%</span>` : '') + `<span class="prd_coupon" style="font-weight:500;">${couponText}</span></div>` : ''}
         </li>`;
-        // ✨✨✨ END: MODIFIED SECTION ✨✨✨
+      // ✨✨✨ END: MODIFIED SECTION ✨✨✨
     }).join('');
   }
 
@@ -446,7 +444,7 @@
   .main_Grid_${pageId} li { color:#000; }
   .main_Grid_${pageId} .prd_desc { padding-bottom:3px; font-size:14px; color:#666; ;}
   .main_Grid_${pageId} .prd_price { font-size:16px; }
-  .main_Grid_${pageId} .coupon_wrapper, .main_Grid_${pageId} .sale_wrapper {  }
+  .main_Grid_${pageId} .coupon_wrapper, .main_Grid_${pageId} .sale_wrapper { margin-top:4px; }
   .main_Grid_${pageId} .prd_coupon_percent, .main_Grid_${pageId} .sale_percent { color:#ff4d4f; font-weight:500; margin-right:4px; }
   .main_Grid_${pageId} .sale_price, .main_Grid_${pageId} .prd_coupon { font-weight:500; }
   @media (max-width: 400px) {

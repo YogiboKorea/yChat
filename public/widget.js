@@ -596,7 +596,7 @@
           <div class="prd_price"${couponText ? ' style="display:none;"' : ''} style="font-size:16px;font-weight:500;">
             ${
               saleText
-                ? `<span class="original_price" style="text-decoration: line-through; color: #999; margin-right: 6px;width:100%;display:block;font-size:12px;">
+                ? `<span class="original_price" style="text-decoration: line-through; color: #999; margin-right: 6px;width:100%;display:block;font-size:13px;">
                     ${priceText}
                   </span>
                   <span class="sale_price">${saleText}</span>
@@ -610,7 +610,7 @@
           ${
             couponText
               ? `<div class="coupon_wrapper" style="margin-top:4px;display:flex;align-items:center;">
-                  <span class="original_price" style="text-decoration: line-through; color: #999; margin-right: 6px;display:block;font-size:12px;width:100%;">
+                  <span class="original_price" style="text-decoration: line-through; color: #999; margin-right: 6px;display:block;font-size:13px;width:100%;">
                     ${priceText}
                   </span>
                   ${displayPercent ? `<span class="prd_coupon_percent" style="color:#ff4d4f;font-weight:500;margin-right:4px;">${displayPercent}%</span>` : ''}
@@ -655,16 +655,15 @@
     .tabs_${pageId}{ width:95%; margin:0 auto;margin-top:20px; font-weight:bold; }
     .tabs_${pageId} button{ font-size:14px; }
     .main_Grid_${pageId}{ width:95%; margin:0 auto; row-gap:30px!important; }
-    .main_Grid_${pageId} .prd_desc{ font-size:12px; padding-bottom:5px; }
+    .main_Grid_${pageId} .prd_desc{ font-size:14px; padding-bottom:5px; }
     .main_Grid_${pageId} .prd_price{ font-size:15px; }
     .main_Grid_${pageId} .sale_percent, .main_Grid_${pageId} .prd_coupon_percent{ font-size:15px; }
   }`;
   document.head.appendChild(style);
 
-  // ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
-  // 7) 데이터 처리 및 화면 렌더링 함수 (재사용을 위해 분리)
-  // ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
-
+  // ────────────────────────────────────────────────────────────────
+  // 7) 데이터 처리 및 화면 렌더링 함수
+  // ────────────────────────────────────────────────────────────────
   async function processPageData(ev) {
     // couponVersion 관리
     const couponVersion = ev.coupon_version || ev.couponVersion || ev.couponsHash || (ev.coupons && ev.coupons.map(c => c.id).join(',')) || null;
@@ -758,10 +757,9 @@
     document.querySelectorAll(`ul.main_Grid_${pageId}`).forEach(ul => loadPanel(ul));
   }
   
-  // ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
-  // 8) API 호출 함수
-  // ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
-
+  // ────────────────────────────────────────────────────────────────
+  // 8) API 호출 함수 및 전역 함수
+  // ────────────────────────────────────────────────────────────────
   async function fetchAndRender() {
     try {
       const cacheBuster = `?t=${new Date().getTime()}`;
@@ -776,7 +774,6 @@
     }
   }
 
-  // 탭 전환 / 쿠폰 다운로드 (기존 코드 유지)
   window.showTab = (id, btn) => {
     document.querySelectorAll(`.tab-content_${pageId}`).forEach(el => el.style.display = 'none');
     document.querySelectorAll(`.tabs_${pageId} button`).forEach(b => b.classList.remove('active'));
@@ -807,9 +804,6 @@
     } catch (e) { console.warn('[widget.js] downloadCoupon post-action error', e); }
   };
 
-  // ────────────────────────────────────────────────────────────────
-  // 8) 탭-링크 핸들러 (기존 코드 유지)
-  // ────────────────────────────────────────────────────────────────
   (function attachTabHandler() {
     const SCROLL_OFFSET = 200;
 
@@ -907,21 +901,48 @@
     }, { passive: false });
   })();
 
-  // ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
-  // 9) 주기적 데이터 갱신 (Polling) 시작
-  // ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+  // ────────────────────────────────────────────────────────────────
+  // 9) 주기적 업데이트 확인 및 자동 캐시 무효화
+  // ────────────────────────────────────────────────────────────────
   (function initializeAndStartPolling() {
-    // 💡 아래 시간(ms 단위)을 조절하여 데이터 갱신 주기를 변경할 수 있습니다. (현재 30초)
-    // 1분 = 60000, 5분 = 300000
-    const POLLING_INTERVAL_MS = 30000; 
-    
-    // 1. 페이지 로드 시 즉시 데이터 로드
+    // 1. 페이지 최초 진입 시, 데이터를 불러와 화면을 렌더링
     fetchAndRender();
 
-    // 2. 설정된 시간 간격으로 주기적 로드 시작
-    setInterval(fetchAndRender, POLLING_INTERVAL_MS);
+    // 2. 주기적으로 업데이트를 '확인'하는 함수
+    async function checkForUpdates() {
+      try {
+        const cacheBuster = `?t=${new Date().getTime()}`;
+        const response = await fetch(`${API_BASE}/api/${mallId}/events/${pageId}${cacheBuster}`);
+        if (!response.ok) return;
 
-    console.log(`[widget.js] Polling started. Refreshing every ${POLLING_INTERVAL_MS / 1000} seconds.`);
+        const eventData = await response.json();
+        
+        // 서버에서 받은 새 버전 정보
+        const newCouponVersion = eventData.coupon_version || eventData.couponVersion || eventData.couponsHash || (eventData.coupons && eventData.coupons.map(c=>c.id).join(',')) || null;
+
+        // 현재 페이지가 가진 버전과 서버의 새 버전을 비교
+        if (newCouponVersion && newCouponVersion !== CURRENT_COUPON_VERSION) {
+          console.log(`[widget.js] 새 버전을 감지했습니다. 다음 로딩을 위해 캐시를 삭제합니다. (현재: ${CURRENT_COUPON_VERSION}, 최신: ${newCouponVersion})`);
+          
+          // 핵심: 조용히 localStorage의 상품 캐시만 삭제
+          invalidateProductCache();
+
+          // 중요: 현재 페이지의 버전 정보도 최신으로 업데이트하여, 불필요한 재삭제 방지
+          CURRENT_COUPON_VERSION = newCouponVersion;
+          try { localStorage.setItem(storagePrefix + 'couponVersion', CURRENT_COUPON_VERSION); } catch (e) {}
+        }
+      } catch (err) {
+        console.error('[widget.js] 업데이트 확인 중 오류 발생:', err);
+      }
+    }
+
+    // 3. 업데이트 확인 Polling 시작
+    // 💡 아래 시간(ms 단위)을 조절하여 업데이트 확인 주기를 변경할 수 있습니다.
+    const POLLING_INTERVAL_MS = 30000; // 현재 30초
+
+    setInterval(checkForUpdates, POLLING_INTERVAL_MS);
+    
+    console.log(`[widget.js] 자동 업데이트 검사를 시작합니다. (${POLLING_INTERVAL_MS / 1000}초 간격)`);
   })();
 
 })(); // end IIFE

@@ -422,7 +422,7 @@
             }
             ${(salePercent > 0) ? `<div class="sale_wrapper" style="display:inline-block;margin-right:4px;"><span class="sale_percent" style="color:#ff4d4f;">${salePercent}%</span></div>` : ''}
           </div>
-          ${couponText ? `<div class="coupon_wrapper" style="margin-top:4px;"><span class="original_price" style="text-decoration: line-through; color: #999; margin-right: 6px;display:block;font-size:12px;width:100%;">${priceText}</span>` + (displayPercent ? `<span class="prd_coupon_percent" style="color:#ff4d4f;font-weight:500;margin-right:4px;">${displayPercent}%</span>` : '') + `<span class="prd_coupon" style="font-weight:500;">${couponText}</span></div>` : ''}
+          ${couponText ? `<div class="coupon_wrapper" style=""><span class="original_price" style="text-decoration: line-through; color: #999; margin-right: 6px;display:block;font-size:12px;width:100%;">${priceText}</span>` + (displayPercent ? `<span class="prd_coupon_percent" style="color:#ff4d4f;font-weight:500;margin-right:4px;">${displayPercent}%</span>` : '') + `<span class="prd_coupon" style="font-weight:500;">${couponText}</span></div>` : ''}
         </li>`;
         // ✨✨✨ END: MODIFIED SECTION ✨✨✨
     }).join('');
@@ -446,7 +446,7 @@
   .main_Grid_${pageId} li { color:#000; }
   .main_Grid_${pageId} .prd_desc { padding-bottom:3px; font-size:14px; color:#666; ;}
   .main_Grid_${pageId} .prd_price { font-size:16px; }
-  .main_Grid_${pageId} .coupon_wrapper, .main_Grid_${pageId} .sale_wrapper { margin-top:4px; }
+  .main_Grid_${pageId} .coupon_wrapper, .main_Grid_${pageId} .sale_wrapper {  }
   .main_Grid_${pageId} .prd_coupon_percent, .main_Grid_${pageId} .sale_percent { color:#ff4d4f; font-weight:500; margin-right:4px; }
   .main_Grid_${pageId} .sale_price, .main_Grid_${pageId} .prd_coupon { font-weight:500; }
   @media (max-width: 400px) {

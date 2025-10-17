@@ -586,10 +586,10 @@
              data-product-no="${p.product_no}"
              target="_blank" rel="noopener noreferrer">
             <img src="${p.list_image}" alt="${(p.product_name||'')}" style="width:100%;display:block;" />
-            <div class="prd_desc" style="font-size:14px;color:#666;padding:4px 0;">
+            <div class="prd_desc" style="font-size:14px;color:#666;padding:4px 0;line-height:1.2">
               ${p.summary_description || ''}
             </div>
-            <div class="prd_name" style="font-weight:500;padding-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;">
+            <div class="prd_name" style="font-weight:500;padding-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;line-height:1.2">
               ${escapeHtml(p.product_name || '')}
             </div>
           </a>
@@ -646,16 +646,16 @@
   .main_Grid_${pageId} img { padding-bottom:10px; }
   .main_Grid_${pageId} { row-gap:50px!important; }
   .main_Grid_${pageId} li { color:#000; }
-  .main_Grid_${pageId} .prd_desc { padding-bottom:3px; font-size:14px; color:#666; ;}
+  .main_Grid_${pageId} .prd_desc { padding-bottom:3px; font-size:14px; color:#666;line-height:1.2;}
   .main_Grid_${pageId} .prd_price { font-size:16px; }
   .main_Grid_${pageId} .coupon_wrapper, .main_Grid_${pageId} .sale_wrapper { margin-top:4px; display:flex; align-items:center; }
-  .main_Grid_${pageId} .prd_coupon_percent, .main_Grid_${pageId} .sale_percent { color:#ff4d4f; font-weight:500; margin-right:4px; }
-  .main_Grid_${pageId} .sale_price, .main_Grid_${pageId} .prd_coupon { font-weight:500; }
+  .main_Grid_${pageId} .prd_coupon_percent, .main_Grid_${pageId} .sale_percent { color:#ff4d4f; font-weight:bold; margin-right:4px; }
+  .main_Grid_${pageId} .sale_price, .main_Grid_${pageId} .prd_coupon { font-weight:bold; }
   @media (max-width: 400px) {
     .tabs_${pageId}{ width:95%; margin:0 auto;margin-top:20px; font-weight:bold; }
     .tabs_${pageId} button{ font-size:14px; }
     .main_Grid_${pageId}{ width:95%; margin:0 auto; row-gap:30px!important; }
-    .main_Grid_${pageId} .prd_desc{ font-size:14px; padding-bottom:5px; }
+    .main_Grid_${pageId} .prd_desc{ font-size:14px; padding-bottom:5px;line-height:1.2; }
     .main_Grid_${pageId} .prd_price{ font-size:15px; }
     .main_Grid_${pageId} .sale_percent, .main_Grid_${pageId} .prd_coupon_percent{ font-size:15px; }
   }`;

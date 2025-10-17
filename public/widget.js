@@ -606,11 +606,13 @@
                 ? `<span class="original_price" style="text-decoration: line-through; color: #999; margin-right: 6px;width:100%;display:block;font-size:12px;">
                      ${priceText}
                    </span>
-                   <span class="sale_price">${saleText}</span>
                    ${salePercent && salePercent > 0
-                     ? `<div class="sale_wrapper" style="display:inline-block;margin-right:4px;">
+                     ? `<div class="sale_wrapper" style="display:inline-block;margin-left:4px;">
                           <span class="sale_percent" style="color:#ff4d4f;">${salePercent}%</span>
-                        </div>` : ``}`
+                        </div>` : ``}
+                      <span class="sale_price">${saleText}</span>   
+                  `
+                    
                 : `<span>${priceText}</span>`
             }
           </div>

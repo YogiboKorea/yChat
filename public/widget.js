@@ -941,7 +941,7 @@
 
     // 3. 업데이트 확인 Polling 시작
     // 💡 아래 시간(ms 단위)을 조절하여 업데이트 확인 주기를 변경할 수 있습니다.
-    const POLLING_INTERVAL_MS = 3000; // 현재 30초
+    const POLLING_INTERVAL_MS = 30000; // 현재 30초
 
     // (수정 후 코드)
     setInterval(updateCacheInBackground, POLLING_INTERVAL_MS);

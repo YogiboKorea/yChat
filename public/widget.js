@@ -900,53 +900,48 @@
       }
     }, { passive: false });
   })();
-
-  // ────────────────────────────────────────────────────────────────
-  // 9) 주기적 업데이트 확인 및 자동 캐시 무효화
+// ────────────────────────────────────────────────────────────────
+  // 9) 주기적 캐시 갱신 (Polling)
   // ────────────────────────────────────────────────────────────────
   (function initializeAndStartPolling() {
     // 1. 페이지 최초 진입 시, 데이터를 불러와 화면을 렌더링
-    fetchAndRender();
+    initializePage();
 
-  // (새로 붙여넣을 부분 ✨)
+    // 2. 백그라운드에서 주기적으로 캐시를 갱신하는 함수
+    async function updateCacheInBackground() {
+      console.log('[widget.js] 백그라운드에서 업데이트를 확인합니다...');
+      const productLists = Array.from(document.querySelectorAll(`ul.main_Grid_${pageId}`));
 
-  // 2. 백그라운드에서 주기적으로 캐시를 갱신하는 함수
-  async function updateCacheInBackground() {
-    console.log('[widget.js] 백그라운드에서 업데이트를 확인합니다...');
-    const productLists = Array.from(document.querySelectorAll(`ul.main_Grid_${pageId}`));
-
-    // 페이지에 있는 모든 상품 목록을 순회하며 확인
-    for (const ul of productLists) {
-      try {
-        const baseCacheKey = ul.dataset.directNos ? `direct_${ul.dataset.directNos}` : (ul.dataset.cate ? `cat_${ul.dataset.cate}` : null);
-        if (!baseCacheKey) continue;
-        
-        const storageKey = makeStorageKeyWithCv(baseCacheKey); // 기존 함수 재활용
-        const oldDataString = localStorage.getItem(storageKey);
-        
-        // 최신 데이터를 서버에서 직접 가져옴
-        const newData = await fetchProducts(ul.dataset.directNos, ul.dataset.cate, ul.dataset.count);
-        const newDataString = JSON.stringify(newData);
-        
-        // 기존 캐시와 최신 데이터를 직접 비교하여 다를 경우, 캐시를 조용히 덮어씀
-        if (oldDataString !== newDataString) {
-          console.log(`[widget.js] ${baseCacheKey} 에서 변경사항을 발견하여 캐시를 업데이트합니다.`);
-          localStorage.setItem(storageKey, newDataString);
+      for (const ul of productLists) {
+        try {
+          const baseCacheKey = ul.dataset.directNos ? `direct_${ul.dataset.directNos}` : (ul.dataset.cate ? `cat_${ul.dataset.cate}` : null);
+          if (!baseCacheKey) continue;
+          
+          const storageKey = makeStorageKey(baseCacheKey);
+          const oldDataString = localStorage.getItem(storageKey);
+          
+          // 최신 데이터를 서버에서 직접 가져옴
+          const newData = await fetchProducts(ul.dataset.directNos, ul.dataset.cate, ul.dataset.count);
+          const newDataString = JSON.stringify(newData);
+          
+          // 기존 캐시와 최신 데이터를 직접 비교
+          if (oldDataString !== newDataString) {
+            console.log(`[widget.js] ${baseCacheKey} 에서 변경사항을 발견하여 캐시를 업데이트합니다.`);
+            localStorage.setItem(storageKey, newDataString);
+          }
+        } catch (err) {
+          console.error(`[widget.js] 상품 목록 캐시를 업데이트하는 중 오류가 발생했습니다.`, err);
         }
-      } catch (err) {
-        console.error(`[widget.js] 상품 목록 캐시를 업데이트하는 중 오류가 발생했습니다.`, err);
       }
     }
-  }
 
-    // 3. 업데이트 확인 Polling 시작
-    // 💡 아래 시간(ms 단위)을 조절하여 업데이트 확인 주기를 변경할 수 있습니다.
-    const POLLING_INTERVAL_MS = 30000; // 현재 30초
+    // 3. 캐시 갱신 Polling 시작
+    // 💡 아래 시간(ms 단위)을 조절하여 캐시 확인 주기를 변경할 수 있습니다.
+    const POLLING_INTERVAL_MS = 300000; // 현재 5분 (300,000ms)
 
-    // (수정 후 코드)
     setInterval(updateCacheInBackground, POLLING_INTERVAL_MS);
     
-    console.log(`[widget.js] 자동 업데이트 검사를 시작합니다. (${POLLING_INTERVAL_MS / 1000}초 간격)`);
+    console.log(`[widget.js] 백그라운드 캐시 업데이트가 시작되었습니다. (${POLLING_INTERVAL_MS / 1000 / 60}분 간격)`);
   })();
 
 })(); // end IIFE

@@ -131,6 +131,7 @@
   // ────────────────────────────────────────────────────────────────
   // 2) 공통 헬퍼
   // ────────────────────────────────────────────────────────────────
+  const storagePrefix = `widgetCache_${pageId}_`;
   function escapeHtml(s = '') {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
@@ -157,9 +158,18 @@
   function toBool(v) {
     return v === true || v === 'true' || v === 1 || v === '1' || v === 'on';
   }
-  const storagePrefix = `widgetCache_${pageId}_`;
-  function makeStorageKey(baseKey) {
-    return storagePrefix + baseKey;
+  function invalidateProductCache() {
+    try {
+      const keys = Object.keys(localStorage);
+      for (const k of keys) {
+        if (k.startsWith(storagePrefix)) {
+          localStorage.removeItem(k);
+        }
+      }
+      console.info('[widget.js] Product cache invalidated.');
+    } catch (e) {
+      console.warn('[widget.js] invalidateProductCache error', e);
+    }
   }
   function fetchWithRetry(url, opts = {}, retries = 3, backoff = 1000) {
     return fetch(url, opts).then(res => {
@@ -170,6 +180,23 @@
       return res;
     });
   }
+
+  // ✨✨✨ START: NEW CODE BLOCK ✨✨✨
+  // ────────────────────────────────────────────────────────────────
+  // 2-1) 새로고침 시 캐시 자동 삭제
+  // ────────────────────────────────────────────────────────────────
+  (function clearCacheOnReload() {
+    try {
+      const navigationEntries = performance.getEntriesByType("navigation");
+      if (navigationEntries.length > 0 && navigationEntries[0].type === 'reload') {
+        console.log('[widget.js] 페이지 새로고침을 감지하여 캐시를 삭제합니다.');
+        invalidateProductCache();
+      }
+    } catch (e) {
+      console.warn('[widget.js] 새로고침 감지 중 오류:', e);
+    }
+  })();
+  // ✨✨✨ END: NEW CODE BLOCK ✨✨✨
 
   // ────────────────────────────────────────────────────────────────
   // 3) 블록 렌더(텍스트/이미지/영상)
@@ -286,10 +313,6 @@
   // ────────────────────────────────────────────────────────────────
   // 4) 상품 그리드
   // ────────────────────────────────────────────────────────────────
-  
-  // ✨✨✨ START: NEW/MODIFIED FUNCTIONS ✨✨✨
-  
-  // ✅ 1. 상품 데이터를 불러오는 `fetchProducts` 함수를 새로 정의합니다.
   async function fetchProducts(directNosAttr, category, limit = 300) {
     const fetchOpts = { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } };
     const ulDirect = directNosAttr || directNos;
@@ -299,7 +322,6 @@
       const results = await Promise.all(ids.map(no =>
         fetchWithRetry(`${API_BASE}/api/${mallId}/products/${no}${couponQSStart}`, fetchOpts).then(r => r.json())
       ));
-      // API 응답 구조에 맞게 데이터 정제
       return results.map(p => (p && p.product_no) ? p : {}).map(p => ({
         product_no: p.product_no, product_name: p.product_name, summary_description: p.summary_description || '', price: p.price,
         list_image: p.list_image, sale_price: p.sale_price || null, benefit_price: p.benefit_price || null, benefit_percentage: p.benefit_percentage || null
@@ -309,7 +331,6 @@
       const [rawProducts] = await Promise.all([
         fetchWithRetry(prodUrl, fetchOpts).then(r => r.json()).then(json => Array.isArray(json) ? json : (json.products || [])),
       ]);
-      // API 응답 구조에 맞게 데이터 정제
       return rawProducts.map(p => (typeof p === 'object' ? p : {})).map(p => ({
         product_no: p.product_no, product_name: p.product_name, summary_description: p.summary_description || '', price: p.price,
         list_image: p.list_image, sale_price: p.sale_price || null, benefit_price: p.benefit_price || null, benefit_percentage: p.benefit_percentage || null
@@ -318,22 +339,20 @@
     return [];
   }
 
-  // ✅ 2. 기존 `loadPanel` 함수를 수정하여 `fetchProducts`를 사용하도록 변경합니다.
   async function loadPanel(ul) {
     const cols = parseInt(ul.dataset.gridSize, 10) || 1;
     const baseCacheKey = ul.dataset.directNos ? `direct_${ul.dataset.directNos}` : (ul.dataset.cate ? `cat_${ul.dataset.cate}` : null);
     if (!baseCacheKey) return;
-    const storageKey = makeStorageKey(baseCacheKey);
+    const storageKey = storagePrefix + baseCacheKey;
 
     const stored = localStorage.getItem(storageKey);
     if (stored) {
       try {
         renderProducts(ul, JSON.parse(stored), cols);
-        return; // 캐시가 있으면 바로 렌더링하고 종료
+        return;
       } catch {}
     }
 
-    // 캐시가 없으면 스피너 표시 후 데이터 요청
     const spinner = document.createElement('div');
     spinner.className = 'grid-spinner';
     ul.parentNode.insertBefore(spinner, ul);
@@ -351,8 +370,6 @@
       spinner.remove();
     }
   }
-  
-  // ✨✨✨ END: NEW/MODIFIED FUNCTIONS ✨✨✨
 
   // ────────────────────────────────────────────────────────────────
   // 5) 상품 렌더링
@@ -433,7 +450,7 @@
   document.head.appendChild(style);
 
   // ────────────────────────────────────────────────────────────────
-  // 7) 메인 데이터 처리 및 전역 함수
+  // 7) 메인 초기화 및 전역 함수
   // ────────────────────────────────────────────────────────────────
   async function initializePage() {
     try {
@@ -471,7 +488,7 @@
       setTimeout(() => {
         document.querySelectorAll(`ul.main_Grid_${pageId}`).forEach(ul => {
           const baseCacheKey = ul.dataset.directNos ? `direct_${ul.dataset.directNos}` : (ul.dataset.cate ? `cat_${ul.dataset.cate}` : null);
-          if(baseCacheKey) localStorage.removeItem(makeStorageKey(baseCacheKey));
+          if(baseCacheKey) localStorage.removeItem(storagePrefix + baseCacheKey);
           loadPanel(ul);
         });
       }, 600);
@@ -521,47 +538,8 @@
   })();
 
   // ────────────────────────────────────────────────────────────────
-  // 9) 주기적 캐시 갱신 (Polling)
+  // 9) 페이지 초기화
   // ────────────────────────────────────────────────────────────────
-  (function initializeAndStartPolling() {
-    // 1. 페이지 최초 진입 시, 데이터를 불러와 화면을 렌더링
-    initializePage();
-
-    // 2. 백그라운드에서 주기적으로 캐시를 갱신하는 함수
-    async function updateCacheInBackground() {
-      console.log('[widget.js] 백그라운드에서 업데이트를 확인합니다...');
-      const productLists = Array.from(document.querySelectorAll(`ul.main_Grid_${pageId}`));
-
-      for (const ul of productLists) {
-        try {
-          const baseCacheKey = ul.dataset.directNos ? `direct_${ul.dataset.directNos}` : (ul.dataset.cate ? `cat_${ul.dataset.cate}` : null);
-          if (!baseCacheKey) continue;
-          
-          const storageKey = makeStorageKey(baseCacheKey);
-          const oldDataString = localStorage.getItem(storageKey);
-          
-          // 최신 데이터를 서버에서 직접 가져옴
-          const newData = await fetchProducts(ul.dataset.directNos, ul.dataset.cate, ul.dataset.count);
-          const newDataString = JSON.stringify(newData);
-          
-          // 기존 캐시와 최신 데이터를 직접 비교
-          if (oldDataString !== newDataString) {
-            console.log(`[widget.js] ${baseCacheKey} 에서 변경사항을 발견하여 캐시를 업데이트합니다.`);
-            localStorage.setItem(storageKey, newDataString);
-          }
-        } catch (err) {
-          console.error(`[widget.js] 상품 목록 캐시를 업데이트하는 중 오류가 발생했습니다.`, err);
-        }
-      }
-    }
-
-    // 3. 캐시 갱신 Polling 시작
-    // 💡 아래 시간(ms 단위)을 조절하여 캐시 확인 주기를 변경할 수 있습니다.
-    const POLLING_INTERVAL_MS = 300000; // 현재 5분 (300,000ms)
-
-    setInterval(updateCacheInBackground, POLLING_INTERVAL_MS);
-    
-    console.log(`[widget.js] 백그라운드 캐시 업데이트가 시작되었습니다. (${POLLING_INTERVAL_MS / 1000 / 60}분 간격)`);
-  })();
+  initializePage();
 
 })(); // end IIFE

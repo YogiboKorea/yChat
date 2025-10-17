@@ -673,7 +673,8 @@
   // ────────────────────────────────────────────────────────────────
   // 7) 데이터 로드 & 실행 (couponVersion 통합) + 쿠키 갱신 처리
   // ────────────────────────────────────────────────────────────────
-  fetch(`${API_BASE}/api/${mallId}/events/${pageId}`)
+  const cacheBuster = `?t=${new Date().getTime()}`;
+  fetch(`${API_BASE}/api/${mallId}/events/${pageId}${cacheBuster}`)
     .then(res => res.json())
     .then(async ev => {
       // couponVersion 관리

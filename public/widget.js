@@ -413,7 +413,7 @@
             ${saleText ? `<span class="original_price" style="text-decoration: line-through; color: #999; margin-right: 6px;width:100%;display:block;font-size:12px;">${priceText}</span><span class="sale_price">${saleText}</span>` : `<span>${priceText}</span>`}
             ${(salePercent > 0) ? `<div class="sale_wrapper" style="display:inline-block;margin-right:4px;"><span class="sale_percent" style="color:#ff4d4f;">${salePercent}%</span></div>` : ''}
           </div>
-          ${couponText ? `<div class="coupon_wrapper" style="margin-top:4px;display:flex;align-items:center;"><span class="original_price" style="text-decoration: line-through; color: #999; margin-right: 6px;display:block;font-size:12px;width:100%;">${priceText}</span>` + (displayPercent ? `<span class="prd_coupon_percent" style="color:#ff4d4f;font-weight:500;margin-right:4px;">${displayPercent}%</span>` : '') + `<span class="prd_coupon" style="font-weight:500;">${couponText}</span></div>` : ''}
+          ${couponText ? `<div class="coupon_wrapper" style="margin-top:4px;"><span class="original_price" style="text-decoration: line-through; color: #999; margin-right: 6px;display:block;font-size:12px;width:100%;">${priceText}</span>` + (displayPercent ? `<span class="prd_coupon_percent" style="color:#ff4d4f;font-weight:500;margin-right:4px;">${displayPercent}%</span>` : '') + `<span class="prd_coupon" style="font-weight:500;">${couponText}</span></div>` : ''}
         </li>`;
     }).join('');
   }

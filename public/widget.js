@@ -391,19 +391,22 @@
       const benefitPrice = parseNumber(p.benefit_price);
 
       const isSale = salePrice != null && salePrice < origPrice;
+      const isCoupon = benefitPrice != null && benefitPrice < origPrice;
 
       const apiPercent = parseNumber(p.benefit_percentage);
       let displayPercent = null;
-      if (apiPercent > 0) displayPercent = Math.round(apiPercent);
-      else if (benefitPrice > 0 && origPrice > 0) displayPercent = Math.round((origPrice - benefitPrice) / origPrice * 100);
-      else if (isSale) displayPercent = Math.round((origPrice - salePrice) / origPrice * 100);
+      if (isCoupon) {
+        if (apiPercent > 0) displayPercent = Math.round(apiPercent);
+        else if (benefitPrice > 0 && origPrice > 0) displayPercent = Math.round((origPrice - benefitPrice) / origPrice * 100);
+      } else if (isSale) {
+        displayPercent = Math.round((origPrice - salePrice) / origPrice * 100);
+      }
 
       const priceText = formatKRW(origPrice);
       const saleText = isSale ? formatKRW(salePrice) : null;
-      const couponText = benefitPrice != null && benefitPrice < origPrice ? formatKRW(benefitPrice) : null;
-      const salePercent = isSale ? Math.round((origPrice - salePrice) / origPrice * 100) : null;
-      
-      // ✨✨✨ START: MODIFIED SECTION ✨✨✨
+      const couponText = isCoupon ? formatKRW(benefitPrice) : null;
+      const salePercent = isSale ? displayPercent : null;
+
       return `
         <li style="list-style:none;">
           <a href="/product/detail.html?product_no=${p.product_no}" class="prd_link" style="text-decoration:none;color:inherit;" data-track-click="product" data-product-no="${p.product_no}" target="_blank" rel="noopener noreferrer">
@@ -411,18 +414,23 @@
             <div class="prd_desc" style="font-size:14px;color:#666;padding:4px 0;">${p.summary_description || ''}</div>
             <div class="prd_name" style="font-weight:500;padding-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(p.product_name || '')}</div>
           </a>
-          <div class="prd_price"${couponText ? ' style="display:none;"' : ''} style="font-size:16px;font-weight:500;">
-            ${
-              isSale
-                ? `<span class="original_price" style="text-decoration: line-through; color: #999; margin-right: 6px;width:100%;display:block;font-size:12px;">${priceText}</span>
-                   ${(salePercent > 0) ? `<span class="sale_percent" style="color:#ff4d4f;font-weight:bold;margin-right:4px;">${salePercent}%</span>` : ''}
-                   <span class="sale_price">${saleText}</span>`
-                : `<span>${priceText}</span>`
-            }
+          <div class="prd_price_container">
+            <div class="prd_price"${couponText ? ' style="display:none;"' : ''}>
+              ${
+                isSale
+                  ? `<span class="original_price">${priceText}</span>
+                     ${(salePercent > 0) ? `<span class="sale_percent">${salePercent}%</span>` : ''}
+                     <span class="sale_price">${saleText}</span>`
+                  : `<span>${priceText}</span>`
+              }
+            </div>
+            ${couponText ? `<div class="coupon_wrapper">
+                              <span class="original_price">${priceText}</span>
+                              ${displayPercent ? `<span class="prd_coupon_percent">${displayPercent}%</span>` : ''}
+                              <span class="prd_coupon">${couponText}</span>
+                           </div>` : ''}
           </div>
-          ${couponText ? `<div class="coupon_wrapper" style="margin-top:4px;"><span class="original_price" style="text-decoration: line-through; color: #999; margin-right: 6px;display:block;font-size:12px;width:100%;">${priceText}</span>` + (displayPercent ? `<span class="prd_coupon_percent" style="color:#ff4d4f;font-weight:500;margin-right:4px;">${displayPercent}%</span>` : '') + `<span class="prd_coupon" style="font-weight:500;">${couponText}</span></div>` : ''}
         </li>`;
-      // ✨✨✨ END: MODIFIED SECTION ✨✨✨
     }).join('');
   }
 
@@ -443,17 +451,45 @@
   .main_Grid_${pageId} { row-gap:50px!important; }
   .main_Grid_${pageId} li { color:#000; }
   .main_Grid_${pageId} .prd_desc { padding-bottom:3px; font-size:14px; color:#666; ;}
-  .main_Grid_${pageId} .prd_price { font-size:16px; }
-  .main_Grid_${pageId} .coupon_wrapper, .main_Grid_${pageId} .sale_wrapper { margin-top:4px; }
-  .main_Grid_${pageId} .prd_coupon_percent, .main_Grid_${pageId} .sale_percent { color:#ff4d4f; font-weight:500; margin-right:4px; }
-  .main_Grid_${pageId} .sale_price, .main_Grid_${pageId} .prd_coupon { font-weight:500; }
+  
+  /* ✨✨✨ START: MODIFIED STYLES ✨✨✨ */
+  .main_Grid_${pageId} .prd_price,
+  .main_Grid_${pageId} .coupon_wrapper {
+    font-size: 16px;
+    font-weight: 500;
+  }
+  .main_Grid_${pageId} .original_price {
+    text-decoration: line-through;
+    color: #999;
+    width:100%;
+    display:block;
+    font-size:13px;
+    font-weight: 400; /* 일반 굵기 */
+  }
+  .main_Grid_${pageId} .sale_percent,
+  .main_Grid_${pageId} .prd_coupon_percent {
+    color: #ff4d4f;
+    font-weight: bold;
+    margin-right: 4px;
+  }
+  .main_Grid_${pageId} .sale_price,
+  .main_Grid_${pageId} .prd_coupon {
+    font-weight: bold;
+  }
+  /* ✨✨✨ END: MODIFIED STYLES ✨✨✨ */
+
   @media (max-width: 400px) {
     .tabs_${pageId}{ width:95%; margin:0 auto;margin-top:20px; font-weight:bold; }
     .tabs_${pageId} button{ font-size:14px; }
     .main_Grid_${pageId}{ width:95%; margin:0 auto; row-gap:30px!important; }
     .main_Grid_${pageId} .prd_desc{ font-size:12px; padding-bottom:5px; }
-    .main_Grid_${pageId} .prd_price{ font-size:15px; }
-    .main_Grid_${pageId} .sale_percent, .main_Grid_${pageId} .prd_coupon_percent{ font-size:15px; }
+    .main_Grid_${pageId} .prd_price,
+    .main_Grid_${pageId} .coupon_wrapper {
+        font-size: 15px;
+    }
+    .main_Grid_${pageId} .original_price {
+        font-size: 12px;
+    }
   }`;
   document.head.appendChild(style);
 

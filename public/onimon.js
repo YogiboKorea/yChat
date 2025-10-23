@@ -19,7 +19,7 @@
     const couponNos = script.dataset.couponNos || '';
     const couponQSStart = couponNos ? `?coupon_no=${couponNos}` : '';
     const couponQSAppend = couponNos ? `&coupon_no=${couponNos}` : '';
-    
+
     // (이하 유틸리티 및 트래킹 함수들은 제공해주신 코드와 동일하게 유지)
     const storagePrefix = `widgetCache_${pageId}_`;
     function escapeHtml(s = '') { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
@@ -40,7 +40,6 @@
     function getRootContainer() {
       let root = document.getElementById('evt-root');
       if (!root) {
-        console.error('onimon.js: #evt-root 요소를 찾을 수 없습니다.');
         root = document.createElement('div');
         root.id = 'evt-root';
         script.parentNode.insertBefore(root, script);
@@ -214,7 +213,7 @@
             let displayPercent = null;
             if (isCoupon) {
                 const basePriceForCoupon = isSale ? salePrice : origPrice;
-                if (basePriceForCoupon > 0 && benefitPrice > 0) {
+                if (basePriceForCoupon > 0 && benefitPrice >= 0) {
                   displayPercent = Math.round((basePriceForCoupon - benefitPrice) / basePriceForCoupon * 100);
                 }
             } else if (isSale) {
@@ -232,7 +231,7 @@
 
             return `
               <li style="overflow: hidden; border: 1px solid #e8e8e8; background: #fff;">
-                <a href="/product/detail.html?product_no=${p.product_no}" style="text-decoration:none; color:inherit;">
+                <a href="/product/detail.html?product_no=${p.product_no}" style="text-decoration:none; color:inherit;" data-track-click="product" data-product-no="${p.product_no}">
                   <div style="aspect-ratio: 1 / 1; width: 100%; display: flex; align-items: center; justify-content: center; background: #f8f9fa;">
                     ${p.list_image ? `<img src="${p.list_image}" alt="${escapeHtml(p.product_name||'')}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:40px; color:#d9d9d9;">⛶</span>`}
                   </div>

@@ -19,9 +19,10 @@
     const couponNos = script.dataset.couponNos || '';
     const couponQSStart = couponNos ? `?coupon_no=${couponNos}` : '';
     const couponQSAppend = couponNos ? `&coupon_no=${couponNos}` : '';
-
-    // (이하 유틸리티 및 트래킹 함수들은 제공해주신 코드와 동일하게 유지)
-    const storagePrefix = `widgetCache_${pageId}_`;
+    
+    // ────────────────────────────────────────────────────────────────
+    // 2) 공통 헬퍼
+    // ────────────────────────────────────────────────────────────────
     function escapeHtml(s = '') { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
     function toBool(v) { return v === true || v === 'true' || v === 1 || v === '1' || v === 'on'; }
     function fetchWithRetry(url, opts = {}, retries = 3, backoff = 1000) {
@@ -160,10 +161,11 @@
     async function fetchProducts(directNosAttr, category, limit = 300) {
         if (directNosAttr) {
             const ids = directNosAttr.split(',').map(s => s.trim()).filter(Boolean);
+            if (ids.length === 0) return [];
             const results = await Promise.all(ids.map(no =>
               fetchWithRetry(`${API_BASE}/api/${mallId}/products/${no}${couponQSStart}`).then(r => r.json())
             ));
-            return results.map(p => (p && p.product_no) ? p : {});
+            return results.map(p => (p && p.product_no) ? p : null).filter(Boolean);
         } else if (category) {
             const prodUrl = `${API_BASE}/api/${mallId}/categories/${category}/products?limit=${limit}${couponQSAppend}`;
             const prods = await fetchWithRetry(prodUrl).then(r => r.json()).then(json => Array.isArray(json) ? json : (json.products || []));

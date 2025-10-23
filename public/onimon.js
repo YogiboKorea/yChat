@@ -19,8 +19,8 @@
     const couponNos = script.dataset.couponNos || '';
     const couponQSStart = couponNos ? `?coupon_no=${couponNos}` : '';
     const couponQSAppend = couponNos ? `&coupon_no=${couponNos}` : '';
-
-    // (이하 유틸리티 및 트래킹 함수들은 기존과 동일)
+    
+    // (이하 유틸리티 및 트래킹 함수들은 제공해주신 코드와 동일하게 유지)
     const storagePrefix = `widgetCache_${pageId}_`;
     function escapeHtml(s = '') { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
     function toBool(v) { return v === true || v === 'true' || v === 1 || v === '1' || v === 'on'; }
@@ -191,6 +191,7 @@
       }
     }
 
+    // ============== 기존 가격 로직이 포함된 상품 렌더링 함수 ==============
     function renderProducts(ul, products, cols) {
         ul.style.cssText = `display:grid; grid-template-columns:repeat(${cols},1fr); gap:16px; max-width:800px; margin:24px auto; list-style:none; padding:0; font-family: 'Noto Sans KR', sans-serif;`;
         const formatKRW = val => `${(Number(val) || 0).toLocaleString('ko-KR')}원`;

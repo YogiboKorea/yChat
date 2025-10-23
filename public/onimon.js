@@ -20,8 +20,9 @@
     const couponQSStart = couponNos ? `?coupon_no=${couponNos}` : '';
     const couponQSAppend = couponNos ? `&coupon_no=${couponNos}` : '';
 
-    // (이하 유틸리티 및 트래킹 함수들은 제공해주신 코드와 동일하게 유지)
-    const storagePrefix = `widgetCache_${pageId}_`;
+    // ────────────────────────────────────────────────────────────────
+    // 2) 공통 헬퍼
+    // ────────────────────────────────────────────────────────────────
     function escapeHtml(s = '') { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
     function toBool(v) { return v === true || v === 'true' || v === 1 || v === '1' || v === 'on'; }
     function fetchWithRetry(url, opts = {}, retries = 3, backoff = 1000) {
@@ -33,6 +34,14 @@
             return res;
         });
     }
+
+    // ******** MISSING FUNCTION ADDED HERE ********
+    function buildYouTubeSrc(id, autoplay = false, loop = false) {
+        const params = new URLSearchParams({ autoplay: autoplay ? '1' : '0', mute: autoplay ? '1' : '0', playsinline: '1', rel: 0, modestbranding: 1, enablejsapi: 1 });
+        if (loop) { params.set('loop', '1'); params.set('playlist', id); }
+        return `https://www.youtube.com/embed/${id}?${params.toString()}`;
+    }
+    // *******************************************
 
     // ────────────────────────────────────────────────────────────────
     // 3) 블록 렌더링 함수들
@@ -95,7 +104,7 @@
         if (!block.youtubeId) return;
         const src = buildYouTubeSrc(block.youtubeId, toBool(block.autoplay), toBool(block.loop));
         const wrap = document.createElement('div');
-        wrap.style.cssText = `position:relative; width:100%; max-width:800px; margin:0 auto; aspect-ratio:${ratio.w}/${ratio.h};`;
+        wrap.style.cssText = `position:relative; width:100%; max-width:800px; margin:16px auto; aspect-ratio:${ratio.w}/${ratio.h};`;
         const iframe = document.createElement('iframe');
         iframe.src = src;
         iframe.title = `youtube-${block.youtubeId}`;
@@ -231,7 +240,7 @@
             const priceFontSize = `${17 - cols}px`;
 
             return `
-              <li style="overflow: hidden; background: #fff;">
+              <li style="overflow: hidden; border: 1px solid #e8e8e8; background: #fff;">
                 <a href="/product/detail.html?product_no=${p.product_no}" style="text-decoration:none; color:inherit;" data-track-click="product" data-product-no="${p.product_no}">
                   <div style="aspect-ratio: 1 / 1; width: 100%; display: flex; align-items: center; justify-content: center; background: #f8f9fa;">
                     ${p.list_image ? `<img src="${p.list_image}" alt="${escapeHtml(p.product_name||'')}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:40px; color:#d9d9d9;">⛶</span>`}
@@ -337,4 +346,4 @@
   
     initializePage();
   
-  })(); // end IIFE//
+  })(); // end IIFE

@@ -20,7 +20,7 @@
     const couponQSStart = couponNos ? `?coupon_no=${couponNos}` : '';
     const couponQSAppend = couponNos ? `&coupon_no=${couponNos}` : '';
 
-    // (이하 유틸리티 및 트래킹 함수들은 제공해주신 코드와 동일하게 유지)
+    // (이하 유틸리티 및 트래킹 함수들은 기존과 동일)
     const storagePrefix = `widgetCache_${pageId}_`;
     function escapeHtml(s = '') { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
     function toBool(v) { return v === true || v === 'true' || v === 1 || v === '1' || v === 'on'; }
@@ -40,7 +40,6 @@
     function getRootContainer() {
       let root = document.getElementById('evt-root');
       if (!root) {
-        console.error('onimon.js: #evt-root 요소를 찾을 수 없습니다.');
         root = document.createElement('div');
         root.id = 'evt-root';
         script.parentNode.insertBefore(root, script);
@@ -118,7 +117,7 @@
           (block.tabs || []).forEach((t, i) => {
               const btn = document.createElement('button');
               if (i === 0) btn.className = 'active';
-              btn.onclick = () => window.showTab(`${block.id}-tab-${i}`, btn, block.activeColor);
+              btn.onclick = () => window.showTab(`${block.id || pageId}-tab-${i}`, btn, block.activeColor);
               btn.textContent = t.title || `탭${i+1}`;
               tabsContainer.appendChild(btn);
           });
@@ -126,7 +125,7 @@
 
           (block.tabs || []).forEach((t, i) => {
               const panel = document.createElement('div');
-              panel.id = `${block.id}-tab-${i}`;
+              panel.id = `${block.id || pageId}-tab-${i}`;
               panel.className = `tab-content_${pageId}`;
               panel.style.display = i === 0 ? 'block' : 'none';
               const ul = document.createElement('ul');
@@ -155,6 +154,9 @@
       root.appendChild(groupWrapper);
     }
   
+    // ────────────────────────────────────────────────────────────────
+    // 4) 상품 데이터 로드 및 렌더링
+    // ────────────────────────────────────────────────────────────────
     async function fetchProducts(directNosAttr, category, limit = 300) {
         if (directNosAttr) {
             const ids = directNosAttr.split(',').map(s => s.trim()).filter(Boolean);
@@ -189,74 +191,75 @@
       }
     }
 
-    // ============== 기존 가격 로직이 포함된 상품 렌더링 함수 ==============
     function renderProducts(ul, products, cols) {
-      ul.style.cssText = `display:grid; grid-template-columns:repeat(${cols},1fr); gap:16px; max-width:800px; margin:24px auto; list-style:none; padding:0; font-family: 'Noto Sans KR', sans-serif;`;
-      const formatKRW = val => `${(Number(val) || 0).toLocaleString('ko-KR')}원`;
-      const parseNumber = v => {
-          if (v == null) return null;
-          if (typeof v === 'number' && isFinite(v)) return v;
-          const n = parseFloat(String(v).replace(/[^\d.-]/g, ''));
-          return isFinite(n) ? n : null;
-      };
+        ul.style.cssText = `display:grid; grid-template-columns:repeat(${cols},1fr); gap:16px; max-width:800px; margin:24px auto; list-style:none; padding:0; font-family: 'Noto Sans KR', sans-serif;`;
+        const formatKRW = val => `${(Number(val) || 0).toLocaleString('ko-KR')}원`;
+        const parseNumber = v => {
+            if (v == null) return null;
+            if (typeof v === 'number' && isFinite(v)) return v;
+            const n = parseFloat(String(v).replace(/[^\d.-]/g, ''));
+            return isFinite(n) ? n : null;
+        };
 
-      ul.innerHTML = products.map(p => {
-          const origPrice = parseNumber(p.price) || 0;
-          const salePrice = parseNumber(p.sale_price);
-          const benefitPrice = parseNumber(p.benefit_price);
+        ul.innerHTML = products.map(p => {
+            const origPrice = parseNumber(p.price) || 0;
+            const salePrice = parseNumber(p.sale_price);
+            const benefitPrice = parseNumber(p.benefit_price);
+    
+            const isSale = salePrice != null && salePrice < origPrice;
+            const isCoupon = benefitPrice != null && benefitPrice < (isSale ? salePrice : origPrice);
+            
+            let displayPercent = null;
+            if (isCoupon) {
+                const basePriceForCoupon = isSale ? salePrice : origPrice;
+                if (basePriceForCoupon > 0 && benefitPrice > 0) {
+                  displayPercent = Math.round((basePriceForCoupon - benefitPrice) / basePriceForCoupon * 100);
+                }
+            } else if (isSale) {
+                if (origPrice > 0) {
+                  displayPercent = Math.round((origPrice - salePrice) / origPrice * 100);
+                }
+            }
+    
+            const priceText = formatKRW(origPrice);
+            const saleText = isSale ? formatKRW(salePrice) : null;
+            const couponText = isCoupon ? formatKRW(benefitPrice) : null;
+    
+            const titleFontSize = `${18 - cols}px`;
+            const priceFontSize = `${17 - cols}px`;
 
-          const isSale = salePrice != null && salePrice < origPrice;
-          const isCoupon = benefitPrice != null && benefitPrice < (isSale ? salePrice : origPrice);
-          
-          let displayPercent = null;
-          if (isCoupon) {
-              const basePriceForCoupon = isSale ? salePrice : origPrice;
-              if (basePriceForCoupon > 0) {
-                displayPercent = Math.round((basePriceForCoupon - benefitPrice) / basePriceForCoupon * 100);
-              }
-          } else if (isSale) {
-              if (origPrice > 0) {
-                displayPercent = Math.round((origPrice - salePrice) / origPrice * 100);
-              }
-          }
-  
-          const priceText = formatKRW(origPrice);
-          const saleText = isSale ? formatKRW(salePrice) : null;
-          const couponText = isCoupon ? formatKRW(benefitPrice) : null;
-  
-          return `
-            <li style="overflow: hidden; border: 1px solid #e8e8e8; background: #fff;">
-              <a href="/product/detail.html?product_no=${p.product_no}" style="text-decoration:none; color:inherit;">
-                <div style="aspect-ratio: 1 / 1; width: 100%; display: flex; align-items: center; justify-content: center; background: #f8f9fa;">
-                  ${p.list_image ? `<img src="${p.list_image}" alt="${escapeHtml(p.product_name||'')}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:40px; color:#d9d9d9;">⛶</span>`}
-                </div>
-                <div style="padding: 12px; min-height: 90px;">
-                  <div class="prd_name" style="font-weight: 500; font-size: ${18 - cols}px; line-height: 1.2;">${escapeHtml(p.product_name || '')}</div>
-                  <div class="prd_price_container" style="margin-top: 4px;">
-                    ${isCoupon ? `
-                      <div class="coupon_wrapper">
-                        <span class="original_price">${isSale ? saleText : priceText}</span>
-                        ${displayPercent ? `<span class="prd_coupon_percent">${displayPercent}%</span>` : ''}
-                        <span class="prd_coupon">${couponText}</span>
-                      </div>
-                    ` : isSale ? `
-                      <div class="prd_price">
-                        <span class="original_price">${priceText}</span>
-                        ${displayPercent ? `<span class="sale_percent">${displayPercent}%</span>` : ''}
-                        <span class="sale_price">${saleText}</span>
-                      </div>
-                    ` : `
-                      <div class="prd_price">
-                        <span>${priceText}</span>
-                      </div>
-                    `}
+            return `
+              <li style="overflow: hidden; border: 1px solid #e8e8e8; background: #fff;">
+                <a href="/product/detail.html?product_no=${p.product_no}" style="text-decoration:none; color:inherit;">
+                  <div style="aspect-ratio: 1 / 1; width: 100%; display: flex; align-items: center; justify-content: center; background: #f8f9fa;">
+                    ${p.list_image ? `<img src="${p.list_image}" alt="${escapeHtml(p.product_name||'')}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:40px; color:#d9d9d9;">⛶</span>`}
                   </div>
-                </div>
-              </a>
-            </li>`;
-      }).join('');
+                  <div style="padding: 12px; min-height: 90px;">
+                    <div class="prd_name" style="font-weight: 500; font-size: ${titleFontSize}; line-height: 1.2;">${escapeHtml(p.product_name || '')}</div>
+                    <div class="prd_price_container" style="margin-top: 4px;">
+                      ${isCoupon ? `
+                        <div class="coupon_wrapper">
+                          <span class="original_price">${isSale ? saleText : priceText}</span>
+                          ${displayPercent > 0 ? `<span class="prd_coupon_percent">${displayPercent}%</span>` : ''}
+                          <span class="prd_coupon" style="font-size: ${priceFontSize};">${couponText}</span>
+                        </div>
+                      ` : isSale ? `
+                        <div class="prd_price">
+                          <span class="original_price">${priceText}</span>
+                          ${displayPercent > 0 ? `<span class="sale_percent">${displayPercent}%</span>` : ''}
+                          <span class="sale_price" style="font-size: ${priceFontSize};">${saleText}</span>
+                        </div>
+                      ` : `
+                        <div class="prd_price">
+                          <span style="font-weight: bold; font-size: ${priceFontSize};">${priceText}</span>
+                        </div>
+                      `}
+                    </div>
+                  </div>
+                </a>
+              </li>`;
+        }).join('');
     }
-    // =======================================================================
   
     const style = document.createElement('style');
     style.textContent = `
@@ -266,7 +269,7 @@
       .tabs_${pageId} button { flex: 1; padding: 8px; font-size: 16px; border: 1px solid #d9d9d9; background: #f5f5f5; color: #333; cursor: pointer; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .prd_price_container .original_price { text-decoration: line-through; color: #999; font-size: 13px; display: block; font-weight: 400; }
       .prd_price_container .sale_percent, .prd_price_container .prd_coupon_percent { color: #ff4d4f; font-weight: bold; margin-right: 4px; }
-      .prd_price_container .sale_price, .prd_price_container .prd_coupon, .prd_price_container .prd_price > span { font-weight: bold; font-size: 15px; }
+      .prd_price_container .sale_price, .prd_price_container .prd_coupon { font-weight: bold; }
     `;
     document.head.appendChild(style);
   

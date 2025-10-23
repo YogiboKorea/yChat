@@ -19,10 +19,11 @@
     const couponNos = script.dataset.couponNos || '';
     const couponQSStart = couponNos ? `?coupon_no=${couponNos}` : '';
     const couponQSAppend = couponNos ? `&coupon_no=${couponNos}` : '';
-
+    
     // ────────────────────────────────────────────────────────────────
     // 2) 공통 헬퍼
     // ────────────────────────────────────────────────────────────────
+    const storagePrefix = `widgetCache_${pageId}_`;
     function escapeHtml(s = '') { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
     function toBool(v) { return v === true || v === 'true' || v === 1 || v === '1' || v === 'on'; }
     function fetchWithRetry(url, opts = {}, retries = 3, backoff = 1000) {
@@ -34,14 +35,11 @@
             return res;
         });
     }
-
-    // ******** MISSING FUNCTION ADDED HERE ********
     function buildYouTubeSrc(id, autoplay = false, loop = false) {
         const params = new URLSearchParams({ autoplay: autoplay ? '1' : '0', mute: autoplay ? '1' : '0', playsinline: '1', rel: 0, modestbranding: 1, enablejsapi: 1 });
         if (loop) { params.set('loop', '1'); params.set('playlist', id); }
         return `https://www.youtube.com/embed/${id}?${params.toString()}`;
     }
-    // *******************************************
 
     // ────────────────────────────────────────────────────────────────
     // 3) 블록 렌더링 함수들
@@ -59,7 +57,7 @@
   
     function renderImageBlock(block, root) {
       const wrap = document.createElement('div');
-      wrap.style.cssText = 'position:relative; margin:0 auto; width:100%; max-width:800px; font-size:0;';
+      wrap.style.cssText = 'position:relative; margin:0 auto 8px; width:100%; max-width:800px; font-size:0;';
       const img = document.createElement('img');
       img.src = block.src;
       img.style.cssText = 'max-width:100%; height:auto; display:block; margin:0 auto;';
@@ -104,7 +102,7 @@
         if (!block.youtubeId) return;
         const src = buildYouTubeSrc(block.youtubeId, toBool(block.autoplay), toBool(block.loop));
         const wrap = document.createElement('div');
-        wrap.style.cssText = `position:relative; width:100%; max-width:800px; margin:16px auto; aspect-ratio:${ratio.w}/${ratio.h};`;
+        wrap.style.cssText = `position:relative; width:100%; max-width:800px; margin:0 auto 8px; aspect-ratio:${ratio.w}/${ratio.h};`;
         const iframe = document.createElement('iframe');
         iframe.src = src;
         iframe.title = `youtube-${block.youtubeId}`;
@@ -120,14 +118,19 @@
       groupWrapper.className = 'product-group-wrapper';
       
       if (block.layoutType === 'tabs') {
+          const activeColor = block.activeColor || '#1890ff';
           const tabsContainer = document.createElement('div');
           tabsContainer.className = `tabs_${pageId}`;
-          tabsContainer.style.gridTemplateColumns = `repeat(${(block.tabs || []).length}, 1fr)`;
+          tabsContainer.style.display = 'flex';
+          tabsContainer.style.gap = '8px';
+          tabsContainer.style.marginTop = '16px';
+          tabsContainer.style.justifyContent = 'center';
+
           (block.tabs || []).forEach((t, i) => {
               const btn = document.createElement('button');
-              if (i === 0) btn.className = 'active';
-              btn.onclick = () => window.showTab(`${block.id || pageId}-tab-${i}`, btn, block.activeColor);
-              btn.textContent = t.title || `탭${i+1}`;
+              if (i === 0) btn.classList.add('active');
+              btn.onclick = () => window.showTab(`${block.id || pageId}-tab-${i}`, btn, activeColor);
+              btn.textContent = t.title || `탭 ${i+1}`;
               tabsContainer.appendChild(btn);
           });
           groupWrapper.appendChild(tabsContainer);
@@ -164,7 +167,7 @@
     }
   
     // ────────────────────────────────────────────────────────────────
-    // 4) 상품 데이터 로드 및 렌더링
+    // 4) 상품 데이터 로드 및 렌더링 (기존 로직 유지)
     // ────────────────────────────────────────────────────────────────
     async function fetchProducts(directNosAttr, category, limit = 300) {
         if (directNosAttr) {
@@ -191,6 +194,7 @@
         const products = await fetchProducts(ul.dataset.directNos, ul.dataset.cate, ul.dataset.count);
         renderProducts(ul, products, cols);
       } catch (err) {
+        console.error('상품 로드 실패:', err);
         const errDiv = document.createElement('div');
         errDiv.style.textAlign = 'center';
         errDiv.innerHTML = `<p style="color:#f00;">상품 로드에 실패했습니다.</p><button style="padding:6px 12px;cursor:pointer;">다시 시도</button>`;
@@ -202,8 +206,7 @@
     }
 
     function renderProducts(ul, products, cols) {
-        ul.style.cssText = `display:grid; grid-template-columns:repeat(${cols},1fr); gap:16px; max-width:800px; margin:24px auto; list-style:none; padding:0; font-family: 'Noto Sans KR', sans-serif;`;
-        
+        ul.style.cssText = `display:grid; grid-template-columns:repeat(${cols},1fr); gap:16px; max-width:800px; margin:24px auto; list-style:none; padding:0;`;
         const formatKRW = val => `${(Number(val) || 0).toLocaleString('ko-KR')}원`;
         const parseNumber = v => {
             if (v == null) return null;
@@ -236,36 +239,26 @@
             const saleText = isSale ? formatKRW(salePrice) : null;
             const couponText = isCoupon ? formatKRW(benefitPrice) : null;
     
-            const titleFontSize = `${18 - cols}px`;
-            const priceFontSize = `${17 - cols}px`;
-
             return `
-              <li style="overflow: hidden; background: #fff;">
-                <a href="/product/detail.html?product_no=${p.product_no}" style="text-decoration:none; color:inherit;" data-track-click="product" data-product-no="${p.product_no}">
-                  <div style="aspect-ratio: 1 / 1; width: 100%; display: flex; align-items: center; justify-content: center; background: #f8f9fa;">
-                    ${p.list_image ? `<img src="${p.list_image}" alt="${escapeHtml(p.product_name||'')}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:40px; color:#d9d9d9;">⛶</span>`}
-                  </div>
-                  <div style="padding: 10px; min-height: 90px;">
-                    <div class="prd_name" style="font-weight: 500; font-size: ${titleFontSize}; line-height: 1.2;">${escapeHtml(p.product_name || '')}</div>
-                    <div class="prd_price_container" style="margin-top: 4px;">
-                      ${isCoupon ? `
-                        <div class="coupon_wrapper">
-                          <span class="original_price">${isSale ? saleText : priceText}</span>
-                          ${displayPercent > 0 ? `<span class="prd_coupon_percent">${displayPercent}%</span>` : ''}
-                          <span class="prd_coupon" style="font-size: ${priceFontSize};">${couponText}</span>
-                        </div>
-                      ` : isSale ? `
-                        <div class="prd_price">
-                          <span class="original_price">${priceText}</span>
-                          ${displayPercent > 0 ? `<span class="sale_percent">${displayPercent}%</span>` : ''}
-                          <span class="sale_price" style="font-size: ${priceFontSize};">${saleText}</span>
-                        </div>
-                      ` : `
-                        <div class="prd_price">
-                          <span style="font-weight: bold; font-size: ${priceFontSize};">${priceText}</span>
-                        </div>
-                      `}
+              <li style="list-style:none;">
+                <a href="/product/detail.html?product_no=${p.product_no}" class="prd_link" style="text-decoration:none;color:inherit;" data-track-click="product" data-product-no="${p.product_no}">
+                  <img src="${p.list_image}" alt="${escapeHtml(p.product_name||'')}" style="width:100%;display:block; margin-bottom: 10px;" />
+                  <div class="prd_desc" style="font-size:14px;color:#666;padding:4px 0;">${p.summary_description || ''}</div>
+                  <div class="prd_name" style="font-weight:500;padding-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(p.product_name || '')}</div>
+                  <div class="prd_price_container">
+                    <div class="prd_price"${isCoupon ? ' style="display:none;"' : ''}>
+                      ${isSale
+                          ? `<span class="original_price">${priceText}</span>
+                             ${(displayPercent > 0) ? `<span class="sale_percent">${displayPercent}%</span>` : ''}
+                             <span class="sale_price">${saleText}</span>`
+                          : `<span>${priceText}</span>`
+                      }
                     </div>
+                    ${isCoupon ? `<div class="coupon_wrapper">
+                                    <span class="original_price">${isSale ? saleText : priceText}</span>
+                                    ${displayPercent > 0 ? `<span class="prd_coupon_percent">${displayPercent}%</span>` : ''}
+                                    <span class="prd_coupon">${couponText}</span>
+                                  </div>` : ''}
                   </div>
                 </a>
               </li>`;
@@ -278,9 +271,10 @@
       @keyframes spin_${pageId} { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg);} }
       .tabs_${pageId} { display: flex; gap: 8px; max-width: 800px; margin: 16px auto; }
       .tabs_${pageId} button { flex: 1; padding: 8px; font-size: 16px; border: 1px solid #d9d9d9; background: #f5f5f5; color: #333; cursor: pointer; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .prd_price_container .original_price { text-decoration: line-through; color: #999; font-size: 13px; display: block; font-weight: 400; }
-      .prd_price_container .sale_percent, .prd_price_container .prd_coupon_percent { color: #ff4d4f; font-weight: bold; margin-right: 4px; }
-      .prd_price_container .sale_price, .prd_price_container .prd_coupon { font-weight: bold; }
+      .tabs_${pageId} button.active { background-color: #1890ff; color: #fff; border-color: #1890ff; font-weight: 600; }
+      .main_Grid_${pageId} .original_price { text-decoration: line-through; color: #999; width:100%; display:block; font-size:13px; font-weight: 400; }
+      .main_Grid_${pageId} .sale_percent, .main_Grid_${pageId} .prd_coupon_percent { color: #ff4d4f; font-weight: bold; margin-right: 4px; }
+      .main_Grid_${pageId} .sale_price, .main_Grid_${pageId} .prd_coupon, .main_Grid_${pageId} .prd_price > span { font-weight: bold; font-size: 16px; }
     `;
     document.head.appendChild(style);
   

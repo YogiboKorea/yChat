@@ -19,10 +19,8 @@
     const couponNos = script.dataset.couponNos || '';
     const couponQSStart = couponNos ? `?coupon_no=${couponNos}` : '';
     const couponQSAppend = couponNos ? `&coupon_no=${couponNos}` : '';
-    
-    // ────────────────────────────────────────────────────────────────
-    // 2) 공통 헬퍼
-    // ────────────────────────────────────────────────────────────────
+
+    // (이하 유틸리티 및 트래킹 함수들은 제공해주신 코드와 동일하게 유지)
     function escapeHtml(s = '') { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
     function toBool(v) { return v === true || v === 'true' || v === 1 || v === '1' || v === 'on'; }
     function fetchWithRetry(url, opts = {}, retries = 3, backoff = 1000) {

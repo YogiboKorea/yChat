@@ -23,6 +23,7 @@
   // ────────────────────────────────────────────────────────────────
   // 2) 공통 헬퍼
   // ────────────────────────────────────────────────────────────────
+  const storagePrefix = `widgetCache_${pageId}_`;
   function escapeHtml(s = '') { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
   function toBool(v) { return v === true || v === 'true' || v === 1 || v === '1' || v === 'on'; }
   function fetchWithRetry(url, opts = {}, retries = 3, backoff = 1000) {
@@ -34,14 +35,11 @@
           return res;
       });
   }
-
-  // ******** MISSING FUNCTION ADDED HERE ********
   function buildYouTubeSrc(id, autoplay = false, loop = false) {
       const params = new URLSearchParams({ autoplay: autoplay ? '1' : '0', mute: autoplay ? '1' : '0', playsinline: '1', rel: 0, modestbranding: 1, enablejsapi: 1 });
       if (loop) { params.set('loop', '1'); params.set('playlist', id); }
       return `https://www.youtube.com/embed/${id}?${params.toString()}`;
   }
-  // *******************************************
 
   // ────────────────────────────────────────────────────────────────
   // 3) 블록 렌더링 함수들
@@ -120,14 +118,19 @@
     groupWrapper.className = 'product-group-wrapper';
     
     if (block.layoutType === 'tabs') {
+        const activeColor = block.activeColor || '#1890ff';
         const tabsContainer = document.createElement('div');
         tabsContainer.className = `tabs_${pageId}`;
-        tabsContainer.style.gridTemplateColumns = `repeat(${(block.tabs || []).length}, 1fr)`;
         (block.tabs || []).forEach((t, i) => {
             const btn = document.createElement('button');
-            if (i === 0) btn.className = 'active';
-            btn.onclick = () => window.showTab(`${block.id || pageId}-tab-${i}`, btn, block.activeColor);
-            btn.textContent = t.title || `탭${i+1}`;
+            if (i === 0) {
+                btn.className = 'active';
+                btn.style.backgroundColor = activeColor;
+                btn.style.color = '#fff';
+                btn.style.borderColor = activeColor;
+            }
+            btn.onclick = () => window.showTab(`${block.id || pageId}-tab-${i}`, btn, activeColor);
+            btn.textContent = t.title || `탭 ${i+1}`;
             tabsContainer.appendChild(btn);
         });
         groupWrapper.appendChild(tabsContainer);
@@ -191,6 +194,7 @@
       const products = await fetchProducts(ul.dataset.directNos, ul.dataset.cate, ul.dataset.count);
       renderProducts(ul, products, cols);
     } catch (err) {
+      console.error('상품 로드 실패:', err);
       const errDiv = document.createElement('div');
       errDiv.style.textAlign = 'center';
       errDiv.innerHTML = `<p style="color:#f00;">상품 로드에 실패했습니다.</p><button style="padding:6px 12px;cursor:pointer;">다시 시도</button>`;
@@ -236,33 +240,30 @@
           const saleText = isSale ? formatKRW(salePrice) : null;
           const couponText = isCoupon ? formatKRW(benefitPrice) : null;
   
-          const titleFontSize = `${18 - cols}px`;
-          const priceFontSize = `${17 - cols}px`;
-
           return `
-            <li style="overflow: hidden; background: #fff;">
+            <li style="overflow: hidden; border: 1px solid #e8e8e8; background: #fff;">
               <a href="/product/detail.html?product_no=${p.product_no}" style="text-decoration:none; color:inherit;" data-track-click="product" data-product-no="${p.product_no}">
                 <div style="aspect-ratio: 1 / 1; width: 100%; display: flex; align-items: center; justify-content: center; background: #f8f9fa;">
                   ${p.list_image ? `<img src="${p.list_image}" alt="${escapeHtml(p.product_name||'')}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size:40px; color:#d9d9d9;">⛶</span>`}
                 </div>
-                <div style="padding: 10px; min-height: 90px;">
-                  <div class="prd_name" style="font-weight: 500; font-size: ${titleFontSize}; line-height: 1.2;">${escapeHtml(p.product_name || '')}</div>
+                <div style="padding: 12px; min-height: 90px;">
+                  <div class="prd_name" style="font-weight: 500; font-size: 16px; line-height: 1.2;">${escapeHtml(p.product_name || '')}</div>
                   <div class="prd_price_container" style="margin-top: 4px;">
                     ${isCoupon ? `
                       <div class="coupon_wrapper">
                         <span class="original_price">${isSale ? saleText : priceText}</span>
                         ${displayPercent > 0 ? `<span class="prd_coupon_percent">${displayPercent}%</span>` : ''}
-                        <span class="prd_coupon" style="font-size: ${priceFontSize};">${couponText}</span>
+                        <span class="prd_coupon" style="font-size: 15px;">${couponText}</span>
                       </div>
                     ` : isSale ? `
                       <div class="prd_price">
                         <span class="original_price">${priceText}</span>
                         ${displayPercent > 0 ? `<span class="sale_percent">${displayPercent}%</span>` : ''}
-                        <span class="sale_price" style="font-size: ${priceFontSize};">${saleText}</span>
+                        <span class="sale_price" style="font-size: 15px;">${saleText}</span>
                       </div>
                     ` : `
                       <div class="prd_price">
-                        <span style="font-weight: bold; font-size: ${priceFontSize};">${priceText}</span>
+                        <span style="font-weight: bold; font-size: 15px;">${priceText}</span>
                       </div>
                     `}
                   </div>
@@ -278,6 +279,7 @@
     @keyframes spin_${pageId} { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg);} }
     .tabs_${pageId} { display: flex; gap: 8px; max-width: 800px; margin: 16px auto; }
     .tabs_${pageId} button { flex: 1; padding: 8px; font-size: 16px; border: 1px solid #d9d9d9; background: #f5f5f5; color: #333; cursor: pointer; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tabs_${pageId} button.active { font-weight: 600; }
     .prd_price_container .original_price { text-decoration: line-through; color: #999; font-size: 13px; display: block; font-weight: 400; }
     .prd_price_container .sale_percent, .prd_price_container .prd_coupon_percent { color: #ff4d4f; font-weight: bold; margin-right: 4px; }
     .prd_price_container .sale_price, .prd_price_container .prd_coupon { font-weight: bold; }

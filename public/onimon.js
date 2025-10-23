@@ -191,9 +191,9 @@
       }
     }
 
-    // ============== 기존 가격 로직이 포함된 상품 렌더링 함수 ==============
     function renderProducts(ul, products, cols) {
         ul.style.cssText = `display:grid; grid-template-columns:repeat(${cols},1fr); gap:16px; max-width:800px; margin:24px auto; list-style:none; padding:0; font-family: 'Noto Sans KR', sans-serif;`;
+        
         const formatKRW = val => `${(Number(val) || 0).toLocaleString('ko-KR')}원`;
         const parseNumber = v => {
             if (v == null) return null;
@@ -268,6 +268,7 @@
       @keyframes spin_${pageId} { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg);} }
       .tabs_${pageId} { display: flex; gap: 8px; max-width: 800px; margin: 16px auto; }
       .tabs_${pageId} button { flex: 1; padding: 8px; font-size: 16px; border: 1px solid #d9d9d9; background: #f5f5f5; color: #333; cursor: pointer; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .tabs_${pageId} button.active { background-color: #1890ff; color: #fff; border-color: #1890ff; }
       .prd_price_container .original_price { text-decoration: line-through; color: #999; font-size: 13px; display: block; font-weight: 400; }
       .prd_price_container .sale_percent, .prd_price_container .prd_coupon_percent { color: #ff4d4f; font-weight: bold; margin-right: 4px; }
       .prd_price_container .sale_price, .prd_price_container .prd_coupon { font-weight: bold; }

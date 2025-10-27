@@ -367,7 +367,6 @@
       const products = await fetchProducts(ul.dataset.directNos, ul.dataset.cate, ul.dataset.count);
       localStorage.setItem(storageKey, JSON.stringify(products));
       renderProducts(ul, products, cols);
-      console.log('상품 데이터:', products);
     } catch (err) {
       const errDiv = document.createElement('div');
       errDiv.style.textAlign = 'center';

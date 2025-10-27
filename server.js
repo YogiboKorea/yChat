@@ -1983,6 +1983,7 @@ app.get('/api/:_any/products/:product_no', async (req, res) => {
 
     // ✨ 최종 응답에 아이콘 필드를 추가합니다.
     res.json({
+      test_field: "코드 반영 성공!",
       product_no,
       product_code: p.product_code,
       product_name: p.product_name,

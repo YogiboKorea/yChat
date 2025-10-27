@@ -382,6 +382,7 @@
   // 5) 상품 렌더링
   // ────────────────────────────────────────────────────────────────
   function renderProducts(ul, products, cols) {
+    console.log('상품 데이터:', products);
     ul.style.cssText = `display:grid; grid-template-columns:repeat(${cols},1fr); gap:10px; max-width:800px; margin:0 auto;`;
     const formatKRW = val => {
       if (typeof val === 'number') return `${val.toLocaleString('ko-KR')}원`;
@@ -662,3 +663,4 @@
   initializePage();
 
 })(); // end IIFE
+

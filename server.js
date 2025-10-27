@@ -1772,8 +1772,7 @@ app.get('/api/:_any/analytics/:pageId/coupon-stats', async (req, res) => {
     console.error('[COUPON-STATS ERROR]', err);
     res.status(500).json({ error: '쿠폰 통계 조회 실패', message: err.response?.data?.message || err.message });
   }
-});
-// 카테고리별 상품 + 쿠폰혜택
+});// 카테고리별 상품 + 쿠폰혜택
 app.get('/api/:_any/categories/:category_no/products', async (req, res) => {
   const { category_no } = req.params;
   try {
@@ -1784,13 +1783,12 @@ app.get('/api/:_any/categories/:category_no/products', async (req, res) => {
     const shop_no      = 1;
     const display_group = 1;
 
-    // 쿠폰 로드 (생략)
+    // 쿠폰 로드
     const coupons = await Promise.all(coupon_nos.map(async no => {
       const urlCoupon = `https://${MALL_ID}.cafe24api.com/api/v2/admin/coupons`;
       const { coupons: arr } = await apiRequest('GET', urlCoupon, {}, {
-        shop_no,
-        coupon_no: no,
-        fields: [ 'coupon_no', 'available_product','available_product_list', 'available_category','available_category_list', 'benefit_amount','benefit_percentage' ].join(',')
+        shop_no, coupon_no: no,
+        fields: 'coupon_no,available_product,available_product_list,available_category,available_category_list,benefit_amount,benefit_percentage'
       });
       return arr?.[0] || null;
     }));
@@ -1803,23 +1801,38 @@ app.get('/api/:_any/categories/:category_no/products', async (req, res) => {
     const productNos = sorted.map(p=>p.product_no);
     if (!productNos.length) return res.json([]);
 
-    // 상품 상세
+    // 1. 기본 상품 정보와 시스템 아이콘을 먼저 가져옵니다.
     const urlProds = `https://${MALL_ID}.cafe24api.com/api/v2/admin/products`;
-    // ✨ 바로 이 부분입니다! fields 파라미터를 추가했습니다.
     const detailRes = await apiRequest('GET', urlProds, {}, {
       shop_no,
       product_no: productNos.join(','),
       limit: productNos.length,
-      fields: 'product_no,product_name,price,summary_description,list_image,icons,additional_icons,product_tags'
+      fields: 'product_no,product_name,price,summary_description,list_image,icons,product_tags'
     });
-    if (details.length > 0) {
-      console.log('### CAFE24 RAW DATA CHECK:', details[0]);
-    }
-
     const details = detailRes.products || [];
     const detailMap = details.reduce((m,p)=>{ m[p.product_no]=p; return m; },{});
 
-    // 즉시할인가 (생략)
+    // 2. 각 상품의 '아이콘 꾸미기' 정보를 병렬로 추가 호출합니다.
+    const iconPromises = productNos.map(async (no) => {
+      const iconsUrl = `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${no}/icons`;
+      try {
+        const iconsRes = await apiRequest('GET', iconsUrl, {}, { shop_no });
+        const imageList = iconsRes?.icons?.image_list || [];
+        return {
+          product_no: no,
+          customIcons: imageList.map(icon => ({ icon_url: icon.path, icon_alt: icon.code }))
+        };
+      } catch (e) {
+        return { product_no: no, customIcons: [] }; // 에러 시 빈 배열 반환
+      }
+    });
+    const iconResults = await Promise.all(iconPromises);
+    const iconsMap = iconResults.reduce((m, item) => {
+      m[item.product_no] = item.customIcons;
+      return m;
+    }, {});
+
+    // 즉시할인가
     const discountMap = {};
     await Promise.all(productNos.map(async no => {
       const urlDis = `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${no}/discountprice`;
@@ -1829,7 +1842,7 @@ app.get('/api/:_any/categories/:category_no/products', async (req, res) => {
 
     const formatKRW = num => num!=null ? Number(num).toLocaleString('ko-KR') + '원' : null;
 
-    // 쿠폰 계산 함수 (생략)
+    // 쿠폰 계산 함수 (전체 복원)
     function calcCouponInfos(prodNo) {
       return validCoupons.map(coupon=>{
         const pList = coupon.available_product_list || [];
@@ -1843,6 +1856,7 @@ app.get('/api/:_any/categories/:category_no/products', async (req, res) => {
           (coupon.available_category==='I' && cList.includes(parseInt(category_no,10))) ||
           (coupon.available_category==='E' && !cList.includes(parseInt(category_no,10)));
         if (!prodOk || !catOk) return null;
+
         const orig = parseFloat(detailMap[prodNo].price || 0);
         const pct  = parseFloat(coupon.benefit_percentage || 0);
         const amt  = parseFloat(coupon.benefit_amount || 0);
@@ -1850,11 +1864,12 @@ app.get('/api/:_any/categories/:category_no/products', async (req, res) => {
         if (pct>0) benefit_price = +(orig*(100-pct)/100).toFixed(2);
         else if (amt>0) benefit_price = +(orig-amt).toFixed(2);
         if (benefit_price==null) return null;
+
         return { coupon_no: coupon.coupon_no, benefit_percentage: pct, benefit_price };
       }).filter(Boolean).sort((a,b)=>b.benefit_percentage-a.benefit_percentage);
     }
 
-    const full = sorted.map(item=>{
+    const full = sorted.map(item => {
       const prod = detailMap[item.product_no];
       if (!prod) return null;
       return {
@@ -1865,14 +1880,13 @@ app.get('/api/:_any/categories/:category_no/products', async (req, res) => {
         list_image: prod.list_image,
         sale_price: discountMap[item.product_no],
         couponInfos: calcCouponInfos(item.product_no),
-        // 누락되었던 아이콘 필드를 여기서 추가합니다.
         icons: prod.icons,
-        additional_icons: prod.additional_icons,
+        additional_icons: iconsMap[item.product_no] || [], // 맵에서 가져온 아이콘 정보 추가
         product_tags: prod.product_tags
       };
     }).filter(Boolean);
 
-    const slim = full.map(p=>{
+    const slim = full.map(p => {
       const infos = p.couponInfos || [];
       const first = infos.length ? infos[0] : null;
       return {
@@ -1885,7 +1899,6 @@ app.get('/api/:_any/categories/:category_no/products', async (req, res) => {
         benefit_price: first ? formatKRW(first.benefit_price) : null,
         benefit_percentage: first ? first.benefit_percentage : null,
         couponInfos: infos.length ? infos : null,
-        // 최종 응답에 아이콘 필드를 여기서 추가합니다.
         icons: p.icons,
         additional_icons: p.additional_icons || [],
         product_tags: p.product_tags
@@ -1898,7 +1911,6 @@ app.get('/api/:_any/categories/:category_no/products', async (req, res) => {
     res.status(err.response?.status || 500).json({ message: '카테고리 상품 조회 실패', error: err.message });
   }
 });
-
 // 전체 상품 조회
 app.get('/api/:_any/products', async (req, res) => {
   try {

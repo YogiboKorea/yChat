@@ -1861,7 +1861,7 @@ app.get('/api/:_any/categories/:category_no/products', async (req, res) => {
         list_image: prod.list_image,
         sale_price: discountMap[item.product_no],
         couponInfos: calcCouponInfos(item.product_no),
-        // ✨ 조회한 아이콘 데이터를 full 객체에 추가합니다.
+        // 누락되었던 아이콘 필드를 여기서 추가합니다.
         icons: prod.icons,
         additional_icons: prod.additional_icons,
         product_tags: prod.product_tags
@@ -1881,7 +1881,7 @@ app.get('/api/:_any/categories/:category_no/products', async (req, res) => {
         benefit_price: first ? formatKRW(first.benefit_price) : null,
         benefit_percentage: first ? first.benefit_percentage : null,
         couponInfos: infos.length ? infos : null,
-        // ✨ 최종 응답(slim) 객체에 아이콘 데이터를 추가합니다.
+        // 최종 응답에 아이콘 필드를 여기서 추가합니다.
         icons: p.icons,
         additional_icons: p.additional_icons || [],
         product_tags: p.product_tags

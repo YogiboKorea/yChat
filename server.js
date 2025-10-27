@@ -2014,10 +2014,7 @@ app.get('/api/:_any/products/:product_no', async (req, res) => {
       benefit_price,
       benefit_percentage,
       list_image: p.list_image,
-      
-      // 시스템 아이콘 (NEW, BEST 등)
       icons: p.icons, 
-      // '아이콘 꾸미기'에서 설정한 아이콘
       additional_icons: customIcons, 
       product_tags: p.product_tags
     });
@@ -2025,7 +2022,7 @@ app.get('/api/:_any/products/:product_no', async (req, res) => {
     console.error('[GET PRODUCT ERROR]', err);
     res.status(500).json({ error: '단일 상품 조회 실패' });
   }
-});
+});//
 // =========================
 // Analytics (MongoDB)
 // =========================

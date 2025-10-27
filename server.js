@@ -1772,7 +1772,8 @@ app.get('/api/:_any/analytics/:pageId/coupon-stats', async (req, res) => {
     console.error('[COUPON-STATS ERROR]', err);
     res.status(500).json({ error: '쿠폰 통계 조회 실패', message: err.response?.data?.message || err.message });
   }
-});// 카테고리별 상품 + 쿠폰혜택
+})
+// 카테고리별 상품 + 쿠폰혜택
 app.get('/api/:_any/categories/:category_no/products', async (req, res) => {
   const { category_no } = req.params;
   try {
@@ -1801,7 +1802,7 @@ app.get('/api/:_any/categories/:category_no/products', async (req, res) => {
     const productNos = sorted.map(p=>p.product_no);
     if (!productNos.length) return res.json([]);
 
-    // 1. 기본 상품 정보와 시스템 아이콘을 먼저 가져옵니다.
+    // 1. 기본 상품 정보
     const urlProds = `https://${MALL_ID}.cafe24api.com/api/v2/admin/products`;
     const detailRes = await apiRequest('GET', urlProds, {}, {
       shop_no,
@@ -1812,18 +1813,33 @@ app.get('/api/:_any/categories/:category_no/products', async (req, res) => {
     const details = detailRes.products || [];
     const detailMap = details.reduce((m,p)=>{ m[p.product_no]=p; return m; },{});
 
-    // 2. 각 상품의 '아이콘 꾸미기' 정보를 병렬로 추가 호출합니다.
+    // 2. 각 상품의 '아이콘 꾸미기' 정보 병렬 호출 및 기간 확인
     const iconPromises = productNos.map(async (no) => {
       const iconsUrl = `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${no}/icons`;
       try {
         const iconsRes = await apiRequest('GET', iconsUrl, {}, { shop_no });
-        const imageList = iconsRes?.icons?.image_list || [];
+        const iconsData = iconsRes?.icons;
+        
+        let imageList = [];
+        if (iconsData) {
+          if (iconsData.use_show_date !== 'T') {
+            imageList = iconsData.image_list || [];
+          } else {
+            const now = new Date();
+            const start = new Date(iconsData.show_start_date);
+            const end = new Date(iconsData.show_end_date);
+            if (now >= start && now < end) {
+              imageList = iconsData.image_list || [];
+            }
+          }
+        }
+        
         return {
           product_no: no,
           customIcons: imageList.map(icon => ({ icon_url: icon.path, icon_alt: icon.code }))
         };
       } catch (e) {
-        return { product_no: no, customIcons: [] }; // 에러 시 빈 배열 반환
+        return { product_no: no, customIcons: [] };
       }
     });
     const iconResults = await Promise.all(iconPromises);
@@ -1842,7 +1858,7 @@ app.get('/api/:_any/categories/:category_no/products', async (req, res) => {
 
     const formatKRW = num => num!=null ? Number(num).toLocaleString('ko-KR') + '원' : null;
 
-    // 쿠폰 계산 함수 (전체 복원)
+    // 쿠폰 계산 함수
     function calcCouponInfos(prodNo) {
       return validCoupons.map(coupon=>{
         const pList = coupon.available_product_list || [];
@@ -1881,7 +1897,7 @@ app.get('/api/:_any/categories/:category_no/products', async (req, res) => {
         sale_price: discountMap[item.product_no],
         couponInfos: calcCouponInfos(item.product_no),
         icons: prod.icons,
-        additional_icons: iconsMap[item.product_no] || [], // 맵에서 가져온 아이콘 정보 추가
+        additional_icons: iconsMap[item.product_no] || [],
         product_tags: prod.product_tags
       };
     }).filter(Boolean);
@@ -1911,6 +1927,7 @@ app.get('/api/:_any/categories/:category_no/products', async (req, res) => {
     res.status(err.response?.status || 500).json({ message: '카테고리 상품 조회 실패', error: err.message });
   }
 });
+
 // 전체 상품 조회
 app.get('/api/:_any/products', async (req, res) => {
   try {
@@ -1938,7 +1955,6 @@ app.get('/api/:_any/products', async (req, res) => {
     res.status(500).json({ error: '전체 상품 조회 실패' });
   }
 });
-
 // 단일 상품 조회
 app.get('/api/:_any/products/:product_no', async (req, res) => {
   const { product_no } = req.params;
@@ -1947,7 +1963,7 @@ app.get('/api/:_any/products/:product_no', async (req, res) => {
     const coupon_query = req.query.coupon_no || '';
     const coupon_nos = coupon_query.split(',').filter(Boolean);
 
-    // ✨ 1. 기본 상품 정보와 시스템 아이콘(icons)을 먼저 가져옵니다.
+    // 1. 기본 상품 정보
     const prodUrl = `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${product_no}`;
     const prodData = await apiRequest('GET', prodUrl, {}, {
       shop_no,
@@ -1956,29 +1972,43 @@ app.get('/api/:_any/products/:product_no', async (req, res) => {
     const p = prodData.product || prodData.products?.[0];
     if (!p) return res.status(404).json({ error: '상품을 찾을 수 없습니다.' });
 
-    // ✨ 2. '아이콘 꾸미기' 정보를 별도 API로 추가 호출합니다.
+    // 2. '아이콘 꾸미기' 정보 호출 및 기간 확인
     const iconsUrl = `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${product_no}/icons`;
     let customIcons = [];
     try {
       const iconsRes = await apiRequest('GET', iconsUrl, {}, { shop_no });
-      // API 응답 구조에 맞춰 데이터를 추출하고, 프론트엔드가 원하는 형태로 변환합니다.
-      const imageList = iconsRes?.icons?.image_list || [];
-      customIcons = imageList.map(icon => ({
-        icon_url: icon.path,
-        icon_alt: icon.code // alt 값으로 code를 사용
-      }));
+      const iconsData = iconsRes?.icons;
+      
+      // 기간 만료 아이콘 필터링 로직
+      if (iconsData) {
+        let imageList = [];
+        if (iconsData.use_show_date !== 'T') {
+          imageList = iconsData.image_list || [];
+        } else {
+          const now = new Date();
+          const start = new Date(iconsData.show_start_date);
+          const end = new Date(iconsData.show_end_date);
+          if (now >= start && now < end) {
+            imageList = iconsData.image_list || [];
+          }
+        }
+        customIcons = imageList.map(icon => ({
+          icon_url: icon.path,
+          icon_alt: icon.code
+        }));
+      }
+
     } catch (iconErr) {
-      // 아이콘이 없는 상품의 경우 404 에러가 발생할 수 있으므로, 경고만 출력하고 무시합니다.
       console.warn(`[ICONS API WARN] product_no ${product_no}:`, iconErr.message);
     }
     
-    // 즉시 할인가 조회
+    // 즉시할인가 조회
     const disUrl = `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${product_no}/discountprice`;
     const disData = await apiRequest('GET', disUrl, {}, { shop_no });
     const rawSale = disData.discountprice?.pc_discount_price;
     const sale_price = rawSale != null ? parseFloat(rawSale) : null;
     
-    // 쿠폰 관련 로직 (전체 복원)
+    // 쿠폰 관련 로직
     const coupons = await Promise.all(coupon_nos.map(async no => {
       const urlCoupon = `https://${MALL_ID}.cafe24api.com/api/v2/admin/coupons`;
       const { coupons: arr } = await apiRequest('GET', urlCoupon, {}, {
@@ -2015,7 +2045,7 @@ app.get('/api/:_any/products/:product_no', async (req, res) => {
       }
     });
 
-    // ✨ 3. 최종 응답에 모든 데이터를 결합하여 보냅니다.
+    // 3. 최종 응답
     res.json({
       product_no,
       product_code: p.product_code,
@@ -2026,11 +2056,8 @@ app.get('/api/:_any/products/:product_no', async (req, res) => {
       benefit_price,
       benefit_percentage,
       list_image: p.list_image,
-      
-      // 시스템 아이콘 (NEW, BEST 등)
       icons: p.icons, 
-      // '아이콘 꾸미기'에서 설정한 아이콘
-      additional_icons: customIcons, 
+      additional_icons: customIcons, // 필터링된 아이콘
       product_tags: p.product_tags
     });
   } catch (err) {
@@ -2038,6 +2065,7 @@ app.get('/api/:_any/products/:product_no', async (req, res) => {
     res.status(500).json({ error: '단일 상품 조회 실패' });
   }
 });
+
 
 // =========================
 // Analytics (MongoDB)

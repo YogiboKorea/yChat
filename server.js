@@ -1926,6 +1926,7 @@ app.get('/api/:_any/products', async (req, res) => {
     res.status(500).json({ error: '전체 상품 조회 실패' });
   }
 });
+
 // 단일 상품 조회
 app.get('/api/:_any/products/:product_no', async (req, res) => {
   const { product_no } = req.params;
@@ -1934,33 +1935,54 @@ app.get('/api/:_any/products/:product_no', async (req, res) => {
     const coupon_query = req.query.coupon_no || '';
     const coupon_nos = coupon_query.split(',').filter(Boolean);
 
+    // ✨ 1. 기본 상품 정보와 시스템 아이콘(icons)을 먼저 가져옵니다.
     const prodUrl = `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${product_no}`;
-    
-    // ✨ 바로 이 부분입니다! fields 파라미터를 추가했습니다.
     const prodData = await apiRequest('GET', prodUrl, {}, {
       shop_no,
-      fields: 'product_no,product_code,product_name,price,summary_description,list_image,icons,additional_icons,product_tags'
+      fields: 'product_no,product_code,product_name,price,summary_description,list_image,icons,product_tags'
     });
-    
     const p = prodData.product || prodData.products?.[0];
     if (!p) return res.status(404).json({ error: '상품을 찾을 수 없습니다.' });
 
+    // ✨ 2. '아이콘 꾸미기' 정보를 별도 API로 추가 호출합니다.
+    const iconsUrl = `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${product_no}/icons`;
+    let customIcons = [];
+    try {
+      const iconsRes = await apiRequest('GET', iconsUrl, {}, { shop_no });
+      // API 응답 구조에 맞춰 데이터를 추출하고, 프론트엔드가 원하는 형태로 변환합니다.
+      const imageList = iconsRes?.icons?.image_list || [];
+      customIcons = imageList.map(icon => ({
+        icon_url: icon.path,
+        icon_alt: icon.code // alt 값으로 code를 사용
+      }));
+    } catch (iconErr) {
+      // 아이콘이 없는 상품의 경우 404 에러가 발생할 수 있으므로, 경고만 출력하고 무시합니다.
+      console.warn(`[ICONS API WARN] product_no ${product_no}:`, iconErr.message);
+    }
+    
+    // 즉시 할인가 조회
     const disUrl = `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${product_no}/discountprice`;
     const disData = await apiRequest('GET', disUrl, {}, { shop_no });
     const rawSale = disData.discountprice?.pc_discount_price;
     const sale_price = rawSale != null ? parseFloat(rawSale) : null;
-
-    // 쿠폰 관련 로직 (기존과 동일)
+    
+    // 쿠폰 관련 로직 (전체 복원)
     const coupons = await Promise.all(coupon_nos.map(async no => {
       const urlCoupon = `https://${MALL_ID}.cafe24api.com/api/v2/admin/coupons`;
       const { coupons: arr } = await apiRequest('GET', urlCoupon, {}, {
         shop_no,
         coupon_no: no,
-        fields: [ 'coupon_no', 'available_product','available_product_list', 'available_category','available_category_list', 'benefit_amount','benefit_percentage' ].join(',')
+        fields: [
+          'coupon_no',
+          'available_product','available_product_list',
+          'available_category','available_category_list',
+          'benefit_amount','benefit_percentage'
+        ].join(',')
       });
       return arr?.[0] || null;
     }));
     const validCoupons = coupons.filter(Boolean);
+
     let benefit_price = null, benefit_percentage = null;
     validCoupons.forEach(coupon => {
       const pList = coupon.available_product_list || [];
@@ -1981,9 +2003,8 @@ app.get('/api/:_any/products/:product_no', async (req, res) => {
       }
     });
 
-    // ✨ 최종 응답에 아이콘 필드를 추가합니다.
+    // ✨ 3. 최종 응답에 모든 데이터를 결합하여 보냅니다.
     res.json({
-      test_field: "코드 반영 성공!",
       product_no,
       product_code: p.product_code,
       product_name: p.product_name,
@@ -1993,9 +2014,11 @@ app.get('/api/:_any/products/:product_no', async (req, res) => {
       benefit_price,
       benefit_percentage,
       list_image: p.list_image,
-      // 아이콘 데이터 추가
-      icons: p.icons,
-      additional_icons: p.additional_icons || [],
+      
+      // 시스템 아이콘 (NEW, BEST 등)
+      icons: p.icons, 
+      // '아이콘 꾸미기'에서 설정한 아이콘
+      additional_icons: customIcons, 
       product_tags: p.product_tags
     });
   } catch (err) {

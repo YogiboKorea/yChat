@@ -27,8 +27,8 @@
   const loopAll = script.dataset.loopAll === '1';
 
   /* ------------------------------------------------------------------
-     COOKIE CLEAR & REFRESH FEATURE
-   ------------------------------------------------------------------ */
+      COOKIE CLEAR & REFRESH FEATURE
+    ------------------------------------------------------------------ */
   function deleteCookie(name) {
     try { document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/;`; } catch (e) {}
     const host = location.hostname || '';
@@ -315,24 +315,33 @@
     const fetchOpts = { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } };
     const ulDirect = directNosAttr || directNos;
 
+    // ✨ API에서 반환하는 상품 객체에 아이콘 관련 필드를 추가합니다.
+    const mapProductData = p => ({
+      product_no: p.product_no,
+      product_name: p.product_name,
+      summary_description: p.summary_description || '',
+      price: p.price,
+      list_image: p.list_image,
+      sale_price: p.sale_price || null,
+      benefit_price: p.benefit_price || null,
+      benefit_percentage: p.benefit_percentage || null,
+      icons: p.icons || null,
+      additional_icons: p.additional_icons || [],
+      product_tags: p.product_tags || ''
+    });
+
     if (ulDirect) {
       const ids = ulDirect.split(',').map(s => s.trim()).filter(Boolean);
       const results = await Promise.all(ids.map(no =>
         fetchWithRetry(`${API_BASE}/api/${mallId}/products/${no}${couponQSStart}`, fetchOpts).then(r => r.json())
       ));
-      return results.map(p => (p && p.product_no) ? p : {}).map(p => ({
-        product_no: p.product_no, product_name: p.product_name, summary_description: p.summary_description || '', price: p.price,
-        list_image: p.list_image, sale_price: p.sale_price || null, benefit_price: p.benefit_price || null, benefit_percentage: p.benefit_percentage || null
-      }));
+      return results.map(p => (p && p.product_no) ? p : {}).map(mapProductData);
     } else if (category) {
       const prodUrl = `${API_BASE}/api/${mallId}/categories/${category}/products?limit=${limit}${couponQSAppend}`;
       const [rawProducts] = await Promise.all([
         fetchWithRetry(prodUrl, fetchOpts).then(r => r.json()).then(json => Array.isArray(json) ? json : (json.products || [])),
       ]);
-      return rawProducts.map(p => (typeof p === 'object' ? p : {})).map(p => ({
-        product_no: p.product_no, product_name: p.product_name, summary_description: p.summary_description || '', price: p.price,
-        list_image: p.list_image, sale_price: p.sale_price || null, benefit_price: p.benefit_price || null, benefit_percentage: p.benefit_percentage || null
-      }));
+      return rawProducts.map(p => (typeof p === 'object' ? p : {})).map(mapProductData);
     }
     return [];
   }
@@ -385,6 +394,14 @@
       const n = parseFloat(String(v).replace(/[^\d.-]/g, ''));
       return isFinite(n) ? n : null;
     };
+
+    // ✨ 상품 태그와 아이콘 이미지 URL을 매핑하는 객체입니다.
+    // ✨ 필요에 따라 키(태그명)와 값(이미지 URL)을 추가/수정하세요.
+    const TAG_ICON_MAP = {
+      "자체제작": "https://path/to/your/custom-icon-handmade.png",
+      "기간한정": "https://path/to/your/custom-icon-limited.png",
+    };
+
     ul.innerHTML = products.map(p => {
       const origPrice = parseNumber(p.price) || 0;
       const salePrice = parseNumber(p.sale_price);
@@ -407,10 +424,51 @@
       const couponText = isCoupon ? formatKRW(benefitPrice) : null;
       const salePercent = isSale ? displayPercent : null;
 
+      // ✨ 아이콘 HTML 생성 로직 시작
+      let iconHtml = '';
+      const renderedUrls = new Set(); // 중복 아이콘 방지
+
+      // 1. additional_icons (사용자 등록 아이콘)
+      if (Array.isArray(p.additional_icons)) {
+        p.additional_icons.forEach(icon => {
+          if (icon.icon_url && !renderedUrls.has(icon.icon_url)) {
+            iconHtml += `<img src="${icon.icon_url}" alt="${escapeHtml(icon.icon_alt || '상품 아이콘')}" class="prd_icon" />`;
+            renderedUrls.add(icon.icon_url);
+          }
+        });
+      }
+
+      // 2. icons (시스템 기본 아이콘)
+      if (p.icons) {
+        // 표시할 시스템 아이콘 종류
+        ['icon_new', 'icon_recom', 'icon_best', 'icon_sale'].forEach(key => {
+          const url = p.icons[key];
+          if (url && !renderedUrls.has(url)) {
+            const altText = key.replace('icon_', '') + ' 아이콘';
+            iconHtml += `<img src="${url}" alt="${altText}" class="prd_icon" />`;
+            renderedUrls.add(url);
+          }
+        });
+      }
+
+      // 3. product_tags (상품 태그 기반 아이콘)
+      if (p.product_tags) {
+        const tags = p.product_tags.split(',').map(t => t.trim());
+        tags.forEach(tag => {
+          const url = TAG_ICON_MAP[tag];
+          if (url && !renderedUrls.has(url)) {
+            iconHtml += `<img src="${url}" alt="${escapeHtml(tag)}" class="prd_icon" />`;
+            renderedUrls.add(url);
+          }
+        });
+      }
+      // ✨ 아이콘 HTML 생성 로직 끝
+
       return `
         <li style="list-style:none;">
-          <a href="/product/detail.html?product_no=${p.product_no}" class="prd_link" style="text-decoration:none;color:inherit;" data-track-click="product" data-product-no="${p.product_no}" target="_blank" rel="noopener noreferrer">
+          <a href="/product/detail.html?product_no=${p.product_no}" class="prd_link" style="position:relative; text-decoration:none; color:inherit; display:block;" data-track-click="product" data-product-no="${p.product_no}" target="_blank" rel="noopener noreferrer">
             <img src="${p.list_image}" alt="${escapeHtml(p.product_name||'')}" style="width:100%;display:block;" />
+            ${iconHtml ? `<div class="prd_icons">${iconHtml}</div>` : ''}
             <div class="prd_desc" style="font-size:14px;color:#666;padding:4px 0;">${p.summary_description || ''}</div>
             <div class="prd_name" style="font-weight:500;padding-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(p.product_name || '')}</div>
           </a>
@@ -425,10 +483,10 @@
               }
             </div>
             ${couponText ? `<div class="coupon_wrapper">
-                              <span class="original_price">${priceText}</span>
-                              ${displayPercent ? `<span class="prd_coupon_percent">${displayPercent}%</span>` : ''}
-                              <span class="prd_coupon">${couponText}</span>
-                           </div>` : ''}
+                               <span class="original_price">${priceText}</span>
+                               ${displayPercent ? `<span class="prd_coupon_percent">${displayPercent}%</span>` : ''}
+                               <span class="prd_coupon">${couponText}</span>
+                             </div>` : ''}
           </div>
         </li>`;
     }).join('');
@@ -452,7 +510,7 @@
   .main_Grid_${pageId} li { color:#000; }
   .main_Grid_${pageId} .prd_desc { padding-bottom:3px; font-size:14px; color:#666; ;}
   
-  /* ✨✨✨ START: MODIFIED STYLES ✨✨✨ */
+  /* PRICE STYLES START */
   .main_Grid_${pageId} .prd_price,
   .main_Grid_${pageId} .coupon_wrapper {
     font-size: 16px;
@@ -476,7 +534,24 @@
   .main_Grid_${pageId} .prd_coupon {
     font-weight: bold;
   }
-  /* ✨✨✨ END: MODIFIED STYLES ✨✨✨ */
+  /* PRICE STYLES END */
+
+  /* ✨ ICONS STYLE START ✨ */
+  .main_Grid_${pageId} .prd_icons {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    pointer-events: none; /* 아이콘이 링크 클릭을 방해하지 않도록 */
+  }
+  .main_Grid_${pageId} .prd_icon {
+    height: 24px; /* 아이콘 높이 통일 */
+    width: auto;
+    padding-bottom: 0; /* 이미지 기본 패딩 제거 */
+  }
+  /* ✨ ICONS STYLE END ✨ */
 
   @media (max-width: 400px) {
     .tabs_${pageId}{ width:95%; margin:0 auto;margin-top:20px; font-weight:bold; }

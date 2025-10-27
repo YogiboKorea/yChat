@@ -1773,7 +1773,6 @@ app.get('/api/:_any/analytics/:pageId/coupon-stats', async (req, res) => {
     res.status(500).json({ error: '쿠폰 통계 조회 실패', message: err.response?.data?.message || err.message });
   }
 });
-
 // 카테고리별 상품 + 쿠폰혜택
 app.get('/api/:_any/categories/:category_no/products', async (req, res) => {
   const { category_no } = req.params;
@@ -1785,18 +1784,13 @@ app.get('/api/:_any/categories/:category_no/products', async (req, res) => {
     const shop_no      = 1;
     const display_group = 1;
 
-    // 쿠폰 로드
+    // 쿠폰 로드 (생략)
     const coupons = await Promise.all(coupon_nos.map(async no => {
       const urlCoupon = `https://${MALL_ID}.cafe24api.com/api/v2/admin/coupons`;
       const { coupons: arr } = await apiRequest('GET', urlCoupon, {}, {
         shop_no,
         coupon_no: no,
-        fields: [
-          'coupon_no',
-          'available_product','available_product_list',
-          'available_category','available_category_list',
-          'benefit_amount','benefit_percentage'
-        ].join(',')
+        fields: [ 'coupon_no', 'available_product','available_product_list', 'available_category','available_category_list', 'benefit_amount','benefit_percentage' ].join(',')
       });
       return arr?.[0] || null;
     }));
@@ -1811,11 +1805,17 @@ app.get('/api/:_any/categories/:category_no/products', async (req, res) => {
 
     // 상품 상세
     const urlProds = `https://${MALL_ID}.cafe24api.com/api/v2/admin/products`;
-    const detailRes = await apiRequest('GET', urlProds, {}, { shop_no, product_no: productNos.join(','), limit: productNos.length });
+    // ✨ 바로 이 부분입니다! fields 파라미터를 추가했습니다.
+    const detailRes = await apiRequest('GET', urlProds, {}, {
+      shop_no,
+      product_no: productNos.join(','),
+      limit: productNos.length,
+      fields: 'product_no,product_name,price,summary_description,list_image,icons,additional_icons,product_tags'
+    });
     const details = detailRes.products || [];
     const detailMap = details.reduce((m,p)=>{ m[p.product_no]=p; return m; },{});
 
-    // 즉시할인가
+    // 즉시할인가 (생략)
     const discountMap = {};
     await Promise.all(productNos.map(async no => {
       const urlDis = `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${no}/discountprice`;
@@ -1825,6 +1825,7 @@ app.get('/api/:_any/categories/:category_no/products', async (req, res) => {
 
     const formatKRW = num => num!=null ? Number(num).toLocaleString('ko-KR') + '원' : null;
 
+    // 쿠폰 계산 함수 (생략)
     function calcCouponInfos(prodNo) {
       return validCoupons.map(coupon=>{
         const pList = coupon.available_product_list || [];
@@ -1838,7 +1839,6 @@ app.get('/api/:_any/categories/:category_no/products', async (req, res) => {
           (coupon.available_category==='I' && cList.includes(parseInt(category_no,10))) ||
           (coupon.available_category==='E' && !cList.includes(parseInt(category_no,10)));
         if (!prodOk || !catOk) return null;
-
         const orig = parseFloat(detailMap[prodNo].price || 0);
         const pct  = parseFloat(coupon.benefit_percentage || 0);
         const amt  = parseFloat(coupon.benefit_amount || 0);
@@ -1846,7 +1846,6 @@ app.get('/api/:_any/categories/:category_no/products', async (req, res) => {
         if (pct>0) benefit_price = +(orig*(100-pct)/100).toFixed(2);
         else if (amt>0) benefit_price = +(orig-amt).toFixed(2);
         if (benefit_price==null) return null;
-
         return { coupon_no: coupon.coupon_no, benefit_percentage: pct, benefit_price };
       }).filter(Boolean).sort((a,b)=>b.benefit_percentage-a.benefit_percentage);
     }
@@ -1861,7 +1860,11 @@ app.get('/api/:_any/categories/:category_no/products', async (req, res) => {
         summary_description: prod.summary_description,
         list_image: prod.list_image,
         sale_price: discountMap[item.product_no],
-        couponInfos: calcCouponInfos(item.product_no)
+        couponInfos: calcCouponInfos(item.product_no),
+        // ✨ 조회한 아이콘 데이터를 full 객체에 추가합니다.
+        icons: prod.icons,
+        additional_icons: prod.additional_icons,
+        product_tags: prod.product_tags
       };
     }).filter(Boolean);
 
@@ -1877,7 +1880,11 @@ app.get('/api/:_any/categories/:category_no/products', async (req, res) => {
         sale_price: (p.sale_price!=null && +p.sale_price!==+p.price) ? formatKRW(p.sale_price) : null,
         benefit_price: first ? formatKRW(first.benefit_price) : null,
         benefit_percentage: first ? first.benefit_percentage : null,
-        couponInfos: infos.length ? infos : null
+        couponInfos: infos.length ? infos : null,
+        // ✨ 최종 응답(slim) 객체에 아이콘 데이터를 추가합니다.
+        icons: p.icons,
+        additional_icons: p.additional_icons || [],
+        product_tags: p.product_tags
       };
     });
 

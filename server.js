@@ -1812,6 +1812,10 @@ app.get('/api/:_any/categories/:category_no/products', async (req, res) => {
       limit: productNos.length,
       fields: 'product_no,product_name,price,summary_description,list_image,icons,additional_icons,product_tags'
     });
+    if (details.length > 0) {
+      console.log('### CAFE24 RAW DATA CHECK:', details[0]);
+    }
+
     const details = detailRes.products || [];
     const detailMap = details.reduce((m,p)=>{ m[p.product_no]=p; return m; },{});
 
@@ -1922,7 +1926,6 @@ app.get('/api/:_any/products', async (req, res) => {
     res.status(500).json({ error: '전체 상품 조회 실패' });
   }
 });
-
 // 단일 상품 조회
 app.get('/api/:_any/products/:product_no', async (req, res) => {
   const { product_no } = req.params;
@@ -1932,7 +1935,13 @@ app.get('/api/:_any/products/:product_no', async (req, res) => {
     const coupon_nos = coupon_query.split(',').filter(Boolean);
 
     const prodUrl = `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${product_no}`;
-    const prodData = await apiRequest('GET', prodUrl, {}, { shop_no });
+    
+    // ✨ 바로 이 부분입니다! fields 파라미터를 추가했습니다.
+    const prodData = await apiRequest('GET', prodUrl, {}, {
+      shop_no,
+      fields: 'product_no,product_code,product_name,price,summary_description,list_image,icons,additional_icons,product_tags'
+    });
+    
     const p = prodData.product || prodData.products?.[0];
     if (!p) return res.status(404).json({ error: '상품을 찾을 수 없습니다.' });
 
@@ -1941,22 +1950,17 @@ app.get('/api/:_any/products/:product_no', async (req, res) => {
     const rawSale = disData.discountprice?.pc_discount_price;
     const sale_price = rawSale != null ? parseFloat(rawSale) : null;
 
+    // 쿠폰 관련 로직 (기존과 동일)
     const coupons = await Promise.all(coupon_nos.map(async no => {
       const urlCoupon = `https://${MALL_ID}.cafe24api.com/api/v2/admin/coupons`;
       const { coupons: arr } = await apiRequest('GET', urlCoupon, {}, {
         shop_no,
         coupon_no: no,
-        fields: [
-          'coupon_no',
-          'available_product','available_product_list',
-          'available_category','available_category_list',
-          'benefit_amount','benefit_percentage'
-        ].join(',')
+        fields: [ 'coupon_no', 'available_product','available_product_list', 'available_category','available_category_list', 'benefit_amount','benefit_percentage' ].join(',')
       });
       return arr?.[0] || null;
     }));
     const validCoupons = coupons.filter(Boolean);
-
     let benefit_price = null, benefit_percentage = null;
     validCoupons.forEach(coupon => {
       const pList = coupon.available_product_list || [];
@@ -1977,6 +1981,7 @@ app.get('/api/:_any/products/:product_no', async (req, res) => {
       }
     });
 
+    // ✨ 최종 응답에 아이콘 필드를 추가합니다.
     res.json({
       product_no,
       product_code: p.product_code,
@@ -1986,14 +1991,17 @@ app.get('/api/:_any/products/:product_no', async (req, res) => {
       sale_price,
       benefit_price,
       benefit_percentage,
-      list_image: p.list_image
+      list_image: p.list_image,
+      // 아이콘 데이터 추가
+      icons: p.icons,
+      additional_icons: p.additional_icons || [],
+      product_tags: p.product_tags
     });
   } catch (err) {
     console.error('[GET PRODUCT ERROR]', err);
     res.status(500).json({ error: '단일 상품 조회 실패' });
   }
 });
-
 // =========================
 // Analytics (MongoDB)
 // =========================

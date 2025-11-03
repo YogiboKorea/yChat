@@ -2290,23 +2290,9 @@ app.get('/api/:_any/analytics/:pageId/product-performance', async (req, res) => 
 
 
 
-///////여기다가 추가
 
+/**🎁 블랙프라이데이 확률 기반 이벤트 참여 API**/
 
-// ========== [블랙프라이데이 이벤트] ==========
-
-/**
- * 🎁 블랙프라이데이 확률 기반 이벤트 참여 API
- * [POST] /api/event/check
- * 이 API는 프론트엔드에서 참여하기 버튼을 눌렀을 때 호출됩니다.
- */
-// server.js 파일 중간에 추가
-
-/**
- * [서버 시작 시 실행] 블랙프라이데이 이벤트 데이터 자동 설정 함수
- * DB의 'eventBlackF' 컬렉션을 확인하고, 데이터가 없으면 3주치 기본 데이터를 자동으로 생성합니다.
- * 이미 데이터가 있으면 아무 작업도 하지 않으므로, DB에서 직접 수정한 내용이 보존됩니다.
- */
 async function initializeEventData() {
   const client = new MongoClient(MONGODB_URI);
   console.log("🟡 블랙프라이데이 이벤트 데이터 확인 중...");
@@ -2411,6 +2397,18 @@ app.post('/api/event/check', async (req, res) => {
           eventWeek: currentEvent.week,
           userId: userId
       });
+      // 3. 해당 주차에 이미 당첨자가 나왔는지 확인
+      if (currentEvent.winner && currentEvent.winner.userId) {
+        // 확률 계산을 모두 건너뛰고, 현재 참여자를 즉시 '미당첨(lose)'으로 처리합니다.
+        await participantsCollection.insertOne({
+            eventWeek: currentEvent.week,
+            userId: userId,
+            participationDate: new Date(),
+            result: 'lose'
+        });
+        // 프론트엔드에 'lose' 결과를 보내고 모든 로직을 여기서 종료합니다.
+        return res.json({ result: 'lose' });
+      }
 
       if (existingParticipant) {
           return res.status(409).json({ message: '이번 주 이벤트에 이미 참여하셨습니다.' });

@@ -2288,60 +2288,126 @@ app.get('/api/:_any/analytics/:pageId/product-performance', async (req, res) => 
 
 
 
-//데이터 
-const initialEventData = [
-  {
-    "week": 1,
-    "startDate": new Date("2025-11-09T15:00:00.000Z"), // KST: 2025-11-10 00:00
-    "endDate": new Date("2025-11-16T14:59:59.999Z"),   // KST: 2025-11-16 23:59
-    "probabilities": { "day1_4": 0.0001, "day5_6": 0.05 },
-    "day7NthWinner": 100,
-    "winner": { "userId": null, "winDate": null }
-  },
-  {
-    "week": 2,
-    "startDate": new Date("2025-11-16T15:00:00.000Z"), // KST: 2025-11-17 00:00
-    "endDate": new Date("2025-11-23T14:59:59.999Z"),   // KST: 2025-11-23 23:59
-    "probabilities": { "day1_4": 0.0001, "day5_6": 0.05 },
-    "day7NthWinner": 100,
-    "winner": { "userId": null, "winDate": null }
-  },
-  {
-    "week": 3,
-    "startDate": new Date("2025-11-23T15:00:00.000Z"), // KST: 2025-11-24 00:00
-    "endDate": new Date("2025-11-30T14:59:59.999Z"),   // KST: 2025-11-30 23:59
-    "probabilities": { "day1_4": 0.0001, "day5_6": 0.05 },
-    "day7NthWinner": 100,
-    "winner": { "userId": null, "winDate": null }
+// server.js 파일
+
+// ... (다른 코드들) ...
+
+/**
+ * 🎁 블랙프라이데이 확률 이벤트 참여 API
+ * [POST] /api/event/check
+ */
+app.post('/api/event/check', async (req, res) => {
+  const { userId } = req.body;
+  if (!userId) {
+      return res.status(400).json({ error: '회원 아이디(userId)가 필요합니다.' });
   }
-];
 
-async function seedDatabase() {
-    const client = new MongoClient(MONGODB_URI);
-    console.log("MongoDB에 연결을 시도합니다...");
+  const client = new MongoClient(MONGODB_URI);
 
-    try {
-        await client.connect();
-        const db = client.db(DB_NAME);
-        const eventConfigsCollection = db.collection('eventBlackF'); // 컬렉션 이름: eventBlackF
+  try {
+      await client.connect();
+      const db = client.db(DB_NAME);
+      
+      // ⭐ 수정된 부분: 컬렉션 이름을 'eventBlackF'로 변경
+      const eventConfigsCollection = db.collection('eventBlackF'); 
+      const participantsCollection = db.collection('eventparticipants');
+      
+      const now = new Date();
 
-        console.log("연결 성공! 기존 이벤트 설정을 삭제합니다...");
-        await eventConfigsCollection.deleteMany({});
+      // 1. 현재 날짜에 해당하는 이벤트 주차 정보 찾기
+      const currentEvent = await eventConfigsCollection.findOne({
+          startDate: { $lte: now },
+          endDate: { $gte: now }
+      });
 
-        console.log("새로운 3주치 이벤트 데이터를 삽입합니다...");
-        await eventConfigsCollection.insertMany(initialEventData);
+      if (!currentEvent) {
+          return res.status(404).json({ message: '현재 진행 중인 이벤트가 없습니다.' });
+      }
 
-        console.log("✅ 성공! 이벤트 기본 데이터가 DB에 정상적으로 저장되었습니다.");
+      // 2. 이미 해당 주차에 참여했는지 확인
+      const existingParticipant = await participantsCollection.findOne({
+          eventWeek: currentEvent.week,
+          userId: userId
+      });
 
-    } catch (error) {
-        console.error("❌ 데이터 저장 중 오류가 발생했습니다:", error);
-    } finally {
-        await client.close();
-        console.log("MongoDB 연결이 종료되었습니다.");
-    }
-}
+      if (existingParticipant) {
+          return res.status(409).json({ message: '이번 주 이벤트에 이미 참여하셨습니다.' });
+      }
 
-seedDatabase();
+      // 3. 해당 주차에 이미 당첨자가 나왔는지 확인
+      if (currentEvent.winner && currentEvent.winner.userId) {
+          await participantsCollection.insertOne({
+              eventWeek: currentEvent.week,
+              userId: userId,
+              participationDate: new Date(),
+              result: 'lose'
+          });
+          return res.json({ result: 'lose' });
+      }
+
+      // 4. 이벤트 경과일 계산 (1일차 ~ 7일차)
+      const dayDifference = Math.floor((now - currentEvent.startDate) / (1000 * 60 * 60 * 24)) + 1;
+      let isWinner = false;
+
+      // 5. 당첨 로직 적용
+      if (dayDifference === 7) {
+          // 7일차 로직...
+          const todayStart = new Date(now.setHours(0, 0, 0, 0));
+          const todayEnd = new Date(now.setHours(23, 59, 59, 999));
+          
+          const todayParticipantCount = await participantsCollection.countDocuments({
+              eventWeek: currentEvent.week,
+              participationDate: { $gte: todayStart, $lte: todayEnd }
+          });
+
+          if (todayParticipantCount === currentEvent.day7NthWinner - 1) {
+              isWinner = true;
+          }
+      } else {
+          // 1~6일차 로직...
+          let probability = 0;
+          if (dayDifference <= 4) {
+              probability = currentEvent.probabilities.day1_4;
+          } else {
+              probability = currentEvent.probabilities.day5_6;
+          }
+          isWinner = Math.random() < probability;
+      }
+
+      // 6. 참여 결과 DB에 기록
+      await participantsCollection.insertOne({
+          eventWeek: currentEvent.week,
+          userId: userId,
+          participationDate: new Date(),
+          result: isWinner ? 'win' : 'lose'
+      });
+
+      // 7. 당첨 시, 이벤트 설정 정보에 당첨자 기록
+      if (isWinner) {
+          await eventConfigsCollection.updateOne(
+              { _id: currentEvent._id },
+              { 
+                  $set: { 
+                      'winner.userId': userId,
+                      'winner.winDate': new Date()
+                  } 
+              }
+          );
+      }
+
+      // 8. 최종 결과 전송
+      res.json({ result: isWinner ? 'win' : 'lose' });
+
+  } catch (error) {
+      if (error.code === 11000) {
+          return res.status(409).json({ message: '이번 주 이벤트에 이미 참여하셨습니다.' });
+      }
+      console.error('이벤트 참여 처리 중 오류 발생:', error);
+      res.status(500).json({ error: '서버 내부 오류가 발생했습니다.' });
+  } finally {
+      await client.close();
+  }
+});
 
 
 // ========== [서버 실행 및 프롬프트 초기화] ==========

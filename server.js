@@ -2288,96 +2288,83 @@ app.get('/api/:_any/analytics/:pageId/product-performance', async (req, res) => 
 
 
 
-// server.js 파일
 
-// ... (다른 코드들) ...
+
+///////여기다가 추가
+
+
+// ========== [블랙프라이데이 이벤트] ==========
 
 /**
- * 🎁 블랙프라이데이 확률 이벤트 참여 API
+ * 🎁 블랙프라이데이 확률 기반 이벤트 참여 API
  * [POST] /api/event/check
+ * 이 API는 프론트엔드에서 참여하기 버튼을 눌렀을 때 호출됩니다.
  */
+// server.js 파일 중간에 추가
 
-
-const initialEventData = [
-  {
-    "week": 1,
-    "startDate": new Date("2025-11-03T15:00:00.000Z"), // KST: 2025-11-10 00:00
-    "endDate": new Date("2025-11-09T14:59:59.999Z"),   // KST: 2025-11-16 23:59
-    "probabilities": { "day1_4": 0.0001, "day5_6": 0.05 },
-    "day7NthWinner": 100,
-    "winner": { "userId": null, "winDate": null }
-  },
-  {
-    "week": 2,
-    "startDate": new Date("2025-11-16T15:00:00.000Z"), // KST: 2025-11-17 00:00
-    "endDate": new Date("2025-11-23T14:59:59.999Z"),   // KST: 2025-11-23 23:59
-    "probabilities": { "day1_4": 0.0001, "day5_6": 0.05 },
-    "day7NthWinner": 100,
-    "winner": { "userId": null, "winDate": null }
-  },
-  {
-    "week": 3,
-    "startDate": new Date("2025-11-23T15:00:00.000Z"), // KST: 2025-11-24 00:00
-    "endDate": new Date("2025-11-30T14:59:59.999Z"),   // KST: 2025-11-30 23:59
-    "probabilities": { "day1_4": 0.0001, "day5_6": 0.05 },
-    "day7NthWinner": 100,
-    "winner": { "userId": null, "winDate": null }
-  }
-];
-
-async function seedDatabase() {
+/**
+ * [서버 시작 시 실행] 블랙프라이데이 이벤트 데이터 자동 설정 함수
+ * DB의 'eventBlackF' 컬렉션을 확인하고, 데이터가 없으면 3주치 기본 데이터를 자동으로 생성합니다.
+ * 이미 데이터가 있으면 아무 작업도 하지 않으므로, DB에서 직접 수정한 내용이 보존됩니다.
+ */
+async function initializeEventData() {
   const client = new MongoClient(MONGODB_URI);
-  console.log("MongoDB에 연결을 시도합니다...");
+  console.log("🟡 블랙프라이데이 이벤트 데이터 확인 중...");
 
   try {
       await client.connect();
       const db = client.db(DB_NAME);
-      const eventConfigsCollection = db.collection('eventBlackF'); // 컬렉션 이름: eventBlackF
+      const eventConfigsCollection = db.collection('eventBlackF');
 
-      console.log("연결 성공! 기존 이벤트 설정을 삭제합니다...");
-      await eventConfigsCollection.deleteMany({});
+      // 컬렉션에 데이터가 하나라도 있는지 확인합니다.
+      const count = await eventConfigsCollection.countDocuments();
 
-      console.log("새로운 3주치 이벤트 데이터를 삽입합니다...");
-      await eventConfigsCollection.insertMany(initialEventData);
+      if (count > 0) {
+          // 데이터가 이미 있으면 아무것도 하지 않고 종료합니다.
+          console.log("✅ 이벤트 데이터가 이미 존재합니다. 초기화를 건너뜁니다.");
+      } else {
+          // 데이터가 없으면, 기본 데이터를 삽입합니다.
+          console.log("⚠️ 이벤트 데이터가 없습니다. 3주치 기본 데이터를 생성합니다...");
 
-      console.log("✅ 성공! 이벤트 기본 데이터가 DB에 정상적으로 저장되었습니다.");
+          const initialEventData = [
+            {
+              "week": 1,
+              "startDate": new Date("2025-11-02T15:00:00.000Z"), // KST: 2025-11-03 00:00
+              "endDate": new Date("2025-11-09T14:59:59.999Z"),   // KST: 2025-11-09 23:59
+              "probabilities": { "day1_4": 0.0001, "day5_6": 0.05 },
+              "day7NthWinner": 100,
+              "winner": { "userId": null, "winDate": null }
+            },
+            {
+              "week": 2,
+              "startDate": new Date("2025-11-09T15:00:00.000Z"), // KST: 2025-11-10 00:00
+              "endDate": new Date("2025-11-16T14:59:59.999Z"),   // KST: 2025-11-16 23:59
+              "probabilities": { "day1_4": 0.0001, "day5_6": 0.05 },
+              "day7NthWinner": 100,
+              "winner": { "userId": null, "winDate": null }
+            },
+            {
+              "week": 3,
+              "startDate": new Date("2025-11-16T15:00:00.000Z"), // KST: 2025-11-17 00:00
+              "endDate": new Date("2025-11-23T14:59:59.999Z"),   // KST: 2025-11-23 23:59
+              "probabilities": { "day1_4": 0.0001, "day5_6": 0.05 },
+              "day7NthWinner": 100,
+              "winner": { "userId": null, "winDate": null }
+            }
+          ];
 
+          await eventConfigsCollection.insertMany(initialEventData);
+          console.log("✅ 이벤트 기본 데이터가 DB에 성공적으로 저장되었습니다.");
+      }
   } catch (error) {
-      console.error("❌ 데이터 저장 중 오류가 발생했습니다:", error);
+      console.error("❌ 이벤트 데이터 초기화 중 오류 발생:", error);
   } finally {
       await client.close();
-      console.log("MongoDB 연결이 종료되었습니다.");
   }
 }
 
-seedDatabase();
-
-async function seedDatabase() {
-    const client = new MongoClient(MONGODB_URI);
-    console.log("MongoDB에 연결을 시도합니다...");
-
-    try {
-        await client.connect();
-        const db = client.db(DB_NAME);
-        const eventConfigsCollection = db.collection('eventBlackF'); // 컬렉션 이름: eventBlackF
-
-        console.log("연결 성공! 기존 이벤트 설정을 삭제합니다...");
-        await eventConfigsCollection.deleteMany({});
-
-        console.log("새로운 3주치 이벤트 데이터를 삽입합니다...");
-        await eventConfigsCollection.insertMany(initialEventData);
-
-        console.log("✅ 성공! 이벤트 기본 데이터가 DB에 정상적으로 저장되었습니다.");
-
-    } catch (error) {
-        console.error("❌ 데이터 저장 중 오류가 발생했습니다:", error);
-    } finally {
-        await client.close();
-        console.log("MongoDB 연결이 종료되었습니다.");
-    }
-}
-
-seedDatabase();p.post('/api/event/check', async (req, res) => {
+app.post('/api/event/check', async (req, res) => {
+  // 1. 요청 본문에서 회원 아이디(userId)를 받습니다.
   const { userId } = req.body;
   if (!userId) {
       return res.status(400).json({ error: '회원 아이디(userId)가 필요합니다.' });
@@ -2389,13 +2376,13 @@ seedDatabase();p.post('/api/event/check', async (req, res) => {
       await client.connect();
       const db = client.db(DB_NAME);
       
-      // ⭐ 수정된 부분: 컬렉션 이름을 'eventBlackF'로 변경
-      const eventConfigsCollection = db.collection('eventBlackF'); 
-      const participantsCollection = db.collection('eventparticipants');
+      // 사용할 컬렉션들을 지정합니다.
+      const eventConfigsCollection = db.collection('eventBlackF');       // 이벤트 규칙 설정이 저장된 컬렉션
+      const participantsCollection = db.collection('eventparticipants');  // 참여자 기록이 저장될 컬렉션
       
       const now = new Date();
 
-      // 1. 현재 날짜에 해당하는 이벤트 주차 정보 찾기
+      // 2. 현재 날짜가 속하는 이벤트 주차 정보를 DB에서 찾습니다.
       const currentEvent = await eventConfigsCollection.findOne({
           startDate: { $lte: now },
           endDate: { $gte: now }
@@ -2405,7 +2392,7 @@ seedDatabase();p.post('/api/event/check', async (req, res) => {
           return res.status(404).json({ message: '현재 진행 중인 이벤트가 없습니다.' });
       }
 
-      // 2. 이미 해당 주차에 참여했는지 확인
+      // 3. 이미 해당 주차에 참여했는지 DB에서 확인합니다. (1인 1회 제한)
       const existingParticipant = await participantsCollection.findOne({
           eventWeek: currentEvent.week,
           userId: userId
@@ -2415,8 +2402,9 @@ seedDatabase();p.post('/api/event/check', async (req, res) => {
           return res.status(409).json({ message: '이번 주 이벤트에 이미 참여하셨습니다.' });
       }
 
-      // 3. 해당 주차에 이미 당첨자가 나왔는지 확인
+      // 4. 해당 주차에 이미 당첨자가 나왔는지 확인합니다.
       if (currentEvent.winner && currentEvent.winner.userId) {
+          // 당첨자가 이미 나왔다면, 현재 참여자는 무조건 '미당첨'으로 기록하고 종료합니다.
           await participantsCollection.insertOne({
               eventWeek: currentEvent.week,
               userId: userId,
@@ -2426,15 +2414,17 @@ seedDatabase();p.post('/api/event/check', async (req, res) => {
           return res.json({ result: 'lose' });
       }
 
-      // 4. 이벤트 경과일 계산 (1일차 ~ 7일차)
-      const dayDifference = Math.floor((now - currentEvent.startDate) / (1000 * 60 * 60 * 24)) + 1;
+      // 5. 이벤트가 시작된 지 며칠째인지 계산합니다. (1일차 ~ 7일차)
+      const dayDifference = Math.floor((now - new Date(currentEvent.startDate)) / (1000 * 60 * 60 * 24)) + 1;
       let isWinner = false;
 
-      // 5. 당첨 로직 적용
+      // 6. 경과일에 따라 다른 당첨 로직을 적용합니다.
       if (dayDifference === 7) {
-          // 7일차 로직...
-          const todayStart = new Date(now.setHours(0, 0, 0, 0));
-          const todayEnd = new Date(now.setHours(23, 59, 59, 999));
+          // 7일차: n번째 참여자 당첨 로직
+          const todayStart = new Date();
+          todayStart.setHours(0, 0, 0, 0);
+          const todayEnd = new Date();
+          todayEnd.setHours(23, 59, 59, 999);
           
           const todayParticipantCount = await participantsCollection.countDocuments({
               eventWeek: currentEvent.week,
@@ -2445,17 +2435,17 @@ seedDatabase();p.post('/api/event/check', async (req, res) => {
               isWinner = true;
           }
       } else {
-          // 1~6일차 로직...
+          // 1~6일차: 확률 기반 당첨 로직
           let probability = 0;
-          if (dayDifference <= 4) {
+          if (dayDifference <= 4) { // 1~4일차
               probability = currentEvent.probabilities.day1_4;
-          } else {
+          } else { // 5~6일차
               probability = currentEvent.probabilities.day5_6;
           }
           isWinner = Math.random() < probability;
       }
 
-      // 6. 참여 결과 DB에 기록
+      // 7. 참여 결과를 DB에 기록합니다.
       await participantsCollection.insertOne({
           eventWeek: currentEvent.week,
           userId: userId,
@@ -2463,7 +2453,7 @@ seedDatabase();p.post('/api/event/check', async (req, res) => {
           result: isWinner ? 'win' : 'lose'
       });
 
-      // 7. 당첨 시, 이벤트 설정 정보에 당첨자 기록
+      // 8. 만약 당첨되었다면, 이벤트 설정 정보에 당첨자를 기록하여 중복 당첨을 막습니다.
       if (isWinner) {
           await eventConfigsCollection.updateOne(
               { _id: currentEvent._id },
@@ -2476,19 +2466,23 @@ seedDatabase();p.post('/api/event/check', async (req, res) => {
           );
       }
 
-      // 8. 최종 결과 전송
+      // 9. 최종 결과를 프론트엔드에 전송합니다.
       res.json({ result: isWinner ? 'win' : 'lose' });
 
   } catch (error) {
+      // DB의 Unique Index 제약 조건 위반 시(동시접속 등으로 중복 참여 시도) 발생하는 에러 처리
       if (error.code === 11000) {
           return res.status(409).json({ message: '이번 주 이벤트에 이미 참여하셨습니다.' });
       }
       console.error('이벤트 참여 처리 중 오류 발생:', error);
       res.status(500).json({ error: '서버 내부 오류가 발생했습니다.' });
   } finally {
+      // 모든 로직이 끝나면 DB 연결을 반드시 닫아줍니다.
       await client.close();
   }
 });
+
+
 
 
 // ========== [서버 실행 및 프롬프트 초기화] ==========
@@ -2501,7 +2495,7 @@ seedDatabase();p.post('/api/event/check', async (req, res) => {
 
     // 시스템 프롬프트 한 번만 초기화
     combinedSystemPrompt = await initializeChatPrompt();
-    seedDatabase();
+
     console.log("✅ 시스템 프롬프트 초기화 완료");
 
     // 서버 실행

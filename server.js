@@ -2296,7 +2296,88 @@ app.get('/api/:_any/analytics/:pageId/product-performance', async (req, res) => 
  * 🎁 블랙프라이데이 확률 이벤트 참여 API
  * [POST] /api/event/check
  */
-app.post('/api/event/check', async (req, res) => {
+
+
+const initialEventData = [
+  {
+    "week": 1,
+    "startDate": new Date("2025-11-09T15:00:00.000Z"), // KST: 2025-11-10 00:00
+    "endDate": new Date("2025-11-16T14:59:59.999Z"),   // KST: 2025-11-16 23:59
+    "probabilities": { "day1_4": 0.0001, "day5_6": 0.05 },
+    "day7NthWinner": 100,
+    "winner": { "userId": null, "winDate": null }
+  },
+  {
+    "week": 2,
+    "startDate": new Date("2025-11-16T15:00:00.000Z"), // KST: 2025-11-17 00:00
+    "endDate": new Date("2025-11-23T14:59:59.999Z"),   // KST: 2025-11-23 23:59
+    "probabilities": { "day1_4": 0.0001, "day5_6": 0.05 },
+    "day7NthWinner": 100,
+    "winner": { "userId": null, "winDate": null }
+  },
+  {
+    "week": 3,
+    "startDate": new Date("2025-11-23T15:00:00.000Z"), // KST: 2025-11-24 00:00
+    "endDate": new Date("2025-11-30T14:59:59.999Z"),   // KST: 2025-11-30 23:59
+    "probabilities": { "day1_4": 0.0001, "day5_6": 0.05 },
+    "day7NthWinner": 100,
+    "winner": { "userId": null, "winDate": null }
+  }
+];
+
+async function seedDatabase() {
+  const client = new MongoClient(MONGODB_URI);
+  console.log("MongoDB에 연결을 시도합니다...");
+
+  try {
+      await client.connect();
+      const db = client.db(DB_NAME);
+      const eventConfigsCollection = db.collection('eventBlackF'); // 컬렉션 이름: eventBlackF
+
+      console.log("연결 성공! 기존 이벤트 설정을 삭제합니다...");
+      await eventConfigsCollection.deleteMany({});
+
+      console.log("새로운 3주치 이벤트 데이터를 삽입합니다...");
+      await eventConfigsCollection.insertMany(initialEventData);
+
+      console.log("✅ 성공! 이벤트 기본 데이터가 DB에 정상적으로 저장되었습니다.");
+
+  } catch (error) {
+      console.error("❌ 데이터 저장 중 오류가 발생했습니다:", error);
+  } finally {
+      await client.close();
+      console.log("MongoDB 연결이 종료되었습니다.");
+  }
+}
+
+seedDatabase();
+
+async function seedDatabase() {
+    const client = new MongoClient(MONGODB_URI);
+    console.log("MongoDB에 연결을 시도합니다...");
+
+    try {
+        await client.connect();
+        const db = client.db(DB_NAME);
+        const eventConfigsCollection = db.collection('eventBlackF'); // 컬렉션 이름: eventBlackF
+
+        console.log("연결 성공! 기존 이벤트 설정을 삭제합니다...");
+        await eventConfigsCollection.deleteMany({});
+
+        console.log("새로운 3주치 이벤트 데이터를 삽입합니다...");
+        await eventConfigsCollection.insertMany(initialEventData);
+
+        console.log("✅ 성공! 이벤트 기본 데이터가 DB에 정상적으로 저장되었습니다.");
+
+    } catch (error) {
+        console.error("❌ 데이터 저장 중 오류가 발생했습니다:", error);
+    } finally {
+        await client.close();
+        console.log("MongoDB 연결이 종료되었습니다.");
+    }
+}
+
+seedDatabase();p.post('/api/event/check', async (req, res) => {
   const { userId } = req.body;
   if (!userId) {
       return res.status(400).json({ error: '회원 아이디(userId)가 필요합니다.' });
@@ -2420,7 +2501,7 @@ app.post('/api/event/check', async (req, res) => {
 
     // 시스템 프롬프트 한 번만 초기화
     combinedSystemPrompt = await initializeChatPrompt();
-
+    seedDatabase();
     console.log("✅ 시스템 프롬프트 초기화 완료");
 
     // 서버 실행

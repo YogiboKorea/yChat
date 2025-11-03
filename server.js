@@ -2362,9 +2362,9 @@ async function initializeEventData() {
       await client.close();
   }
 }
+// server.js 파일의 기존 /api/event/check 부분을 아래 코드로 완전히 교체해주세요.
 
 app.post('/api/event/check', async (req, res) => {
-  // 1. 요청 본문에서 회원 아이디(userId)를 받습니다.
   const { userId } = req.body;
   if (!userId) {
       return res.status(400).json({ error: '회원 아이디(userId)가 필요합니다.' });
@@ -2376,23 +2376,37 @@ app.post('/api/event/check', async (req, res) => {
       await client.connect();
       const db = client.db(DB_NAME);
       
-      // 사용할 컬렉션들을 지정합니다.
-      const eventConfigsCollection = db.collection('eventBlackF');       // 이벤트 규칙 설정이 저장된 컬렉션
-      const participantsCollection = db.collection('eventparticipants');  // 참여자 기록이 저장될 컬렉션
+      const eventConfigsCollection = db.collection('eventBlackF'); 
+      const participantsCollection = db.collection('eventparticipants');
       
       const now = new Date();
 
-      // 2. 현재 날짜가 속하는 이벤트 주차 정보를 DB에서 찾습니다.
-      const currentEvent = await eventConfigsCollection.findOne({
+      // ⭐ [진단용 코드 1] 서버가 인식하는 현재 시간을 출력합니다.
+      console.log('--- [진단 시작] ---');
+      console.log('1. 서버 현재 시간 (UTC):', now);
+
+      // ⭐ [진단용 코드 2] DB에서 데이터를 찾기 위해 실제 실행되는 쿼리를 출력합니다.
+      const query = {
           startDate: { $lte: now },
           endDate: { $gte: now }
-      });
+      };
+      console.log('2. 실행될 DB 쿼리:', JSON.stringify(query, null, 2));
+
+      // ⭐ [진단용 코드 3] DB에 저장된 모든 이벤트 데이터를 날짜 필터 없이 가져와서 출력합니다.
+      const allEvents = await eventConfigsCollection.find({}).toArray();
+      console.log('3. DB에 저장된 모든 이벤트 데이터:', allEvents);
+      console.log('--- [진단 종료] ---');
+      
+
+      // 1. 현재 날짜에 해당하는 이벤트 주차 정보 찾기
+      const currentEvent = await eventConfigsCollection.findOne(query);
 
       if (!currentEvent) {
+          // 이 부분이 실행되고 있는 것입니다.
           return res.status(404).json({ message: '현재 진행 중인 이벤트가 없습니다.' });
       }
 
-      // 3. 이미 해당 주차에 참여했는지 DB에서 확인합니다. (1인 1회 제한)
+      // 2. 이미 해당 주차에 참여했는지 확인
       const existingParticipant = await participantsCollection.findOne({
           eventWeek: currentEvent.week,
           userId: userId
@@ -2402,9 +2416,9 @@ app.post('/api/event/check', async (req, res) => {
           return res.status(409).json({ message: '이번 주 이벤트에 이미 참여하셨습니다.' });
       }
 
-      // 4. 해당 주차에 이미 당첨자가 나왔는지 확인합니다.
+      // 3. 해당 주차에 이미 당첨자가 나왔는지 확인
       if (currentEvent.winner && currentEvent.winner.userId) {
-          // 당첨자가 이미 나왔다면, 현재 참여자는 무조건 '미당첨'으로 기록하고 종료합니다.
+          // 당첨자가 이미 나왔다면, 현재 참여자는 무조건 '미당첨'으로 기록하고 종료
           await participantsCollection.insertOne({
               eventWeek: currentEvent.week,
               userId: userId,
@@ -2414,11 +2428,11 @@ app.post('/api/event/check', async (req, res) => {
           return res.json({ result: 'lose' });
       }
 
-      // 5. 이벤트가 시작된 지 며칠째인지 계산합니다. (1일차 ~ 7일차)
+      // 4. 이벤트 경과일 계산 (1일차 ~ 7일차)
       const dayDifference = Math.floor((now - new Date(currentEvent.startDate)) / (1000 * 60 * 60 * 24)) + 1;
       let isWinner = false;
 
-      // 6. 경과일에 따라 다른 당첨 로직을 적용합니다.
+      // 5. 당첨 로직 적용
       if (dayDifference === 7) {
           // 7일차: n번째 참여자 당첨 로직
           const todayStart = new Date();
@@ -2435,17 +2449,17 @@ app.post('/api/event/check', async (req, res) => {
               isWinner = true;
           }
       } else {
-          // 1~6일차: 확률 기반 당첨 로직
+          // 1~6일차: 확률 로직
           let probability = 0;
-          if (dayDifference <= 4) { // 1~4일차
+          if (dayDifference <= 4) {
               probability = currentEvent.probabilities.day1_4;
-          } else { // 5~6일차
+          } else {
               probability = currentEvent.probabilities.day5_6;
           }
           isWinner = Math.random() < probability;
       }
 
-      // 7. 참여 결과를 DB에 기록합니다.
+      // 6. 참여 결과 DB에 기록
       await participantsCollection.insertOne({
           eventWeek: currentEvent.week,
           userId: userId,
@@ -2453,7 +2467,7 @@ app.post('/api/event/check', async (req, res) => {
           result: isWinner ? 'win' : 'lose'
       });
 
-      // 8. 만약 당첨되었다면, 이벤트 설정 정보에 당첨자를 기록하여 중복 당첨을 막습니다.
+      // 7. 당첨 시, 이벤트 설정 정보에 당첨자 기록
       if (isWinner) {
           await eventConfigsCollection.updateOne(
               { _id: currentEvent._id },
@@ -2466,7 +2480,7 @@ app.post('/api/event/check', async (req, res) => {
           );
       }
 
-      // 9. 최종 결과를 프론트엔드에 전송합니다.
+      // 8. 최종 결과 전송
       res.json({ result: isWinner ? 'win' : 'lose' });
 
   } catch (error) {
@@ -2492,6 +2506,7 @@ app.post('/api/event/check', async (req, res) => {
 
     // 토큰 불러오기
     await getTokensFromDB();
+    await initializeEventData();
 
     // 시스템 프롬프트 한 번만 초기화
     combinedSystemPrompt = await initializeChatPrompt();

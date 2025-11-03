@@ -2301,8 +2301,8 @@ app.get('/api/:_any/analytics/:pageId/product-performance', async (req, res) => 
 const initialEventData = [
   {
     "week": 1,
-    "startDate": new Date("2025-11-09T15:00:00.000Z"), // KST: 2025-11-10 00:00
-    "endDate": new Date("2025-11-16T14:59:59.999Z"),   // KST: 2025-11-16 23:59
+    "startDate": new Date("2025-11-03T15:00:00.000Z"), // KST: 2025-11-10 00:00
+    "endDate": new Date("2025-11-09T14:59:59.999Z"),   // KST: 2025-11-16 23:59
     "probabilities": { "day1_4": 0.0001, "day5_6": 0.05 },
     "day7NthWinner": 100,
     "winner": { "userId": null, "winDate": null }

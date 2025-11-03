@@ -2377,7 +2377,7 @@ app.post('/api/event/check', async (req, res) => {
       const db = client.db(DB_NAME);
       
       const eventConfigsCollection = db.collection('eventBlackF'); 
-      const participantsCollection = db.collection('eventparticipants');
+      const participantsCollection = db.collection('eventBlackEntry');
       
       const now = new Date();
 

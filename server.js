@@ -2323,16 +2323,16 @@ async function initializeEventData() {
             },
             {
               "week": 2,
-              "startDate": new Date("2025-11-09T15:00:00.000Z"), // KST: 2025-11-10 00:00
-              "endDate": new Date("2025-11-16T14:59:59.999Z"),   // KST: 2025-11-16 23:59
+              "startDate": new Date("2025-11-16T15:00:00.000Z"), // KST: 2025-11-10 00:00
+              "endDate": new Date("2025-11-23T14:59:59.999Z"),   // KST: 2025-11-16 23:59
               "probabilities": { "day1_4": 0.0001, "day5_6": 0.05 },
               "day7NthWinner": 100,
               "winner": { "userId": null, "winDate": null }
             },
             {
               "week": 3,
-              "startDate": new Date("2025-11-16T15:00:00.000Z"), // KST: 2025-11-17 00:00
-              "endDate": new Date("2025-11-23T14:59:59.999Z"),   // KST: 2025-11-23 23:59
+              "startDate": new Date("2025-11-23T15:00:00.000Z"), // KST: 2025-11-17 00:00
+              "endDate": new Date("2025-11-30T14:59:59.999Z"),   // KST: 2025-11-23 23:59
               "probabilities": { "day1_4": 0.0001, "day5_6": 0.05 },
               "day7NthWinner": 100,
               "winner": { "userId": null, "winDate": null }

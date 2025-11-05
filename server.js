@@ -2378,6 +2378,59 @@ async function ensureIndexes() {
   }
 }
 
+app.get('/api/event/status', async (req, res) => {
+  const { userId } = req.query;
+  if (!userId) {
+      // userId가 없으면 굳이 에러 처리 안 하고 '참여 가능'으로 응답
+      return res.json({ hasParticipated: false, message: '회원 ID가 필요합니다.' });
+  }
+
+  const client = new MongoClient(MONGODB_URI);
+  try {
+      await client.connect();
+      const db = client.db(DB_NAME);
+      const eventConfigsCollection = db.collection('eventBlackF');
+      const participantsCollection = db.collection('eventBlackEntry');
+
+      // 1. 이미 '당첨'된 이력이 있는지 확인 (영구 참여 불가)
+      const anyWinRecord = await participantsCollection.findOne({
+          userId: userId,
+          result: 'win'
+      });
+
+      if (anyWinRecord) {
+          return res.json({ hasParticipated: true, message: '이미 당첨된 이력이 있습니다.' });
+      }
+
+      // 2. '이번 주'에 참여한 이력이 있는지 확인
+      const now = new Date();
+      const currentEvent = await eventConfigsCollection.findOne({
+          startDate: { $lte: now },
+          endDate: { $gte: now }
+      });
+
+      if (currentEvent) {
+          const currentWeekRecord = await participantsCollection.findOne({
+              eventWeek: currentEvent.week,
+              userId: userId
+          });
+
+          if (currentWeekRecord) {
+              return res.json({ hasParticipated: true, message: '이번 주 이벤트에 이미 참여하셨습니다.' });
+          }
+      }
+
+      // 3. 위 모든 조건에 해당하지 않으면, 참여 가능
+      return res.json({ hasParticipated: false });
+
+  } catch (error) {
+      console.error('이벤트 상태 확인 중 오류:', error);
+      res.status(500).json({ hasParticipated: false, message: '서버 오류' });
+  } finally {
+      await client.close();
+  }
+});
+
 // server.js 파일의 기존 /api/event/check 부분을 아래 코드로 완전히 교체해주세요.
 
 app.post('/api/event/check', async (req, res) => {

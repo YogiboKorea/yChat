@@ -2348,6 +2348,36 @@ async function initializeEventData() {
       await client.close();
   }
 }
+
+async function ensureIndexes() {
+  const client = new MongoClient(MONGODB_URI);
+  console.log("🟡 DB 인덱스(중복 방지 규칙) 확인 및 적용 중...");
+
+  try {
+      await client.connect();
+      const db = client.db(DB_NAME);
+      const participantsCollection = db.collection('eventBlackEntry'); // 정확한 컬렉션 이름
+
+      // 이게 핵심: { eventWeek: 1, userId: 1 } 조합을 unique로 만듦
+      await participantsCollection.createIndex(
+          { "eventWeek": 1, "userId": 1 },
+          { "unique": true }
+      );
+      console.log("✅ 'eventBlackEntry' 컬렉션에 중복 방지 규칙(Unique Index)이 적용되었습니다.");
+
+  } catch (error) {
+      // 만약 1단계(데이터 삭제)를 건너뛰어서 DB에 이미 중복 데이터가 있다면 이 에러가 발생합니다.
+      if (error.code === 11000) {
+          console.error("❌ [심각한 오류] DB에 이미 중복 데이터가 있어 중복 방지 규칙을 만들 수 없습니다!");
+          console.error("❌ [조치 필요] 'eventBlackEntry' 컬렉션의 중복 데이터를 모두 삭제한 후 서버를 재시작하세요!");
+      } else {
+          console.error("❌ 인덱스 생성 중 오류 발생:", error.message);
+      }
+  } finally {
+      await client.close();
+  }
+}
+
 // server.js 파일의 기존 /api/event/check 부분을 아래 코드로 완전히 교체해주세요.
 
 app.post('/api/event/check', async (req, res) => {
@@ -2453,6 +2483,37 @@ app.post('/api/event/check', async (req, res) => {
       await client.close();
   }
 });
+
+
+// server.js 파일 맨 아래
+(async function initialize() {
+  try {
+    console.log("🟡 서버 시작 중...");
+
+    // 기존 토큰 불러오기
+    await getTokensFromDB();
+
+    // 기존 시스템 프롬프트 초기화
+    combinedSystemPrompt = await initializeChatPrompt();
+    
+    // 1. 이벤트 데이터 자동 설정
+    await initializeEventData();
+    
+    // 2. [추가] DB 인덱스(중복 방지) 자동 설정
+    await ensureIndexes(); 
+
+    console.log("✅ 시스템 프롬프트 및 DB 설정 초기화 완료");
+
+    // 서버 실행
+    app.listen(PORT, () => {
+      console.log(`🚀 서버 실행 완료! 포트: ${PORT}`);
+    });
+
+  } catch (err) {
+    console.error("❌ 서버 초기화 오류:", err.message);
+    process.exit(1);
+  }
+})();
 
 
 

@@ -2539,6 +2539,84 @@ app.post('/api/event/check', async (req, res) => {
 
 
 
+
+
+/**
+ * [HELPER] 날짜 객체를 KST 문자열(YYYY. MM. DD. 오후 H:mm:ss)로 변환
+ */
+function formatKST(date) {
+  if (!date) return '';
+  return new Date(date).toLocaleString('ko-KR', {
+      timeZone: 'Asia/Seoul',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true // '오전/오후' 형식 사용
+  });
+}
+
+/**
+* 🎁 [추가] 블랙프라이데이 이벤트 참여자 엑셀 다운로드 API
+* [GET] /api/event/download
+*/
+app.get('/api/event/download', async (req, res) => {
+  const client = new MongoClient(MONGODB_URI);
+
+  try {
+      await client.connect();
+      const db = client.db(DB_NAME);
+      const participantsCollection = db.collection('eventBlackEntry');
+
+      // 1. DB에서 모든 참여자 데이터를 가져옵니다 (최신순 정렬)
+      const allParticipants = await participantsCollection.find({}).sort({ participationDate: -1 }).toArray();
+
+      // 2. Excel 워크북 및 워크시트 생성
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('블랙프라이데이 참여자');
+
+      // 3. 엑셀 컬럼 설정 (요청사항 반영)
+      worksheet.columns = [
+          { header: '참여날짜', key: 'kstDate', width: 25 },
+          { header: '고객아이디', key: 'userId', width: 30 },
+          { header: '당첨여부', key: 'resultText', width: 15 }
+      ];
+
+      // 4. 데이터를 순회하며 엑셀 행 추가
+      allParticipants.forEach(doc => {
+          worksheet.addRow({
+              // participationDate (UTC)를 한국 시간(KST) 문자열로 변환
+              kstDate: formatKST(doc.participationDate), 
+              userId: doc.userId,
+              // 'win' -> '성공', 'lose' -> '탈락'
+              resultText: doc.result === 'win' ? '성공' : '탈락' 
+          });
+      });
+
+      // 5. 엑셀 파일로 응답 전송
+      res.setHeader(
+          'Content-Type',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      res.setHeader(
+          'Content-Disposition',
+          'attachment; filename="BlackFriday_Participants.xlsx"'
+      );
+
+      await workbook.xlsx.write(res);
+      res.end();
+
+  } catch (error) {
+      console.error('엑셀 다운로드 생성 중 오류:', error);
+      res.status(500).json({ error: '엑셀 파일 생성 중 오류가 발생했습니다.' });
+  } finally {
+      await client.close();
+  }
+});
+
+
 // ========== [서버 실행 및 프롬프트 초기화] ==========
 (async function initialize() {
   try {

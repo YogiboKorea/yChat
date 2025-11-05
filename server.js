@@ -2378,10 +2378,14 @@ async function ensureIndexes() {
   }
 }
 
+/**
+ * 🎁 [수정] 이벤트 참여 상태 '확인' API (읽기 전용)
+ * [GET] /api/event/status?userId=...
+ * 오직 '이번 주'에 참여했는지만 확인합니다. (영구 당첨 블록 제거)
+ */
 app.get('/api/event/status', async (req, res) => {
   const { userId } = req.query;
   if (!userId) {
-      // userId가 없으면 굳이 에러 처리 안 하고 '참여 가능'으로 응답
       return res.json({ hasParticipated: false, message: '회원 ID가 필요합니다.' });
   }
 
@@ -2392,17 +2396,7 @@ app.get('/api/event/status', async (req, res) => {
       const eventConfigsCollection = db.collection('eventBlackF');
       const participantsCollection = db.collection('eventBlackEntry');
 
-      // 1. 이미 '당첨'된 이력이 있는지 확인 (영구 참여 불가)
-      const anyWinRecord = await participantsCollection.findOne({
-          userId: userId,
-          result: 'win'
-      });
-
-      if (anyWinRecord) {
-          return res.json({ hasParticipated: true, message: '이미 당첨된 이력이 있습니다.' });
-      }
-
-      // 2. '이번 주'에 참여한 이력이 있는지 확인
+      // 1. '이번 주'에 참여한 이력이 있는지 확인
       const now = new Date();
       const currentEvent = await eventConfigsCollection.findOne({
           startDate: { $lte: now },
@@ -2410,17 +2404,22 @@ app.get('/api/event/status', async (req, res) => {
       });
 
       if (currentEvent) {
+          // ⭐ [수정] '이번 주'의 'eventWeek'와 'userId'로만 확인
           const currentWeekRecord = await participantsCollection.findOne({
               eventWeek: currentEvent.week,
               userId: userId
           });
 
           if (currentWeekRecord) {
+              // '이번 주'에 이미 참여한 기록이 있음 (당첨/탈락 무관)
               return res.json({ hasParticipated: true, message: '이번 주 이벤트에 이미 참여하셨습니다.' });
           }
       }
+      
+      // 2. (수정) 'anyWinRecord' 영구 당첨 확인 로직 삭제
+      // -> 1주차에 당첨됐어도 2주차에는 이 API가 'false'를 반환하여 참여 가능
 
-      // 3. 위 모든 조건에 해당하지 않으면, 참여 가능
+      // 3. 위 모든 조건에 해당하지 않으면, (이번 주에) 참여 가능
       return res.json({ hasParticipated: false });
 
   } catch (error) {

@@ -2363,80 +2363,53 @@ app.post('/api/event/check', async (req, res) => {
       const db = client.db(DB_NAME);
       
       const eventConfigsCollection = db.collection('eventBlackF'); 
-      const participantsCollection = db.collection('eventBlackEntry');
+      const participantsCollection = db.collection('eventBlackEntry'); // 사용자가 지정한 컬렉션 이름
       
       const now = new Date();
 
-      // ⭐ [진단용 코드 1] 서버가 인식하는 현재 시간을 출력합니다.
-      console.log('--- [진단 시작] ---');
-      console.log('1. 서버 현재 시간 (UTC):', now);
-
-      // ⭐ [진단용 코드 2] DB에서 데이터를 찾기 위해 실제 실행되는 쿼리를 출력합니다.
-      const query = {
+      // 1. 현재 날짜에 해당하는 이벤트 주차 정보 찾기
+      const currentEvent = await eventConfigsCollection.findOne({
           startDate: { $lte: now },
           endDate: { $gte: now }
-      };
-      console.log('2. 실행될 DB 쿼리:', JSON.stringify(query, null, 2));
-
-      // ⭐ [진단용 코드 3] DB에 저장된 모든 이벤트 데이터를 날짜 필터 없이 가져와서 출력합니다.
-      const allEvents = await eventConfigsCollection.find({}).toArray();
-      console.log('3. DB에 저장된 모든 이벤트 데이터:', allEvents);
-      console.log('--- [진단 종료] ---');
-      
-
-      // 1. 현재 날짜에 해당하는 이벤트 주차 정보 찾기
-      const currentEvent = await eventConfigsCollection.findOne(query);
+      });
 
       if (!currentEvent) {
-          // 이 부분이 실행되고 있는 것입니다.
           return res.status(404).json({ message: '현재 진행 중인 이벤트가 없습니다.' });
       }
-
-      // 2. 이미 해당 주차에 참여했는지 확인
-      const existingParticipant = await participantsCollection.findOne({
-          eventWeek: currentEvent.week,
-          userId: userId
-      });
-      // 3. 해당 주차에 이미 당첨자가 나왔는지 확인
+      
+      // 2. 해당 주차에 이미 당첨자가 나왔는지 먼저 확인
       if (currentEvent.winner && currentEvent.winner.userId) {
-        // 확률 계산을 모두 건너뛰고, 현재 참여자를 즉시 '미당첨(lose)'으로 처리합니다.
-        await participantsCollection.insertOne({
-            eventWeek: currentEvent.week,
-            userId: userId,
-            participationDate: new Date(),
-            result: 'lose'
-        });
-
-        // 프론트엔드에 'lose' 결과를 보내고 모든 로직을 여기서 종료합니다.
-        return res.json({ result: 'lose' });
-      }
-
-      if (existingParticipant) {
-          return res.status(409).json({ message: '이번 주 이벤트에 이미 참여하셨습니다.' });
-      }
-
-      // 3. 해당 주차에 이미 당첨자가 나왔는지 확인
-      if (currentEvent.winner && currentEvent.winner.userId) {
-          // 당첨자가 이미 나왔다면, 현재 참여자는 무조건 '미당첨'으로 기록하고 종료
+          // 참여 기록을 남기고 즉시 'lose' 응답 (확률 0%)
           await participantsCollection.insertOne({
               eventWeek: currentEvent.week,
               userId: userId,
               participationDate: new Date(),
               result: 'lose'
-          });
-          return res.json({ result: 'lose' });
+          }).catch(err => { /* 중복 참여 시도는 무시 */ });
+          return res.json({ result: 'lose', week: currentEvent.week });
       }
 
-      // 4. 이벤트 경과일 계산 (1일차 ~ 7일차)
+      // 3. (당첨자가 없는 경우) 이번 주에 이미 참여했는지 확인
+      const existingParticipant = await participantsCollection.findOne({
+          eventWeek: currentEvent.week,
+          userId: userId
+      });
+
+      if (existingParticipant) {
+          return res.status(409).json({ message: '이번 주 이벤트에 이미 참여하셨습니다.' });
+      }
+
+      // 4. 이벤트 경과일 계산
       const dayDifference = Math.floor((now - new Date(currentEvent.startDate)) / (1000 * 60 * 60 * 24)) + 1;
       let isWinner = false;
 
       // 5. 당첨 로직 적용
       if (dayDifference === 7) {
-          // 7일차: n번째 참여자 당첨 로직
-          const todayStart = new Date();
+          // ⭐ [수정] 서버 위치와 상관없이 항상 '한국 시간 기준' 오늘 날짜를 계산
+          const todayKST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+          const todayStart = new Date(todayKST);
           todayStart.setHours(0, 0, 0, 0);
-          const todayEnd = new Date();
+          const todayEnd = new Date(todayKST);
           todayEnd.setHours(23, 59, 59, 999);
           
           const todayParticipantCount = await participantsCollection.countDocuments({
@@ -2444,21 +2417,13 @@ app.post('/api/event/check', async (req, res) => {
               participationDate: { $gte: todayStart, $lte: todayEnd }
           });
 
-          if (todayParticipantCount === currentEvent.day7NthWinner - 1) {
-              isWinner = true;
-          }
+          if (todayParticipantCount === currentEvent.day7NthWinner - 1) { isWinner = true; }
       } else {
-          // 1~6일차: 확률 로직
-          let probability = 0;
-          if (dayDifference <= 4) {
-              probability = currentEvent.probabilities.day1_4;
-          } else {
-              probability = currentEvent.probabilities.day5_6;
-          }
+          let probability = (dayDifference <= 4) ? currentEvent.probabilities.day1_4 : currentEvent.probabilities.day5_6;
           isWinner = Math.random() < probability;
       }
 
-      // 6. 참여 결과 DB에 기록
+      // 6. 참여 결과 DB에 기록 (participationDate는 new Date()로 UTC 저장, 이것이 표준 방식)
       await participantsCollection.insertOne({
           eventWeek: currentEvent.week,
           userId: userId,
@@ -2466,35 +2431,28 @@ app.post('/api/event/check', async (req, res) => {
           result: isWinner ? 'win' : 'lose'
       });
 
-      // 7. 당첨 시, 이벤트 설정 정보에 당첨자 기록
+      // 7. 당첨 시, 당첨자 정보 기록
       if (isWinner) {
           await eventConfigsCollection.updateOne(
               { _id: currentEvent._id },
-              { 
-                  $set: { 
-                      'winner.userId': userId,
-                      'winner.winDate': new Date()
-                  } 
-              }
+              { $set: { 'winner.userId': userId, 'winner.winDate': new Date() } }
           );
       }
 
       // 8. 최종 결과 전송
-      res.json({ result: isWinner ? 'win' : 'lose' });
+      res.json({ result: isWinner ? 'win' : 'lose', week: currentEvent.week });
 
   } catch (error) {
-      // DB의 Unique Index 제약 조건 위반 시(동시접속 등으로 중복 참여 시도) 발생하는 에러 처리
+      // DB의 Unique Index 규칙 위반 시(error.code 11000) 이리로 들어옵니다.
       if (error.code === 11000) {
           return res.status(409).json({ message: '이번 주 이벤트에 이미 참여하셨습니다.' });
       }
       console.error('이벤트 참여 처리 중 오류 발생:', error);
       res.status(500).json({ error: '서버 내부 오류가 발생했습니다.' });
   } finally {
-      // 모든 로직이 끝나면 DB 연결을 반드시 닫아줍니다.
       await client.close();
   }
 });
-
 
 
 

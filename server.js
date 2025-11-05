@@ -2377,16 +2377,15 @@ async function ensureIndexes() {
       await client.close();
   }
 }
-
 /**
  * 🎁 [수정] 이벤트 참여 상태 '확인' API (읽기 전용)
  * [GET] /api/event/status?userId=...
- * 오직 '이번 주'에 참여했는지만 확인합니다. (영구 당첨 블록 제거)
+ * '이번 주' 참여 여부 + 이전 결과(win/lose)까지 함께 반환
  */
 app.get('/api/event/status', async (req, res) => {
   const { userId } = req.query;
   if (!userId) {
-      return res.json({ hasParticipated: false, message: '회원 ID가 필요합니다.' });
+      return res.json({ status: 'not_running' }); // ID가 없으면 '실행중 아님'으로 간주
   }
 
   const client = new MongoClient(MONGODB_URI);
@@ -2396,39 +2395,46 @@ app.get('/api/event/status', async (req, res) => {
       const eventConfigsCollection = db.collection('eventBlackF');
       const participantsCollection = db.collection('eventBlackEntry');
 
-      // 1. '이번 주'에 참여한 이력이 있는지 확인
       const now = new Date();
       const currentEvent = await eventConfigsCollection.findOne({
           startDate: { $lte: now },
           endDate: { $gte: now }
       });
 
-      if (currentEvent) {
-          // ⭐ [수정] '이번 주'의 'eventWeek'와 'userId'로만 확인
-          const currentWeekRecord = await participantsCollection.findOne({
-              eventWeek: currentEvent.week,
-              userId: userId
-          });
-
-          if (currentWeekRecord) {
-              // '이번 주'에 이미 참여한 기록이 있음 (당첨/탈락 무관)
-              return res.json({ hasParticipated: true, message: '이번 주 이벤트에 이미 참여하셨습니다.' });
-          }
+      if (!currentEvent) {
+          // 1. 진행 중인 이벤트가 없음
+          return res.json({ status: 'not_running' });
       }
-      
-      // 2. (수정) 'anyWinRecord' 영구 당첨 확인 로직 삭제
-      // -> 1주차에 당첨됐어도 2주차에는 이 API가 'false'를 반환하여 참여 가능
 
-      // 3. 위 모든 조건에 해당하지 않으면, (이번 주에) 참여 가능
-      return res.json({ hasParticipated: false });
+      // 2. '이번 주'에 참여한 이력이 있는지 확인
+      const currentWeekRecord = await participantsCollection.findOne({
+          eventWeek: currentEvent.week,
+          userId: userId
+      });
+
+      if (currentWeekRecord) {
+          // 3. '이번 주'에 이미 참여함 (결과와 주차 반환)
+          return res.json({
+              status: 'participated',
+              result: currentWeekRecord.result, // 'win' 또는 'lose'
+              week: currentEvent.week
+          });
+      }
+
+      // 4. '이번 주'에 참여한 적 없음 (참여 가능)
+      return res.json({ 
+          status: 'not_participated',
+          week: currentEvent.week 
+      });
 
   } catch (error) {
       console.error('이벤트 상태 확인 중 오류:', error);
-      res.status(500).json({ hasParticipated: false, message: '서버 오류' });
+      res.status(500).json({ status: 'error', message: '서버 오류' });
   } finally {
       await client.close();
   }
 });
+
 
 // server.js 파일의 기존 /api/event/check 부분을 아래 코드로 완전히 교체해주세요.
 

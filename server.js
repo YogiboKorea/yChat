@@ -2485,37 +2485,6 @@ app.post('/api/event/check', async (req, res) => {
 });
 
 
-// server.js 파일 맨 아래
-(async function initialize() {
-  try {
-    console.log("🟡 서버 시작 중...");
-
-    // 기존 토큰 불러오기
-    await getTokensFromDB();
-
-    // 기존 시스템 프롬프트 초기화
-    combinedSystemPrompt = await initializeChatPrompt();
-    
-    // 1. 이벤트 데이터 자동 설정
-    await initializeEventData();
-    
-    // 2. [추가] DB 인덱스(중복 방지) 자동 설정
-    await ensureIndexes(); 
-
-    console.log("✅ 시스템 프롬프트 및 DB 설정 초기화 완료");
-
-    // 서버 실행
-    app.listen(PORT, () => {
-      console.log(`🚀 서버 실행 완료! 포트: ${PORT}`);
-    });
-
-  } catch (err) {
-    console.error("❌ 서버 초기화 오류:", err.message);
-    process.exit(1);
-  }
-})();
-
-
 
 // ========== [서버 실행 및 프롬프트 초기화] ==========
 (async function initialize() {
@@ -2525,6 +2494,8 @@ app.post('/api/event/check', async (req, res) => {
     // 토큰 불러오기
     await getTokensFromDB();
     await initializeEventData();
+    // 2. [추가] DB 인덱스(중복 방지) 자동 설정
+    await ensureIndexes(); 
 
     // 시스템 프롬프트 한 번만 초기화
     combinedSystemPrompt = await initializeChatPrompt();

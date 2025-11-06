@@ -2622,6 +2622,232 @@ app.get('/api/event/download', async (req, res) => {
 });
 
 
+
+//실시간 판매 데이터 로직 추가하기
+// ========== [블랙 프라이데이 누적 매출 로직] ==========
+
+const EVENT_START_DATE = '2025-11-01'; // 🎁 이벤트 시작일 (YYYY-MM-DD)
+const SALES_DB_NAME = 'blackOnlineTotal'; // Cafe24 온라인 매출 총액 저장 컬렉션
+const OFFLINE_DB_NAME = 'blackOffData'; // 일별 오프라인 목표액 저장 컬렉션
+
+// ... (기존 app.get('/api/total-sales', ...) API 바로 다음에)
+
+/**
+ * [초기화] 'dailyofflinetargets' 컬렉션에 오프라인 목표액 데이터를 'Upsert'
+ * (서버 시작 시 호출되며, $setOnInsert를 사용해 이미 데이터가 있으면 덮어쓰지 않습니다.)
+ */
+async function initializeOfflineSalesData() {
+  console.log("🟡 오프라인 일일 매출 목표 데이터 확인 및 초기화 중...");
+
+  // 🎁 [설정] 여기에 이벤트 기간의 오프라인 일일 목표액을 모두 정의하세요.
+  const offlineSalesData = [
+    { "dateString": "2025-11-06", "targetAmount": 5000000 },
+    { "dateString": "2025-11-07", "targetAmount": 5500000 },
+    { "dateString": "2025-11-08", "targetAmount": 7000000 },
+    { "dateString": "2025-11-09", "targetAmount": 6000000 },
+    { "dateString": "2025-11-10", "targetAmount": 5000000 },
+    { "dateString": "2025-11-11", "targetAmount": 5200000 },
+    { "dateString": "2025-11-12", "targetAmount": 5300000 },
+  ];
+
+  if (offlineSalesData.length === 0) {
+    console.log("ℹ️ 오프라인 매출 데이터가 정의되지 않았습니다. 건너뜁니다.");
+    return;
+  }
+
+  try {
+    // `runDb` 헬퍼를 사용해 DB 작업 수행
+    const results = await runDb(async (db) => {
+      const collection = db.collection(OFFLINE_DB_NAME); // 'dailyofflinetargets'
+      
+      // 1. (필수) dateString에 unique 인덱스가 있는지 확인 및 생성
+      await collection.createIndex({ "dateString": 1 }, { "unique": true });
+
+      // 2. 정의된 모든 데이터를 'bulkWrite' (대량 쓰기)로 한 번에 전송
+      const bulkOps = offlineSalesData.map(item => ({
+        updateOne: {
+          filter: { dateString: item.dateString }, // 이 dateString을 찾아서
+          update: {
+            // ❗️ $setOnInsert: 찾았는데 없으면(Insert) 이 데이터를 넣고,
+            // 이미 있으면(Update) 아무것도 하지 않음 (덮어쓰기 방지)
+            $setOnInsert: { 
+              dateString: item.dateString,
+              targetAmount: item.targetAmount
+            }
+          },
+          upsert: true // 없으면 새로 만들기 (Insert)
+        }
+      }));
+      
+      // 3. 대량 작업 실행
+      return await collection.bulkWrite(bulkOps);
+    });
+
+    console.log(`✅ 오프라인 매출 데이터 초기화 완료. (신규 ${results.upsertedCount}건, 기존 ${results.matchedCount}건)`);
+  
+  } catch (error) {
+    // 인덱스 생성 중 이미 데이터가 있어서 발생하는 중복 오류는 무시해도 됩니다.
+    if (error.code === 11000) {
+        console.log("ℹ️ 오프라인 매출 데이터가 이미 존재합니다. (정상)");
+    } else {
+        console.error("❌ 오프라인 매출 데이터 초기화 중 심각한 오류:", error.message);
+    }
+  }
+}
+
+/**
+ * [유틸] KST 기준 오늘 날짜 문자열 (YYYY-MM-DD)
+ */
+function getTodayDateString() {
+  const now = new Date();
+  const kstOffset = 9 * 60 * 60 * 1000; // 9시간
+  const kstDate = new Date(now.getTime() + kstOffset);
+  return kstDate.toISOString().split('T')[0];
+}
+
+/**
+ * [유틸] 오늘의 오프라인 목표액을 00시부터 현재까지의 비율로 계산
+ */
+function calculateCurrentOfflineSales(targetAmount) {
+  if (!targetAmount || targetAmount === 0) return 0;
+
+  const now = new Date();
+  const kstOffset = 9 * 60 * 60 * 1000;
+  const kstNow = new Date(now.getTime() + kstOffset);
+
+  const startOfDay = new Date(kstNow);
+  startOfDay.setUTCHours(0, 0, 0, 0); // KST 자정
+
+  const totalMillisecondsInDay = 86400000; // 24 * 60 * 60 * 1000
+  const elapsedMilliseconds = kstNow.getTime() - startOfDay.getTime();
+
+  let percentage = elapsedMilliseconds / totalMillisecondsInDay;
+  if (percentage > 1) percentage = 1;
+  if (percentage < 0) percentage = 0;
+
+  return Math.round(targetAmount * percentage);
+}
+
+/**
+ * [스케줄러 작업] Cafe24 API에서 '결제완료(N40)'된 모든 주문을 집계
+  카페24 시시간 주문 판매 데이터 추가하기
+ */
+async function updateOnlineSales() {
+  console.log('🔄 [매출 스케줄러] Cafe24 온라인 매출 집계를 시작합니다...');
+  
+  let totalSales = 0;
+  let totalOrders = 0;
+  let offset = 0;
+  const limit = 100; // Cafe24 API 페이지 당 항목 수
+  const today = getTodayDateString(); // KST 오늘 날짜
+
+  try {
+    const cafe24Url = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`;
+
+    while (true) {
+      // 기존 'apiRequest' 함수를 재사용합니다.
+      const response = await apiRequest(
+        'GET',
+        cafe24Url,
+        {}, // data
+        { // params
+          shop_no: 1,
+          order_status: 'N40', // '결제완료' 상태
+          start_date: EVENT_START_DATE,
+          end_date: today,
+          limit: limit,
+          offset: offset
+        }
+      );
+
+      const orders = response.orders;
+      if (!orders || orders.length === 0) {
+        break; // 더 이상 주문이 없으면 루프 종료
+      }
+
+      for (const order of orders) {
+        // '실결제금액'을 누적합니다.
+        totalSales += parseFloat(order.actual_order_amount);
+      }
+      totalOrders += orders.length;
+      offset += orders.length;
+    }
+
+    // `runDb` 헬퍼를 사용하여 MongoDB에 총액을 $set (덮어쓰기) 합니다.
+    await runDb(async (db) => {
+      const collection = db.collection(SALES_DB_NAME);
+      await collection.updateOne(
+        { eventName: 'blackFriday2025' },
+        {
+          $set: {
+            totalOnlineSales: totalSales,
+            lastCheckedTime: new Date()
+          },
+          $setOnInsert: { eventName: 'blackFriday2025' }
+        },
+        { upsert: true }
+      );
+    });
+
+    console.log(`✅ [매출 스케줄러] 온라인 매출 집계 완료. 총액: ${totalSales} (주문 ${totalOrders}건)`);
+
+  } catch (error) {
+    console.error('❌ [매출 스케줄러] 오류 발생:', error.message);
+  }
+}
+
+/**
+ * [스케줄러 시작] 10분마다 매출 집계 스케줄러 실행
+ */
+function startSalesScheduler() {
+  console.log('⏰ [매출 스케줄러] 10분 주기 스케줄러를 시작합니다.');
+  // 매 10분마다 `updateOnlineSales` 실행
+  cron.schedule('*/10 * * * *', updateOnlineSales);
+  
+  // (테스트용) 서버 시작 시 1회 즉시 실행
+  // updateOnlineSales(); 
+}
+
+/**
+ * 💰 [API] 누적 판매 금액 조회 API
+ * [GET] /api/total-sales
+ */
+app.get('/api/total-sales', async (req, res) => {
+  try {
+    const result = await runDb(async (db) => {
+      // 1. (온라인) DB에 저장된 Cafe24 누적 매출액
+      const statsCollection = db.collection(SALES_DB_NAME);
+      const stat = await statsCollection.findOne({ eventName: 'blackFriday2025' });
+      const totalOnlineSales = stat ? stat.totalOnlineSales : 0;
+
+      // 2. (오프라인) 오늘의 목표 오프라인 매출액
+      const targetsCollection = db.collection(OFFLINE_DB_NAME);
+      const todayString = getTodayDateString();
+      const offlineTarget = await targetsCollection.findOne({ dateString: todayString });
+      const targetAmount = offlineTarget ? offlineTarget.targetAmount : 0;
+
+      // 3. (오프라인) 현재 시간 기준 누적 오프라인 매출액 계산
+      const currentOfflineSales = calculateCurrentOfflineSales(targetAmount);
+
+      return { totalOnlineSales, currentOfflineSales };
+    });
+
+    const { totalOnlineSales, currentOfflineSales } = result;
+
+    // 4. 최종 합계 반환
+    res.json({
+      totalSales: totalOnlineSales + currentOfflineSales,
+      online: totalOnlineSales,
+      offline: currentOfflineSales
+    });
+
+  } catch (error) {
+    console.error('❌ /api/total-sales 오류:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
 // ========== [서버 실행 및 프롬프트 초기화] ==========
 (async function initialize() {
   try {
@@ -2632,9 +2858,13 @@ app.get('/api/event/download', async (req, res) => {
     await initializeEventData();
     // 2. [추가] DB 인덱스(중복 방지) 자동 설정
     await ensureIndexes(); 
+    //실시간 판매 데이터 
+    await initializeOfflineSalesData()
+    startSalesScheduler();
 
     // 시스템 프롬프트 한 번만 초기화
     combinedSystemPrompt = await initializeChatPrompt();
+
 
     console.log("✅ 시스템 프롬프트 초기화 완료");
 

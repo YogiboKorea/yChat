@@ -2720,7 +2720,7 @@ async function updateOnlineSales() {
   let totalSales = 0;
   let totalOrders = 0;
   let offset = 0;
-  const limit = 100;
+  const limit = 1000;
   
   // KST 기준 '오늘' 날짜 (end_date용)
   const kstNow = new Date(new Date().getTime() + (9 * 60 * 60 * 1000));
@@ -2887,7 +2887,7 @@ async function updateOfflineSales() {
 function startSalesSchedulers() {
   // 1. 온라인(Cafe24)은 10분마다 실행
   console.log('⏰ [온라인 스케줄러] 10분 주기로 시작합니다.');
-  cron.schedule('*/10 * * * *', updateOnlineSales);
+  cron.schedule('*/1 * * * *', updateOnlineSales);
   
   // 2. 오프라인(연출)은 30초마다 실행 (더 역동적인 연출)
   console.log('⏰ [오프라인 스케줄러] 30초 주기로 시작합니다.');
@@ -2964,3 +2964,5 @@ app.get('/api/total-sales', async (req, res) => {
     process.exit(1);
   }
 })();
+
+

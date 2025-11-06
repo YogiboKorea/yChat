@@ -2817,30 +2817,48 @@ function startSalesScheduler() {
 app.get('/api/total-sales', async (req, res) => {
   try {
     const result = await runDb(async (db) => {
+      
       // 1. (온라인) DB에 저장된 Cafe24 누적 매출액
-      const statsCollection = db.collection(SALES_DB_NAME);
+      const statsCollection = db.collection(SALES_DB_NAME); // 'blackOnlineTotal'
       const stat = await statsCollection.findOne({ eventName: 'blackFriday2025' });
       const totalOnlineSales = stat ? stat.totalOnlineSales : 0;
 
-      // 2. (오프라인) 오늘의 목표 오프라인 매출액
-      const targetsCollection = db.collection(OFFLINE_DB_NAME);
-      const todayString = getTodayDateString();
-      const offlineTarget = await targetsCollection.findOne({ dateString: todayString });
-      const targetAmount = offlineTarget ? offlineTarget.targetAmount : 0;
+      // --- [수정된 오프라인 로직] ---
+      const targetsCollection = db.collection(OFFLINE_DB_NAME); // 'blackOffData'
+      const todayString = getTodayDateString(); // 예: "2025-11-06"
 
-      // 3. (오프라인) 현재 시간 기준 누적 오프라인 매출액 계산
-      const currentOfflineSales = calculateCurrentOfflineSales(targetAmount);
+      // 2. (오프라인) 어제까지의 모든 목표액을 합산
+      const previousDaysDocs = await targetsCollection.find({ 
+        dateString: { $lt: todayString } // $lt (less than) : 오늘보다 이전 날짜
+      }).toArray();
+      
+      let previousDaysTotal = 0;
+      for (const doc of previousDaysDocs) {
+        previousDaysTotal += doc.targetAmount;
+      }
+      // (예: 11월 5일의 10,000,000원이 여기에 합산됨)
 
-      return { totalOnlineSales, currentOfflineSales };
+      // 3. (오프라인) 오늘의 목표액을 가져와 실시간 누적액 계산
+      const todayTargetDoc = await targetsCollection.findOne({ dateString: todayString });
+      const todayTargetAmount = todayTargetDoc ? todayTargetDoc.targetAmount : 0; // 예: 5,000,000원
+      
+      // 'calculateCurrentOfflineSales' 함수는 그대로 재사용
+      const todayAccumulatingSales = calculateCurrentOfflineSales(todayTargetAmount); 
+
+      // 4. (오프라인) 최종 오프라인 매출 = 어제까지 총합 + 오늘 누적액
+      const totalOfflineSales = previousDaysTotal + todayAccumulatingSales;
+      // --- [수정 끝] ---
+
+      return { totalOnlineSales, totalOfflineSales };
     });
 
-    const { totalOnlineSales, currentOfflineSales } = result;
+    const { totalOnlineSales, totalOfflineSales } = result;
 
-    // 4. 최종 합계 반환
+    // 5. 최종 합계 반환
     res.json({
-      totalSales: totalOnlineSales + currentOfflineSales,
+      totalSales: totalOnlineSales + totalOfflineSales, // ⬅️ 수정됨
       online: totalOnlineSales,
-      offline: currentOfflineSales
+      offline: totalOfflineSales // ⬅️ 수정됨
     });
 
   } catch (error) {
@@ -2848,7 +2866,6 @@ app.get('/api/total-sales', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
-
 
 // ========== [서버 실행 및 프롬프트 초기화] ==========
 (async function initialize() {

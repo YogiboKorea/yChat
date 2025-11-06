@@ -32,12 +32,7 @@ let refreshToken = REFRESH_TOKEN;
 
 // ========== [Express 초기화] ==========
 const app = express();
-app.use(cors({
-  origin: true, // ⭐️ origin: '*' 보다 강력한 설정
-  credentials: true,
-  methods: 'GET,POST,PUT,DELETE,OPTIONS',
-  allowedHeaders: 'Origin,X-Requested-With,Content-Type,Accept,Authorization'
-}));
+app.use(cors());
 app.use(compression());
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "public")));

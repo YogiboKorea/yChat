@@ -2740,7 +2740,7 @@ async function updateOnlineSales() {
   let totalSales = 0;
   let totalOrders = 0;
   let offset = 0;
-  const limit = 100; // Cafe24 API 페이지 당 항목 수
+  const limit = 10000; // Cafe24 API 페이지 당 항목 수
   const today = getTodayDateString(); // KST 오늘 날짜
 
   try {
@@ -2769,7 +2769,7 @@ async function updateOnlineSales() {
 
       for (const order of orders) {
         // '실결제금액'을 누적합니다.
-        totalSales += parseFloat(order.actual_order_amount);
+        totalSales += parseFloat(order.actual_order_amount) || 0;
       }
       totalOrders += orders.length;
       offset += orders.length;
@@ -2804,7 +2804,7 @@ async function updateOnlineSales() {
 function startSalesScheduler() {
   console.log('⏰ [매출 스케줄러] 10분 주기 스케줄러를 시작합니다.');
   // 매 10분마다 `updateOnlineSales` 실행
-  cron.schedule('*/10 * * * *', updateOnlineSales);
+  cron.schedule('*/2 * * * *', updateOnlineSales);
   
   // (테스트용) 서버 시작 시 1회 즉시 실행
   // updateOnlineSales(); 

@@ -2946,7 +2946,7 @@ app.get('/api/total-sales', async (req, res) => {
     await ensureIndexes(); 
     //실시간 판매 데이터 
     await initializeOfflineSalesData()
-    startSalesScheduler();
+    startSalesSchedulers();
 
     // 시스템 프롬프트 한 번만 초기화
     combinedSystemPrompt = await initializeChatPrompt();

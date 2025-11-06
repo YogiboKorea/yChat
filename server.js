@@ -2734,13 +2734,17 @@ function calculateCurrentOfflineSales(targetAmount) {
  * [스케줄러 작업] Cafe24 API에서 '결제완료(N40)'된 모든 주문을 집계
   카페24 시시간 주문 판매 데이터 추가하기
  */
+/**
+ * [스케줄러 작업] Cafe24 API에서 '결제완료(N40)'된 모든 주문을 집계
+ * [수정됨] 첫 번째 주문 데이터를 로그로 출력하여 필드 이름을 확인합니다.
+ */
 async function updateOnlineSales() {
   console.log('🔄 [매출 스케줄러] Cafe24 온라인 매출 집계를 시작합니다...');
   
   let totalSales = 0;
   let totalOrders = 0;
   let offset = 0;
-  const limit = 1000; // Cafe24 API 페이지 당 항목 수
+  const limit = 1000; // Cafe24 API 페이지 당 항목 수 (100 -> 1000으로 수정)
   const today = getTodayDateString(); // KST 오늘 날짜
 
   try {
@@ -2766,6 +2770,18 @@ async function updateOnlineSales() {
       if (!orders || orders.length === 0) {
         break; // 더 이상 주문이 없으면 루프 종료
       }
+
+      // 
+      // ⬇️ [디버깅 코드 추가] 
+      //    첫 번째 루프일 때(offset === 0), 맨 첫 번째 주문 데이터를 로그로 출력
+      // 
+      if (offset === 0 && orders.length > 0) {
+        console.log("=============== [첫 번째 주문 데이터 확인] ===============");
+        console.log(orders[0]); // ⭐️ 첫 번째 주문 객체를 통째로 출력
+        console.log("====================================================");
+      }
+      // ⬆️ 여기까지 추가
+      // 
 
       for (const order of orders) {
         // '실결제금액'을 누적합니다.
@@ -2797,7 +2813,6 @@ async function updateOnlineSales() {
     console.error('❌ [매출 스케줄러] 오류 발생:', error.message);
   }
 }
-
 /**
  * [스케줄러 시작] 10분마다 매출 집계 스케줄러 실행
  */

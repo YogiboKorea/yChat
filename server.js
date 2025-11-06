@@ -2625,7 +2625,7 @@ app.get('/api/event/download', async (req, res) => {
 //실시간 판매 데이터 로직 추가하기
 // ========== [블랙 프라이데이 누적 매출 로직] ==========
 
-const EVENT_START_DATE = '2025-11-01'; // 🎁 온라인 매출 집계 시작일
+const EVENT_START_DATE = '2025-11-05'; // 🎁 온라인 매출 집계 시작일
 const SALES_STATUS_DB = 'blackSalesStatus'; // ⭐️ [변경] 온라인/오프라인 상태 통합 저장 컬렉션
 const OFFLINE_TARGET_DB = 'blackOffData'; // 일별 오프라인 '목표액' 저장 컬렉션
 

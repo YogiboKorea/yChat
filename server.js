@@ -2754,7 +2754,7 @@ async function updateOnlineSales() {
         {}, // data
         { // params
           shop_no: 1,
-          order_status: 'N40', // '결제완료' 상태
+          order_status: 'N30,N40', // '결제완료' 상태
           start_date: EVENT_START_DATE,
           end_date: today,
           limit: limit,

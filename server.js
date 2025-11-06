@@ -2642,6 +2642,7 @@ async function initializeOfflineSalesData() {
 
   // 🎁 [설정] 여기에 이벤트 기간의 오프라인 일일 목표액을 모두 정의하세요.
   const offlineSalesData = [
+    { "dateString": "2025-11-05", "targetAmount": 10000000 },
     { "dateString": "2025-11-06", "targetAmount": 5000000 },
     { "dateString": "2025-11-07", "targetAmount": 5500000 },
     { "dateString": "2025-11-08", "targetAmount": 7000000 },

@@ -2740,7 +2740,7 @@ async function updateOnlineSales() {
   let totalSales = 0;
   let totalOrders = 0;
   let offset = 0;
-  const limit = 10000; // Cafe24 API 페이지 당 항목 수
+  const limit = 1000; // Cafe24 API 페이지 당 항목 수
   const today = getTodayDateString(); // KST 오늘 날짜
 
   try {

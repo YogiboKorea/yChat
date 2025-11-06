@@ -8,6 +8,7 @@ const axios = require("axios");
 const { MongoClient, ObjectId } = require("mongodb");
 const levenshtein = require("fast-levenshtein");
 const ExcelJS = require("exceljs");
+const cron = require('node-cron');
 require("dotenv").config();
 const nodemailer = require('nodemailer');
 // ========== [환경 설정] ==========

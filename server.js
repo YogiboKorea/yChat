@@ -2320,15 +2320,17 @@ async function initializeEventData() {
               "endDate": new Date("2025-11-09T14:59:59.999Z"),   // KST: 2025-11-09 23:59
               "probabilities": { "day1_4": 0.0001, "day5_6": 0.05 },
               "day7NthWinner": 100,
-              "winner": { "userId": null, "winDate": null }
+              "winner": { "userId": null, "winDate": null },
+              "winnerUrl": "https://yogibo.kr/surl/P/2478"
             },
             {
               "week": 2,
               "startDate": new Date("2025-11-16T15:00:00.000Z"), // KST: 2025-11-10 00:00
               "endDate": new Date("2025-11-23T14:59:59.999Z"),   // KST: 2025-11-16 23:59
-              "probabilities": { "day1_4": 0.0001, "day5_6": 0.05 },
+              "probabilities": { "day1_4": 0.00001, "day5_6": 0.05 },
               "day7NthWinner": 100,
-              "winner": { "userId": null, "winDate": null }
+              "winner": { "userId": null, "winDate": null },
+              "winnerUrl": "https://yogibo.kr/surl/P/2479"
             },
             {
               "week": 3,
@@ -2336,7 +2338,8 @@ async function initializeEventData() {
               "endDate": new Date("2025-11-30T14:59:59.999Z"),   // KST: 2025-11-23 23:59
               "probabilities": { "day1_4": 0.0001, "day5_6": 0.05 },
               "day7NthWinner": 100,
-              "winner": { "userId": null, "winDate": null }
+              "winner": { "userId": null, "winDate": null },
+              "winnerUrl": "https://yogibo.kr/surl/P/2480"
             }
           ];
 
@@ -2383,10 +2386,13 @@ async function ensureIndexes() {
  * [GET] /api/event/status?userId=...
  * '이번 주' 참여 여부 + 이전 결과(win/lose)까지 함께 반환
  */
+
+// server.js 파일의 '/api/event/status' API를 이 코드로 교체하세요.
+
 app.get('/api/event/status', async (req, res) => {
   const { userId } = req.query;
   if (!userId) {
-      return res.json({ status: 'not_running' }); // ID가 없으면 '실행중 아님'으로 간주
+      return res.json({ status: 'not_running' });
   }
 
   const client = new MongoClient(MONGODB_URI);
@@ -2403,26 +2409,26 @@ app.get('/api/event/status', async (req, res) => {
       });
 
       if (!currentEvent) {
-          // 1. 진행 중인 이벤트가 없음
           return res.json({ status: 'not_running' });
       }
 
-      // 2. '이번 주'에 참여한 이력이 있는지 확인
       const currentWeekRecord = await participantsCollection.findOne({
           eventWeek: currentEvent.week,
           userId: userId
       });
 
       if (currentWeekRecord) {
-          // 3. '이번 주'에 이미 참여함 (결과와 주차 반환)
+          // "이번 주"에 이미 참여함
           return res.json({
               status: 'participated',
               result: currentWeekRecord.result, // 'win' 또는 'lose'
-              week: currentEvent.week
+              week: currentEvent.week,
+              // ⭐ [추가] 당첨되었었다면, URL도 함께 반환
+              url: currentWeekRecord.result === 'win' ? currentEvent.winnerUrl : null
           });
       }
 
-      // 4. '이번 주'에 참여한 적 없음 (참여 가능)
+      // "이번 주"에 참여한 적 없음
       return res.json({ 
           status: 'not_participated',
           week: currentEvent.week 
@@ -2436,8 +2442,7 @@ app.get('/api/event/status', async (req, res) => {
   }
 });
 
-
-// server.js 파일의 기존 /api/event/check 부분을 아래 코드로 완전히 교체해주세요.
+// server.js 파일의 '/api/event/check' API를 이 코드로 교체하세요.
 
 app.post('/api/event/check', async (req, res) => {
   const { userId } = req.body;
@@ -2452,11 +2457,10 @@ app.post('/api/event/check', async (req, res) => {
       const db = client.db(DB_NAME);
       
       const eventConfigsCollection = db.collection('eventBlackF'); 
-      const participantsCollection = db.collection('eventBlackEntry'); // 사용자가 지정한 컬렉션 이름
+      const participantsCollection = db.collection('eventBlackEntry');
       
       const now = new Date();
 
-      // 1. 현재 날짜에 해당하는 이벤트 주차 정보 찾기
       const currentEvent = await eventConfigsCollection.findOne({
           startDate: { $lte: now },
           endDate: { $gte: now }
@@ -2466,19 +2470,16 @@ app.post('/api/event/check', async (req, res) => {
           return res.status(404).json({ message: '현재 진행 중인 이벤트가 없습니다.' });
       }
       
-      // 2. 해당 주차에 이미 당첨자가 나왔는지 먼저 확인
       if (currentEvent.winner && currentEvent.winner.userId) {
-          // 참여 기록을 남기고 즉시 'lose' 응답 (확률 0%)
           await participantsCollection.insertOne({
               eventWeek: currentEvent.week,
               userId: userId,
               participationDate: new Date(),
               result: 'lose'
-          }).catch(err => { /* 중복 참여 시도는 무시 */ });
+          }).catch(err => { /* 중복 무시 */ });
           return res.json({ result: 'lose', week: currentEvent.week });
       }
 
-      // 3. (당첨자가 없는 경우) 이번 주에 이미 참여했는지 확인
       const existingParticipant = await participantsCollection.findOne({
           eventWeek: currentEvent.week,
           userId: userId
@@ -2488,13 +2489,11 @@ app.post('/api/event/check', async (req, res) => {
           return res.status(409).json({ message: '이번 주 이벤트에 이미 참여하셨습니다.' });
       }
 
-      // 4. 이벤트 경과일 계산
+      // ... (중간의 dayDifference, isWinner, 7일차 로직 등은 모두 동일) ...
       const dayDifference = Math.floor((now - new Date(currentEvent.startDate)) / (1000 * 60 * 60 * 24)) + 1;
       let isWinner = false;
 
-      // 5. 당첨 로직 적용
       if (dayDifference === 7) {
-          // ⭐ [수정] 서버 위치와 상관없이 항상 '한국 시간 기준' 오늘 날짜를 계산
           const todayKST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
           const todayStart = new Date(todayKST);
           todayStart.setHours(0, 0, 0, 0);
@@ -2512,7 +2511,6 @@ app.post('/api/event/check', async (req, res) => {
           isWinner = Math.random() < probability;
       }
 
-      // 6. 참여 결과 DB에 기록 (participationDate는 new Date()로 UTC 저장, 이것이 표준 방식)
       await participantsCollection.insertOne({
           eventWeek: currentEvent.week,
           userId: userId,
@@ -2520,7 +2518,6 @@ app.post('/api/event/check', async (req, res) => {
           result: isWinner ? 'win' : 'lose'
       });
 
-      // 7. 당첨 시, 당첨자 정보 기록
       if (isWinner) {
           await eventConfigsCollection.updateOne(
               { _id: currentEvent._id },
@@ -2529,10 +2526,14 @@ app.post('/api/event/check', async (req, res) => {
       }
 
       // 8. 최종 결과 전송
-      res.json({ result: isWinner ? 'win' : 'lose', week: currentEvent.week });
+      res.json({ 
+          result: isWinner ? 'win' : 'lose', 
+          week: currentEvent.week,
+          // ⭐ [추가] 당첨되었을 경우에만 URL을 함께 반환
+          url: isWinner ? currentEvent.winnerUrl : null
+      });
 
   } catch (error) {
-      // DB의 Unique Index 규칙 위반 시(error.code 11000) 이리로 들어옵니다.
       if (error.code === 11000) {
           return res.status(409).json({ message: '이번 주 이벤트에 이미 참여하셨습니다.' });
       }
@@ -2622,6 +2623,10 @@ app.get('/api/event/download', async (req, res) => {
   }
 });
 
+
+
+
+
 //실시간 판매 데이터 로직 추가하기
 // ========== [블랙 프라이데이 누적 매출 로직] ==========
 //실시간 판매 데이터 로직 추가하기
@@ -2635,8 +2640,7 @@ const OFFLINE_TARGET_DB = 'blackOffData'; // 일별 오프라인 '목표액' 저
 // (가장 적은 14,240원을 10번 추가하여, 총 20개 중 11개(55%)가 14,240원이 되도록 가중치 부여)
 const OFFLINE_INCREMENTS = [
   311200, 35040, 23840, 255200, 263200, 143200, 215200, 135200, 136200,
-  14240, // <- 기본 1개
-  14240, 14240, 14240, 14240, 14240, 14240, 14240, 14240, 14240, 14240 // <- 10개 추가
+  14240,  14240, 14240, 14240, 14240, 14240, 14240, 14240, 14240, 14240, 14240 // <- 10개 추가
 ];
 
 // 🎁 [신규] 오프라인 특별 첫날 설정 (11월 7일 00:00 ~ 10:00 KST)

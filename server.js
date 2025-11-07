@@ -2645,34 +2645,28 @@ app.get('/api/event/download', async (req, res) => {
       await client.close();
   }
 });
-
-
-
-
-
-//실시간 판매 데이터 로직 추가하기
-// ========== [블랙 프라이데이 누적 매출 로직] ==========
 //실시간 판매 데이터 로직 추가하기
 // ========== [블랙 프라이데이 누적 매출 로직] ==========
 
-const EVENT_START_DATE = '2025-11-06'; // 🎁 온라인 매출 집계 시작일
+// ⬇️ [수정 1] 온라인 매출 집계 시작일을 '2025-11-10'로 변경
+const EVENT_START_DATE = '2025-11-10'; // 🎁 온라인 매출 집계 시작일
 const SALES_STATUS_DB = 'blackSalesStatus'; // ⭐️ 온라인/오프라인 상태 통합 저장 컬렉션
 const OFFLINE_TARGET_DB = 'blackOffData'; // 일별 오프라인 '목표액' 저장 컬렉션
 
-// 🎁 [수정] 오프라인 연출용 증분 리스트
-// (가장 적은 14,240원을 10번 추가하여, 총 20개 중 11개(55%)가 14,240원이 되도록 가중치 부여)
+// 🎁 오프라인 연출용 증분 리스트 (가중치 부여)
 const OFFLINE_INCREMENTS = [
   311200, 35040, 23840, 255200, 263200, 143200, 215200, 135200, 136200,
-  14240,  14240, 14240, 14240, 14240, 14240, 14240, 14240, 14240, 14240, 14240 // <- 10개 추가
+  14240, // <- 기본 1개
+  14240, 14240, 14240, 14240, 14240, 14240, 14240, 14240, 14240, 14240 // <- 10개 추가
 ];
 
-// 🎁 [신규] 오프라인 특별 첫날 설정 (11월 7일 00:00 ~ 10:00 KST)
+// ⬇️ [수정 2] 오프라인 특별 첫날 설정을 '11월 10일' 00:00 ~ 10:00 KST로 변경
 const SPECIAL_DAY_CONFIG = {
-  // 2025년 11월 7일 00:00:00 KST (UTC: 11/06 15:00)
-  startUTC: Date.UTC(2025, 10, 6, 15, 0, 0),
-  // 2025년 11월 7일 10:00:00 KST (UTC: 11/07 01:00)
-  endUTC: Date.UTC(2025, 10, 7, 1, 0, 0),
-  target: 32000000 // 목표액 3,200만원
+  // 2025년 11월 10일 00:00:00 KST (UTC: 11/09 15:00)
+  startUTC: Date.UTC(2025, 10, 9, 15, 0, 0),
+  // 2025년 11월 10일 10:00:00 KST (UTC: 11/10 01:00)
+  endUTC: Date.UTC(2025, 10, 10, 1, 0, 0),
+  target: 30000000 // 목표액 3,200만원
 };
 
 /**
@@ -2681,14 +2675,13 @@ const SPECIAL_DAY_CONFIG = {
 async function initializeOfflineSalesData() {
   console.log("🟡 오프라인 일일 매출 목표 데이터 확인 및 초기화 중...");
 
-  // 🎁 [수정] 11-05, 11-06 데이터를 다시 추가 (누적 합산을 위해 필수)
+  // ⬇️ [수정 3] 이벤트가 10일부터 시작하므로, 7, 8, 9일 데이터는 불필요 (삭제 또는 0원)
   const offlineSalesData = [
-    { "dateString": "2025-11-07", "targetAmount": 5500000 }, // 11/7 10:00 ~ 11/8 10:00 목표
-    { "dateString": "2025-11-08", "targetAmount": 7000000 },
-    { "dateString": "2025-11-09", "targetAmount": 6000000 },
-    { "dateString": "2025-11-10", "targetAmount": 5000000 },
+    // (11/5, 6, 7, 8, 9일 데이터는 0원이므로 생략)
+    { "dateString": "2025-11-10", "targetAmount": 5000000 }, // 11/10 10:00 ~ 11/11 10:00 목표
     { "dateString": "2025-11-11", "targetAmount": 5200000 },
     { "dateString": "2025-11-12", "targetAmount": 5300000 },
+    // (기존의 11-07, 11-08, 11-09 데이터는 시작일(10일)과 맞지 않아 제거)
   ];
 
   if (offlineSalesData.length === 0) {
@@ -2741,7 +2734,8 @@ async function updateOnlineSales() {
     while (true) {
       const response = await apiRequest('GET', cafe24Url, {}, {
           shop_no: 1, order_status: 'N30,N40',
-          start_date: EVENT_START_DATE, end_date: today,
+          start_date: EVENT_START_DATE, // '2025-11-10'부터 집계
+          end_date: today,
           limit: limit, offset: offset
       });
       const orders = response.orders;
@@ -2780,10 +2774,7 @@ function startSalesScheduler() {
 
 /**
  * 💰 [API] 누적 판매 금액 조회 API
- * [수정됨] 하이브리드 방식:
- * (1) 시간 퍼센트로 '목표 상한선(ceiling)'을 계산
- * (2) 50% 확률로 (가중치 적용된) 랜덤 증분액을 더함
- * (3) 단, (2)번이 (1)번을 넘지 못하게 함
+ * (하이브리드 방식)
  */
 app.get('/api/total-sales', async (req, res) => {
   try {
@@ -2792,7 +2783,6 @@ app.get('/api/total-sales', async (req, res) => {
       const statsCollection = db.collection(SALES_STATUS_DB); 
       const targetsCollection = db.collection(OFFLINE_TARGET_DB);
       
-      // 1. (온라인) DB에 저장된 Cafe24 누적 매출액
       const stat = await statsCollection.findOne({ _id: 'blackFriday2025' });
       const totalOnlineSales = stat ? stat.totalOnlineSales : 0;
 
@@ -2803,15 +2793,16 @@ app.get('/api/total-sales', async (req, res) => {
       let totalOfflineBase = 0; // (A) 과거 사이클 총합
       let currentTargetCeiling = 0; // (B) 현재 시간 기준 목표액 (상한선)
 
-      // 2. (오프라인) "11-07" 이전 날짜(11-05, 11-06)의 목표액을 *전액 합산*
-      const pastTargets = allTargets.filter(d => d.dateString < "2025-11-07");
+      // ⬇️ [수정 4] 기준 날짜를 '2025-11-10'로 변경
+      // 2. (오프라인) "11-10" 이전 날짜의 목표액을 *전액 합산*
+      const pastTargets = allTargets.filter(d => d.dateString < "2025-11-10");
       for (const doc of pastTargets) {
-        totalOfflineBase += doc.targetAmount; // (A)에 더함
+        totalOfflineBase += doc.targetAmount; // (A)에 더함 (0원이 더해질 것임)
       }
 
-      // 3. (오프라인) "특별 첫날" (11-07 00:00 ~ 10:00) 계산
-      const specialStart = SPECIAL_DAY_CONFIG.startUTC;
-      const specialEnd = SPECIAL_DAY_CONFIG.endUTC;
+      // 3. (오프라인) "특별 첫날" (11-10 00:00 ~ 10:00) 계산
+      const specialStart = SPECIAL_DAY_CONFIG.startUTC; // 11/10 00:00 KST
+      const specialEnd = SPECIAL_DAY_CONFIG.endUTC;     // 11/10 10:00 KST
       const specialTarget = SPECIAL_DAY_CONFIG.target; // 3200만
 
       if (nowUTC >= specialEnd) {
@@ -2825,11 +2816,12 @@ app.get('/api/total-sales', async (req, res) => {
       }
       
       // 4. (오프라인) "일반" (10:00 ~ 10:00) 사이클 계산 (10시가 지났을 경우)
-      let currentCycleStart = SPECIAL_DAY_CONFIG.endUTC; 
+      let currentCycleStart = SPECIAL_DAY_CONFIG.endUTC; // 11/10 10:00 KST 부터 시작
       const dayDuration = 24 * 60 * 60 * 1000; 
 
-      if (nowUTC >= currentCycleStart) { // 11/7 10:00 KST 이후
-        const generalTargets = allTargets.filter(d => d.dateString >= "2025-11-07");
+      if (nowUTC >= currentCycleStart) { // 11/10 10:00 KST 이후
+        // ⬇️ [수정 5] 기준 날짜를 '2025-11-10'로 변경
+        const generalTargets = allTargets.filter(d => d.dateString >= "2025-11-10");
         
         for (const doc of generalTargets) {
           const cycleTarget = doc.targetAmount;
@@ -2849,11 +2841,9 @@ app.get('/api/total-sales', async (req, res) => {
       }
       
       // 5. [연출] 50% 확률로 랜덤 증분액 더하기
-      let stagedAmount = stat.lastStagedAmount || 0; // DB에 저장된 마지막 연출금액
+      let stagedAmount = (stat && stat.lastStagedAmount) ? stat.lastStagedAmount : 0;
       
-      // ⭐️ 50% 확률로만 금액을 올림 ("매번 오를 필요는 없어")
-      if (Math.random() < 0.5) {
-        // (가중치 적용된) 랜덤 금액 선택
+      if (Math.random() < 0.5) { // 50% 확률로 동결
         const randomAmount = OFFLINE_INCREMENTS[Math.floor(Math.random() * OFFLINE_INCREMENTS.length)];
         stagedAmount += randomAmount;
       }
@@ -2863,13 +2853,18 @@ app.get('/api/total-sales', async (req, res) => {
         stagedAmount = currentTargetCeiling;
       }
       
-      // 7. DB에 현재 연출된 금액을 저장 (다음 호출 시 이어서 하도록)
+      // 7. [리셋 방지] 현재 시간이 사이클 시작 전이면, 연출 금액(stagedAmount)을 0으로 강제
+      if (nowUTC < specialStart) { // 11/10 00:00 KST 이전
+         stagedAmount = 0; 
+      }
+
+      // 8. DB에 현재 연출된 금액을 저장
       await statsCollection.updateOne(
         { _id: 'blackFriday2025' },
         { $set: { lastStagedAmount: stagedAmount } }
       );
       
-      // 8. 최종 오프라인 매출 = (A. 과거 총합) + (B. 현재 연출된 금액)
+      // 9. 최종 오프라인 매출 = (A. 과거 총합) + (B. 현재 연출된 금액)
       const totalOfflineSales = totalOfflineBase + stagedAmount;
       
       // --- [계산 끝] ---
@@ -2877,7 +2872,7 @@ app.get('/api/total-sales', async (req, res) => {
       return { totalOnlineSales, totalOfflineSales };
     });
 
-    // 9. 최종 합계 반환
+    // 10. 최종 합계 반환
     res.json({
       totalSales: totalOnlineSales + totalOfflineSales,
       online: totalOnlineSales,

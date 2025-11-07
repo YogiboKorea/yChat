@@ -2389,10 +2389,15 @@ async function ensureIndexes() {
 
 // server.js 파일의 '/api/event/status' API를 이 코드로 교체하세요.
 
+/**
+ * 🎁 [수정] 이벤트 참여 상태 '확인' API (읽기 전용)
+ * [GET] /api/event/status?userId=...
+ * '진행 전', '참여 가능', '참여 완료'를 구분하여 반환
+ */
 app.get('/api/event/status', async (req, res) => {
   const { userId } = req.query;
   if (!userId) {
-      return res.json({ status: 'not_running' });
+      return res.json({ status: 'not_running' }); // ID가 없으면 '실행중 아님'으로 간주
   }
 
   const client = new MongoClient(MONGODB_URI);
@@ -2403,36 +2408,46 @@ app.get('/api/event/status', async (req, res) => {
       const participantsCollection = db.collection('eventBlackEntry');
 
       const now = new Date();
+
+      // 1. 현재 진행 중인 이벤트가 있는지 확인
       const currentEvent = await eventConfigsCollection.findOne({
           startDate: { $lte: now },
           endDate: { $gte: now }
       });
 
-      if (!currentEvent) {
-          return res.json({ status: 'not_running' });
-      }
-
-      const currentWeekRecord = await participantsCollection.findOne({
-          eventWeek: currentEvent.week,
-          userId: userId
-      });
-
-      if (currentWeekRecord) {
-          // "이번 주"에 이미 참여함
-          return res.json({
-              status: 'participated',
-              result: currentWeekRecord.result, // 'win' 또는 'lose'
-              week: currentEvent.week,
-              // ⭐ [추가] 당첨되었었다면, URL도 함께 반환
-              url: currentWeekRecord.result === 'win' ? currentEvent.winnerUrl : null
+      if (currentEvent) {
+          // 2. 이벤트 진행 중 -> '이번 주' 참여 이력 확인
+          const currentWeekRecord = await participantsCollection.findOne({
+              eventWeek: currentEvent.week,
+              userId: userId
           });
+
+          if (currentWeekRecord) {
+              // '이번 주'에 이미 참여함
+              return res.json({
+                  status: 'participated',
+                  result: currentWeekRecord.result,
+                  week: currentEvent.week,
+                  url: currentWeekRecord.result === 'win' ? currentEvent.winnerUrl : null
+              });
+          } else {
+              // '이번 주' 참여 가능
+              return res.json({ 
+                  status: 'not_participated',
+                  week: currentEvent.week 
+              });
+          }
+      }
+      
+      // 3. 진행 중인 이벤트 없음 -> '진행 전'인지 '종료'인지 확인
+      const firstEvent = await eventConfigsCollection.findOne({ week: 1 });
+      if (firstEvent && now < firstEvent.startDate) {
+          // 1주차 시작 전
+          return res.json({ status: 'not_started_yet', message: '아직 이벤트 진행전입니다.' });
       }
 
-      // "이번 주"에 참여한 적 없음
-      return res.json({ 
-          status: 'not_participated',
-          week: currentEvent.week 
-      });
+      // 4. 1주차 시작일이 지났는데도 진행 중 이벤트가 없으면 '종료'
+      return res.json({ status: 'not_running', message: '이벤트가 종료되었습니다.' });
 
   } catch (error) {
       console.error('이벤트 상태 확인 중 오류:', error);
@@ -2441,9 +2456,12 @@ app.get('/api/event/status', async (req, res) => {
       await client.close();
   }
 });
-
 // server.js 파일의 '/api/event/check' API를 이 코드로 교체하세요.
 
+/**
+ * 🎁 [수정] 블랙프라이데이 확률 기반 이벤트 참여 API
+ * [POST] /api/event/check
+ */
 app.post('/api/event/check', async (req, res) => {
   const { userId } = req.body;
   if (!userId) {
@@ -2461,15 +2479,25 @@ app.post('/api/event/check', async (req, res) => {
       
       const now = new Date();
 
+      // 1. 현재 날짜에 해당하는 이벤트 주차 정보 찾기
       const currentEvent = await eventConfigsCollection.findOne({
           startDate: { $lte: now },
           endDate: { $gte: now }
       });
 
       if (!currentEvent) {
+          // 2. [수정] 진행 중인 이벤트가 없을 때, '진행 전'인지 확인
+          const firstEvent = await eventConfigsCollection.findOne({ week: 1 });
+          if (firstEvent && now < firstEvent.startDate) {
+              return res.status(404).json({ message: '아직 이벤트 진행전입니다.' });
+          }
+          // 그 외에는 '종료'로 간주
           return res.status(404).json({ message: '현재 진행 중인 이벤트가 없습니다.' });
       }
       
+      // --- 이하 로직은 동일 ---
+      
+      // 2. 해당 주차에 이미 당첨자가 나왔는지 먼저 확인
       if (currentEvent.winner && currentEvent.winner.userId) {
           await participantsCollection.insertOne({
               eventWeek: currentEvent.week,
@@ -2477,9 +2505,10 @@ app.post('/api/event/check', async (req, res) => {
               participationDate: new Date(),
               result: 'lose'
           }).catch(err => { /* 중복 무시 */ });
-          return res.json({ result: 'lose', week: currentEvent.week });
+          return res.json({ result: 'lose', week: currentEvent.week, url: null });
       }
 
+      // 3. (당첨자가 없는 경우) 이번 주에 이미 참여했는지 확인
       const existingParticipant = await participantsCollection.findOne({
           eventWeek: currentEvent.week,
           userId: userId
@@ -2489,10 +2518,11 @@ app.post('/api/event/check', async (req, res) => {
           return res.status(409).json({ message: '이번 주 이벤트에 이미 참여하셨습니다.' });
       }
 
-      // ... (중간의 dayDifference, isWinner, 7일차 로직 등은 모두 동일) ...
+      // 4. 이벤트 경과일 계산
       const dayDifference = Math.floor((now - new Date(currentEvent.startDate)) / (1000 * 60 * 60 * 24)) + 1;
       let isWinner = false;
 
+      // 5. 당첨 로직 적용
       if (dayDifference === 7) {
           const todayKST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
           const todayStart = new Date(todayKST);
@@ -2511,6 +2541,7 @@ app.post('/api/event/check', async (req, res) => {
           isWinner = Math.random() < probability;
       }
 
+      // 6. 참여 결과 DB에 기록
       await participantsCollection.insertOne({
           eventWeek: currentEvent.week,
           userId: userId,
@@ -2518,6 +2549,7 @@ app.post('/api/event/check', async (req, res) => {
           result: isWinner ? 'win' : 'lose'
       });
 
+      // 7. 당첨 시, 당첨자 정보 기록
       if (isWinner) {
           await eventConfigsCollection.updateOne(
               { _id: currentEvent._id },
@@ -2529,7 +2561,6 @@ app.post('/api/event/check', async (req, res) => {
       res.json({ 
           result: isWinner ? 'win' : 'lose', 
           week: currentEvent.week,
-          // ⭐ [추가] 당첨되었을 경우에만 URL을 함께 반환
           url: isWinner ? currentEvent.winnerUrl : null
       });
 
@@ -2543,7 +2574,6 @@ app.post('/api/event/check', async (req, res) => {
       await client.close();
   }
 });
-
 
 
 

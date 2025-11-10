@@ -2316,7 +2316,7 @@ async function initializeEventData() {
           const initialEventData = [
             {
               "week": 1,
-              "startDate": new Date("2025-11-07T15:00:00.000Z"), // KST: 2025-11-03 00:00
+              "startDate": new Date("2025-11-09T15:00:00.000Z"), // KST: 2025-11-03 00:00
               "endDate": new Date("2025-11-16T14:59:59.999Z"),   // KST: 2025-11-09 23:59
               "probabilities": { "day1_4": 0.0001, "day5_6": 0.0001 },
               "day7NthWinner": 100,
@@ -2649,7 +2649,7 @@ app.get('/api/event/download', async (req, res) => {
 // ========== [블랙 프라이데이 누적 매출 로직] ==========
 
 // ⬇️ [수정 1] 온라인 매출 집계 시작일을 '2025-11-10'로 변경
-const EVENT_START_DATE = '2025-11-10'; // 🎁 온라인 매출 집계 시작일
+const EVENT_START_DATE = '2025-11-08'; // 🎁 온라인 매출 집계 시작일
 const SALES_STATUS_DB = 'blackSalesStatus'; // ⭐️ 온라인/오프라인 상태 통합 저장 컬렉션
 const OFFLINE_TARGET_DB = 'blackOffData'; // 일별 오프라인 '목표액' 저장 컬렉션
 
@@ -2666,7 +2666,7 @@ const SPECIAL_DAY_CONFIG = {
   startUTC: Date.UTC(2025, 10, 9, 15, 0, 0),
   // 2025년 11월 10일 10:00:00 KST (UTC: 11/10 01:00)
   endUTC: Date.UTC(2025, 10, 10, 1, 0, 0),
-  target: 30000000 // 목표액 3,200만원
+  target: 30000000 // 목표액 3,000만원
 };
 
 /**
@@ -2678,10 +2678,27 @@ async function initializeOfflineSalesData() {
   // ⬇️ [수정 3] 이벤트가 10일부터 시작하므로, 7, 8, 9일 데이터는 불필요 (삭제 또는 0원)
   const offlineSalesData = [
     // (11/5, 6, 7, 8, 9일 데이터는 0원이므로 생략)
-    { "dateString": "2025-11-10", "targetAmount": 5000000 }, // 11/10 10:00 ~ 11/11 10:00 목표
+    { "dateString": "2025-11-10", "targetAmount": 37204660 }, // 11/10 10:00 ~ 11/11 10:00 목표
     { "dateString": "2025-11-11", "targetAmount": 5200000 },
     { "dateString": "2025-11-12", "targetAmount": 5300000 },
-    // (기존의 11-07, 11-08, 11-09 데이터는 시작일(10일)과 맞지 않아 제거)
+    { "dateString": "2025-11-13", "targetAmount": 5300000 },
+    { "dateString": "2025-11-14", "targetAmount": 5300000 },
+    { "dateString": "2025-11-15", "targetAmount": 5300000 },
+    { "dateString": "2025-11-16", "targetAmount": 5300000 },
+    { "dateString": "2025-11-17", "targetAmount": 5300000 },
+    { "dateString": "2025-11-18", "targetAmount": 5300000 },
+    { "dateString": "2025-11-19", "targetAmount": 5300000 },
+    { "dateString": "2025-11-20", "targetAmount": 5300000 },
+    { "dateString": "2025-11-21", "targetAmount": 5300000 },
+    { "dateString": "2025-11-22", "targetAmount": 5300000 },
+    { "dateString": "2025-11-23", "targetAmount": 5300000 },
+    { "dateString": "2025-11-24", "targetAmount": 5300000 },
+    { "dateString": "2025-11-25", "targetAmount": 5300000 },
+    { "dateString": "2025-11-26", "targetAmount": 5300000 },
+    { "dateString": "2025-11-27", "targetAmount": 5300000 },
+    { "dateString": "2025-11-28", "targetAmount": 5300000 },
+    { "dateString": "2025-11-29", "targetAmount": 5300000 },
+    { "dateString": "2025-11-30", "targetAmount": 5300000 },
   ];
 
   if (offlineSalesData.length === 0) {

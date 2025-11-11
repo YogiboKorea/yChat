@@ -2750,7 +2750,7 @@ async function updateOnlineSales() {
     const cafe24Url = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`;
     while (true) {
       const response = await apiRequest('GET', cafe24Url, {}, {
-          shop_no: 1, order_status: 'N10,N30,N40',
+          shop_no: 1, order_status: 'N10,N20,N30,N40',
           start_date: EVENT_START_DATE, // '2025-11-10'부터 집계
           end_date: today,
           limit: limit, offset: offset

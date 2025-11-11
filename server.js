@@ -2679,7 +2679,7 @@ async function initializeOfflineSalesData() {
   const offlineSalesData = [
     // (11/5, 6, 7, 8, 9일 데이터는 0원이므로 생략)
     { "dateString": "2025-11-10", "targetAmount": 37204660 }, // 11/10 10:00 ~ 11/11 10:00 목표
-    { "dateString": "2025-11-11", "targetAmount": 5200000 },
+    { "dateString": "2025-11-11", "targetAmount": 9632530 },
     { "dateString": "2025-11-12", "targetAmount": 5300000 },
     { "dateString": "2025-11-13", "targetAmount": 5300000 },
     { "dateString": "2025-11-14", "targetAmount": 5300000 },
@@ -2750,7 +2750,7 @@ async function updateOnlineSales() {
     const cafe24Url = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`;
     while (true) {
       const response = await apiRequest('GET', cafe24Url, {}, {
-          shop_no: 1, order_status: 'N30,N40',
+          shop_no: 1, order_status: 'N10,N30,N40',
           start_date: EVENT_START_DATE, // '2025-11-10'부터 집계
           end_date: today,
           limit: limit, offset: offset

@@ -2921,12 +2921,13 @@ app.get('/api/total-sales', async (req, res) => {
   시크릿 특가 클릭 데이터 추가 작업
 */
 app.post('/api/log-secret-code', async (req, res) => {
-  const client = new MongoClient(MONGODB_URI);
   try {
-    await client.connect();
-    const db = client.db(DB_NAME);
-    const eventSecretDataCollection = db.collection('eventSecretData');
+    // ★ 4. 이미 연결된 'db' 객체에서 컬렉션을 바로 가져옴
+    // (매번 connect() 할 필요 없음)
+    const eventSecretDataCollection = db.collection('eventSecretData'); 
+    
     const { enteredCode, isSuccess } = req.body;
+    
     if (typeof enteredCode === 'undefined' || typeof isSuccess === 'undefined') {
       return res.status(400).json({ success: false, message: '필수 데이터가 누락되었습니다.' });
     }
@@ -2937,18 +2938,41 @@ app.post('/api/log-secret-code', async (req, res) => {
       timestamp: new Date()
     };
 
-    // 'eventSecretDataCollection' 변수를 사용합니다.
     await eventSecretDataCollection.insertOne(logDocument); 
-
     res.status(201).json({ success: true, message: '로그가 성공적으로 저장되었습니다.' });
 
   } catch (error) {
+    // ★ 5. db가 아직 연결되지 않았거나 다른 오류일 경우
+    if (!db) {
+      return res.status(503).json({ success: false, message: 'DB가 아직 준비되지 않았습니다.' });
+    }
     console.error('시크릿 코드 로그 저장 중 오류:', error);
     res.status(500).json({ success: false, message: '서버 오류 발생' });
   }
-
+  // ★ 6. client.close()가 없어야 합니다. (연결을 계속 재사용해야 하므로)
 });
 
+
+/**
+ * 시크릿 특가 로그 전체 조회 (GET) - (이전 요청)
+ */
+app.get('/api/get-secret-logs', async (req, res) => {
+  try {
+    // ★ 4. (동일) 이미 연결된 'db' 객체에서 컬렉션을 바로 가져옴
+    const eventSecretDataCollection = db.collection('eventSecretData');
+    
+    const logs = await eventSecretDataCollection.find({}).sort({ timestamp: -1 }).toArray();
+
+    res.status(200).json({ success: true, data: logs });
+
+  } catch (error) {
+    if (!db) {
+      return res.status(503).json({ success: false, message: 'DB가 아직 준비되지 않았습니다.' });
+    }
+    console.error('시크릿 코드 로그 조회 중 오류:', error);
+    res.status(500).json({ success: false, message: '서버 오류 발생' });
+  }
+});
 
 
 // ========== [서버 실행 및 프롬프트 초기화] ==========

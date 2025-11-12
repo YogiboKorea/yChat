@@ -2685,7 +2685,7 @@ async function initializeOfflineSalesData() {
     // (11/5, 6, 7, 8, 9일 데이터는 0원이므로 생략)
     { "dateString": "2025-11-10", "targetAmount": 37204660 }, // 11/10 10:00 ~ 11/11 10:00 목표
     { "dateString": "2025-11-11", "targetAmount": 9632530 },
-    { "dateString": "2025-11-12", "targetAmount": 5300000 },
+    { "dateString": "2025-11-12", "targetAmount": 11561770 },
     { "dateString": "2025-11-13", "targetAmount": 5300000 },
     { "dateString": "2025-11-14", "targetAmount": 5300000 },
     { "dateString": "2025-11-15", "targetAmount": 5300000 },
@@ -2914,16 +2914,13 @@ app.get('/api/total-sales', async (req, res) => {
 });
 
 
+//시크릿특가
 
-
-
-/**
-  시크릿 특가 클릭 데이터 추가 작업
-*/
 app.post('/api/log-secret-code', async (req, res) => {
   try {
     // ★ 4. 이미 연결된 'db' 객체에서 컬렉션을 바로 가져옴
     // (매번 connect() 할 필요 없음)
+    const db = client.db(DB_NAME);
     const eventSecretDataCollection = db.collection('eventSecretData'); 
     
     const { enteredCode, isSuccess } = req.body;

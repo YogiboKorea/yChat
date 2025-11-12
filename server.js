@@ -2913,23 +2913,24 @@ app.get('/api/total-sales', async (req, res) => {
   }
 });
 
-
 //시크릿특가
-
 app.post('/api/log-secret-code', async (req, res) => {
+  // ★ 1. [추가] 이 라우트에서 직접 DB에 연결합니다.
+  const client = new MongoClient(MONGODB_URI); 
   
   try {
-    // ★ 4. 'db' 변수가 할당되었는지 *먼저* 확인합니다.
-    if (!db) {
-      return res.status(503).json({ success: false, message: 'DB가 아직 준비되지 않았습니다.' });
-    }
+    // ★ 2. [추가] DB 연결
+    await client.connect();
+    const db = client.db(DB_NAME);
 
-    // ★ 5. (수정) 'client.db(...)' 대신 전역 'db' 변수를 사용합니다.
+    // ★ 3. [수정] 'if (!db)' 검사 제거 (이제 db가 여기서 선언되었으므로)
     const eventSecretDataCollection = db.collection('eventSecretData');
 
     const { enteredCode, isSuccess } = req.body;
 
     if (typeof enteredCode === 'undefined' || typeof isSuccess === 'undefined') {
+      // ★ 4. [추가] 오류 시에도 DB 연결을 닫아야 합니다.
+      await client.close(); 
       return res.status(400).json({ success: false, message: '필수 데이터가 누락되었습니다.' });
     }
 
@@ -2945,21 +2946,26 @@ app.post('/api/log-secret-code', async (req, res) => {
   } catch (error) {
     console.error('시크릿 코드 로그 저장 중 오류:', error);
     res.status(500).json({ success: false, message: '서버 오류 발생' });
+  } finally {
+    // ★ 5. [추가] 성공하든 실패하든 항상 DB 연결을 닫습니다.
+    await client.close(); 
   }
 });
 
 
 /**
- * 시크릿 특가 로그 전체 조회 (GET) - 오류가 발생했던 라우트
+ * 시크릿 특가 로그 전체 조회 (GET)
  */
 app.get('/api/get-secret-logs', async (req, res) => {
-  try {
-    // ★ 4. (동일) 'db' 변수가 할당되었는지 *먼저* 확인합니다.
-    if (!db) {
-      return res.status(503).json({ success: false, message: 'DB가 아직 준비되지 않았습니다.' });
-    }
+  // ★ 1. [추가] 이 라우트에서 직접 DB에 연결합니다.
+  const client = new MongoClient(MONGODB_URI); 
 
-    // ★ 5. (동일) 전역 'db' 변수를 사용합니다.
+  try {
+    // ★ 2. [추가] DB 연결
+    await client.connect();
+    const db = client.db(DB_NAME);
+
+    // ★ 3. [수정] 'if (!db)' 검사 제거
     const eventSecretDataCollection = db.collection('eventSecretData');
 
     const logs = await eventSecretDataCollection.find({}).sort({ timestamp: -1 }).toArray();
@@ -2968,8 +2974,12 @@ app.get('/api/get-secret-logs', async (req, res) => {
   } catch (error) {
     console.error('시크릿 코드 로그 조회 중 오류:', error);
     res.status(500).json({ success: false, message: '서버 오류 발생' });
+  } finally {
+    // ★ 4. [추가] 성공하든 실패하든 항상 DB 연결을 닫습니다.
+    await client.close();
   }
 });
+
 
 // ========== [서버 실행 및 프롬프트 초기화] ==========
 (async function initialize() {

@@ -543,6 +543,7 @@
     .main_Grid_${pageId} .original_price {
         font-size: 12px;
     }
+   .main_Grid_${pageId} .original_price {padding-bottom:10px; }       
   }`;
   document.head.appendChild(style);
 

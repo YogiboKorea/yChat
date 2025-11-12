@@ -2646,7 +2646,7 @@ app.get('/api/event/download', async (req, res) => {
   }
 });
 
-// ip제거 스파크플러스 안에서의 ip정보는 제거 한다  입력 유입 
+// 중복 제거 ip중복  입력 유입 
 
 
 
@@ -2912,42 +2912,6 @@ app.get('/api/total-sales', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
-
-
-//시크릿 코드 통계 데이터 추출 작업
-
-const eventSecretDataCollection = db.collection('eventSecretData');
-
-app.post('/api/log-secret-code', async (req, res) => {
-  try {
-    // 2. 클라이언트에서 { enteredCode, isSuccess } 두 값을 받습니다.
-    const { enteredCode, isSuccess } = req.body;
-
-    // 3. 데이터 유효성 검사
-    if (typeof enteredCode === 'undefined' || typeof isSuccess === 'undefined') {
-      return res.status(400).json({ success: false, message: '필수 데이터가 누락되었습니다.' });
-    }
-
-    // 4. MongoDB에 저장할 문서(Document) 생성
-    const logDocument = {
-      enteredCode,
-      isSuccess,
-      timestamp: new Date() // 현재 시간 저장
-    };
-
-    // 5. 네이티브 드라이버의 insertOne 메서드를 사용해 저장
-    await eventSecretDataCollection.insertOne(logDocument);
-
-    // 6. 클라이언트에 성공 응답 전송
-    res.status(201).json({ success: true, message: '로그가 성공적으로 저장되었습니다.' });
-
-  } catch (error) {
-    console.error('시크릿 코드 로그 저장 중 오류:', error);
-    res.status(500).json({ success: false, message: '서버 오류 발생' });
-  }
-});
-
-
 // ========== [서버 실행 및 프롬프트 초기화] ==========
 (async function initialize() {
   try {

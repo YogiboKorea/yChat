@@ -509,9 +509,16 @@
   /* PRICE STYLES */
   .main_Grid_${pageId} .prd_price,
   .main_Grid_${pageId} .coupon_wrapper { font-size: 16px; font-weight: 500; }
-  .main_Grid_${pageId} .original_price { text-decoration: line-through; color: #999; width:100%; display:block; font-size:13px; font-weight: 400; }
+  .main_Grid_${pageId} .original_price { text-decoration: line-through; color: #999; width:100%; display:block; font-size:13px; font-weight: 400;padding-bottom:5px; }
   .main_Grid_${pageId} .sale_percent,
-  .main_Grid_${pageId} .prd_coupon_percent { color: #ff4d4f; font-weight: bold; margin-right: 4px; }
+  .main_Grid_${pageId} .prd_coupon_percent { 
+    font-weight: bold;
+    margin-right: 4px;
+    padding-inline: 10px;
+    border-radius: 20px;
+    background: #00bdd4;
+    color: #fff;
+  }
   .main_Grid_${pageId} .sale_price,
   .main_Grid_${pageId} .prd_coupon { font-weight: bold; }
 

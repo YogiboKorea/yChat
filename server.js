@@ -2917,10 +2917,15 @@ app.get('/api/total-sales', async (req, res) => {
  * 시크릿 특가 클릭 데이터 추가 (POST) - [IP 차단/로깅 기능 추가됨]
  */
 app.post('/api/log-secret-code', async (req, res) => {
+  
   try {
     // ★ 5. [신규] 클라이언트 IP 확인 (Cloudtype/프록시 환경 대응)
     const clientIp = req.headers['x-forwarded-for']?.split(',').shift() || req.connection.remoteAddress;
 
+    const BLOCKED_IPS = [
+      '61.99.75.10' // 요청하신 차단 IP
+      // '123.45.67.89' // 다른 IP 추가 시
+    ];
     // ★ 6. [신규] IP 차단 로직
     if (BLOCKED_IPS.includes(clientIp)) {
       // 차단된 IP는 로그를 남기지 않고 즉시 403 (Forbidden) 반환

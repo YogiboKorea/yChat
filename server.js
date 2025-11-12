@@ -2917,8 +2917,7 @@ app.get('/api/total-sales', async (req, res) => {
 //시크릿특가
 
 app.post('/api/log-secret-code', async (req, res) => {
-  const db = client.db(DB_NAME);
-
+  
   try {
     // ★ 4. 'db' 변수가 할당되었는지 *먼저* 확인합니다.
     if (!db) {

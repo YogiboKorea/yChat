@@ -2913,12 +2913,20 @@ app.get('/api/total-sales', async (req, res) => {
   }
 });
 
+
+
 /**
  * 시크릿 특가 클릭 데이터 추가 (POST) - [IP 차단/로깅 기능 추가됨]
  */
 app.post('/api/log-secret-code', async (req, res) => {
-  
+  // ★ 1. [수정] 이 라우트에서 직접 DB에 연결합니다.
+  const client = new MongoClient(MONGODB_URI);
+
   try {
+    // ★ 2. [수정] DB 연결
+    await client.connect();
+    const db = client.db(DB_NAME);
+
     // ★ 5. [신규] 클라이언트 IP 확인 (Cloudtype/프록시 환경 대응)
     const clientIp = req.headers['x-forwarded-for']?.split(',').shift() || req.connection.remoteAddress;
 
@@ -2932,15 +2940,12 @@ app.post('/api/log-secret-code', async (req, res) => {
       return res.status(403).json({ success: false, message: 'Access Denied.' });
     }
 
-    // ★ 7. 'db' 변수가 할당되었는지 확인
-    if (!db) {
-      return res.status(503).json({ success: false, message: 'DB가 아직 준비되지 않았습니다.' });
-    }
-
+    // ★ 7. 'db' 변수 검사 제거 (여기서 선언되었으므로)
     const eventSecretDataCollection = db.collection('eventSecretData');
     const { enteredCode, isSuccess } = req.body;
 
     if (typeof enteredCode === 'undefined' || typeof isSuccess === 'undefined') {
+      // ★ [수정] 오류 시에도 client.close()가 finally에서 실행되도록 return만 함
       return res.status(400).json({ success: false, message: '필수 데이터가 누락되었습니다.' });
     }
 
@@ -2958,6 +2963,9 @@ app.post('/api/log-secret-code', async (req, res) => {
   } catch (error) {
     console.error('시크릿 코드 로그 저장 중 오류:', error);
     res.status(500).json({ success: false, message: '서버 오류 발생' });
+  } finally {
+    // ★ 9. [추가] 성공하든 실패하든 항상 DB 연결을 닫습니다.
+    await client.close();
   }
 });
 
@@ -2966,10 +2974,15 @@ app.post('/api/log-secret-code', async (req, res) => {
  * 시크릿 특가 로그 전체 조회 (GET) - (상세 로그 확인용)
  */
 app.get('/api/get-secret-logs', async (req, res) => {
+  // ★ 1. [수정] 이 라우트에서 직접 DB에 연결합니다.
+  const client = new MongoClient(MONGODB_URI);
+
   try {
-    if (!db) {
-      return res.status(503).json({ success: false, message: 'DB가 아직 준비되지 않았습니다.' });
-    }
+    // ★ 2. [수정] DB 연결
+    await client.connect();
+    const db = client.db(DB_NAME);
+    
+    // ★ 3. 'db' 변수 검사 제거
     const eventSecretDataCollection = db.collection('eventSecretData');
     
     // [수정] 데이터가 많아질 경우를 대비해 최신 1000개만 조회
@@ -2980,6 +2993,9 @@ app.get('/api/get-secret-logs', async (req, res) => {
   } catch (error) {
     console.error('시크릿 코드 로그 조회 중 오류:', error);
     res.status(500).json({ success: false, message: '서버 오류 발생' });
+  } finally {
+    // ★ 4. [추가] 성공하든 실패하든 항상 DB 연결을 닫습니다.
+    await client.close();
   }
 });
 
@@ -2987,10 +3003,15 @@ app.get('/api/get-secret-logs', async (req, res) => {
  * [신규] 시크릿 특가 로그 '일일 집계' (GET) - (요약 페이지용)
  */
 app.get('/api/get-secret-logs/daily-summary', async (req, res) => {
+  // ★ 1. [수정] 이 라우트에서 직접 DB에 연결합니다.
+  const client = new MongoClient(MONGODB_URI);
+
   try {
-    if (!db) {
-      return res.status(503).json({ success: false, message: 'DB가 아직 준비되지 않았습니다.' });
-    }
+    // ★ 2. [수정] DB 연결
+    await client.connect();
+    const db = client.db(DB_NAME);
+
+    // ★ 3. 'db' 변수 검사 제거
     const eventSecretDataCollection = db.collection('eventSecretData');
 
     // MongoDB Aggregation Pipeline
@@ -3038,8 +3059,13 @@ app.get('/api/get-secret-logs/daily-summary', async (req, res) => {
   } catch (error) {
     console.error('시크릿 코드 일일 집계 중 오류:', error);
     res.status(500).json({ success: false, message: '서버 오류 발생' });
+  } finally {
+    // ★ 4. [추가] 성공하든 실패하든 항상 DB 연결을 닫습니다.
+    await client.close();
   }
 });
+
+
 
 
 // ========== [서버 실행 및 프롬프트 초기화] ==========

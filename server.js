@@ -2981,6 +2981,71 @@ app.get('/api/get-secret-logs', async (req, res) => {
 });
 
 
+/**
+ * [신규] 시크릿 특가 로그 '일일 집계' (GET)
+ * MongoDB Aggregation을 사용하여 날짜별로 데이터를 요약합니다.
+ */
+app.get('/api/get-secret-logs/daily-summary', async (req, res) => {
+  // 이 API도 '매번 연결'하는 방식으로 작성하여
+  // 기존 server.js 코드와 일관성을 맞춥니다.
+  const client = new MongoClient(MONGODB_URI); 
+
+  try {
+    await client.connect();
+    const db = client.db(DB_NAME);
+    const eventSecretDataCollection = db.collection('eventSecretData');
+
+    // MongoDB Aggregation Pipeline
+    const dailyStats = await eventSecretDataCollection.aggregate([
+      {
+        // 1. 타임스탬프를 KST 기준 날짜 문자열로 변환
+        $project: {
+          kstDate: {
+            $dateToString: {
+              format: "%Y-%m-%d", // "YYYY-MM-DD"
+              date: "$timestamp",
+              timezone: "Asia/Seoul" // KST 기준
+            }
+          },
+          isSuccess: "$isSuccess"
+        }
+      },
+      {
+        // 2. KST 날짜별로 그룹화
+        $group: {
+          _id: "$kstDate", // "YYYY-MM-DD"
+          totalClicks: { $sum: 1 },
+          totalSuccess: { $sum: { $cond: [ "$isSuccess", 1, 0 ] } }, // isSuccess: true
+          totalFail: { $sum: { $cond: [ { $not: "$isSuccess" }, 1, 0 ] } } // isSuccess: false
+        }
+      },
+      {
+        // 3. 최신 날짜순으로 정렬
+        $sort: { _id: -1 }
+      },
+      {
+        // 4. 출력 형식 정리
+        $project: {
+          _id: 0,
+          date: "$_id",
+          totalClicks: 1,
+          totalSuccess: 1,
+          totalFail: 1
+        }
+      }
+    ]).toArray();
+
+    res.status(200).json({ success: true, data: dailyStats });
+
+  } catch (error) {
+    console.error('시크릿 코드 일일 집계 중 오류:', error);
+    res.status(500).json({ success: false, message: '서버 오류 발생' });
+  } finally {
+    await client.close();
+  }
+});
+
+
 // ========== [서버 실행 및 프롬프트 초기화] ==========
 (async function initialize() {
   try {

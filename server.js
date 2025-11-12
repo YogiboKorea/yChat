@@ -2912,6 +2912,45 @@ app.get('/api/total-sales', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+
+
+
+
+/**
+  시크릿 특가 클릭 데이터 추가 작업
+*/
+app.get('/api/log-secret-code', async (req, res) => {
+  const client = new MongoClient(MONGODB_URI);
+  try {
+    await client.connect();
+    const db = client.db(DB_NAME);
+    const eventSecretDataCollection = db.collection('eventSecretData');
+    const { enteredCode, isSuccess } = req.body;
+    if (typeof enteredCode === 'undefined' || typeof isSuccess === 'undefined') {
+      return res.status(400).json({ success: false, message: '필수 데이터가 누락되었습니다.' });
+    }
+
+    const logDocument = {
+      enteredCode,
+      isSuccess,
+      timestamp: new Date()
+    };
+
+    // 'eventSecretDataCollection' 변수를 사용합니다.
+    await eventSecretDataCollection.insertOne(logDocument); 
+
+    res.status(201).json({ success: true, message: '로그가 성공적으로 저장되었습니다.' });
+
+  } catch (error) {
+    console.error('시크릿 코드 로그 저장 중 오류:', error);
+    res.status(500).json({ success: false, message: '서버 오류 발생' });
+  }
+
+});
+
+
+
 // ========== [서버 실행 및 프롬프트 초기화] ==========
 (async function initialize() {
   try {

@@ -2920,7 +2920,7 @@ app.get('/api/total-sales', async (req, res) => {
 /**
   시크릿 특가 클릭 데이터 추가 작업
 */
-app.get('/api/log-secret-code', async (req, res) => {
+app.post('/api/log-secret-code', async (req, res) => {
   const client = new MongoClient(MONGODB_URI);
   try {
     await client.connect();

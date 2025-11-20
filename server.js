@@ -2569,6 +2569,45 @@ app.post('/api/event/check', async (req, res) => {
 
 
 
+/**
+ * 🛡️ [추가] 당첨자 본인 확인 검증 API
+ * [GET] /api/event/validate-winner?userId=...
+ * DB의 eventBlackF 컬렉션을 조회하여 해당 userId가 'winner'로 기록되어 있는지 확인합니다.
+ */
+app.get('/api/event/validate-winner', async (req, res) => {
+  const { userId } = req.query;
+  if (!userId) {
+      return res.json({ isWinner: false });
+  }
+
+  const client = new MongoClient(MONGODB_URI);
+  try {
+      await client.connect();
+      const db = client.db(DB_NAME);
+      const eventConfigsCollection = db.collection('eventBlackF');
+
+      // 1. 해당 userId가 winner.userId로 등록된 주차가 있는지 찾습니다.
+      // (1, 2, 3주차 중 하나라도 당첨된 기록이 있는지 확인)
+      const winRecord = await eventConfigsCollection.findOne({
+          "winner.userId": userId
+      });
+
+      if (winRecord) {
+          // 당첨 기록이 있음
+          return res.json({ isWinner: true, week: winRecord.week });
+      } else {
+          // 당첨 기록 없음
+          return res.json({ isWinner: false });
+      }
+
+  } catch (error) {
+      console.error('당첨자 검증 중 오류:', error);
+      res.status(500).json({ isWinner: false, error: '서버 오류' });
+  } finally {
+      await client.close();
+  }
+});
+
 
 
 /**
@@ -2691,9 +2730,9 @@ async function initializeOfflineSalesData() {
     { "dateString": "2025-11-15", "targetAmount": 10000000 },
     { "dateString": "2025-11-16", "targetAmount": 10000000 },
     { "dateString": "2025-11-17", "targetAmount": 12266780 },
-    { "dateString": "2025-11-18", "targetAmount": 5300000 },
-    { "dateString": "2025-11-19", "targetAmount": 5300000 },
-    { "dateString": "2025-11-20", "targetAmount": 5300000 },
+    { "dateString": "2025-11-18", "targetAmount": 8785110 },
+    { "dateString": "2025-11-19", "targetAmount": 13078460 },
+    { "dateString": "2025-11-20", "targetAmount": 4172020},
     { "dateString": "2025-11-21", "targetAmount": 5300000 },
     { "dateString": "2025-11-22", "targetAmount": 5300000 },
     { "dateString": "2025-11-23", "targetAmount": 5300000 },

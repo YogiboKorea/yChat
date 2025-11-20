@@ -2568,9 +2568,8 @@ app.post('/api/event/check', async (req, res) => {
 });
 
 
-
 /**
- * 🛡️ [수정] 특정 상품 페이지 접근 권한 확인 API (안전장치 추가)
+ * 🛡️ [수정] 특정 상품 페이지 접근 권한 확인 API (디버깅 기능 추가)
  */
 app.get('/api/event/check-page-access', async (req, res) => {
   const { userId, objectId } = req.query;
@@ -2579,9 +2578,7 @@ app.get('/api/event/check-page-access', async (req, res) => {
       return res.json({ canAccess: false });
   }
 
-  // ⭐ [추가] ObjectId 형식이 맞는지 먼저 확인 (서버 다운 방지)
   if (!ObjectId.isValid(objectId)) {
-      console.log('유효하지 않은 ObjectId 요청:', objectId);
       return res.json({ canAccess: false });
   }
 
@@ -2591,14 +2588,39 @@ app.get('/api/event/check-page-access', async (req, res) => {
       const db = client.db(DB_NAME);
       const eventConfigsCollection = db.collection('eventBlackF');
 
+      // 1. DB에서 해당 문서를 찾습니다.
       const eventData = await eventConfigsCollection.findOne({ 
           _id: new ObjectId(objectId) 
       });
 
-      if (eventData && eventData.winner && eventData.winner.userId === userId) {
-          return res.json({ canAccess: true });
+      // ⭐ [디버깅 로그] 서버 콘솔에 DB 조회 결과를 출력합니다.
+      console.log("=== 🔍 [디버깅] DB 조회 결과 ===");
+      console.log("요청 ObjectId:", objectId);
+      console.log("DB 데이터:", eventData);
+
+      let dbWinnerId = null;
+      if (eventData && eventData.winner) {
+          dbWinnerId = eventData.winner.userId;
+          console.log("👉 DB에 저장된 당첨자 ID:", dbWinnerId);
       } else {
-          return res.json({ canAccess: false });
+          console.log("👉 DB에 당첨자 정보가 없습니다 (null).");
+      }
+      console.log("👉 현재 접속한 유저 ID:", userId);
+      console.log("==============================");
+
+      // 2. 검증 로직
+      if (dbWinnerId && dbWinnerId === userId) {
+          // 당첨자 일치
+          return res.json({ 
+              canAccess: true, 
+              winnerId: dbWinnerId // ⭐ 프론트 확인용으로 당첨자 ID 반환
+          });
+      } else {
+          // 불일치
+          return res.json({ 
+              canAccess: false,
+              winnerId: dbWinnerId // ⭐ 확인용 반환
+          });
       }
 
   } catch (error) {
@@ -2608,7 +2630,6 @@ app.get('/api/event/check-page-access', async (req, res) => {
       await client.close();
   }
 });
-
 
 
 /**

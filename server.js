@@ -2567,14 +2567,14 @@ app.post('/api/event/check', async (req, res) => {
   }
 });
 /**
- * 🛡️ [수정] 특정 상품 페이지 접근 권한 확인 API
- * [GET] /api/event/check-page-access?userId=...&pageUrl=...
- * 요청받은 pageUrl이 DB의 winnerUrl과 일치하는지 확인하고, 당첨자 본인인지 검증
+ * 🛡️ [수정] 특정 상품 페이지 접근 권한 확인 API (ObjectId 기준)
+ * [GET] /api/event/check-page-access?userId=...&objectId=...
+ * 요청받은 objectId에 해당하는 주차의 당첨자가 맞는지 확인
  */
 app.get('/api/event/check-page-access', async (req, res) => {
-  const { userId, pageUrl } = req.query;
+  const { userId, objectId } = req.query;
 
-  if (!userId || !pageUrl) {
+  if (!userId || !objectId) {
       return res.json({ canAccess: false });
   }
 
@@ -2584,17 +2584,16 @@ app.get('/api/event/check-page-access', async (req, res) => {
       const db = client.db(DB_NAME);
       const eventConfigsCollection = db.collection('eventBlackF');
 
-      // 1. DB에서 해당 URL을 가진 이벤트 데이터를 찾습니다.
-      // (URL의 쿼리 파라미터 등을 제외하고 경로만 비교하기 위해 정규식 등을 쓸 수도 있지만,
-      // 여기서는 정확히 일치하는 것을 찾습니다.)
+      // 1. 프론트에서 보낸 objectId로 해당 문서(주차 데이터)를 찾습니다.
       const eventData = await eventConfigsCollection.findOne({ 
-          winnerUrl: pageUrl 
+          _id: new ObjectId(objectId) 
       });
 
       // 2. 데이터가 있고, 당첨자가 설정되어 있으며, 그 당첨자가 현재 유저와 같다면 '통과'
       if (eventData && eventData.winner && eventData.winner.userId === userId) {
           return res.json({ canAccess: true });
       } else {
+          // 당첨자가 없거나(null), 다른 사람이면 '차단'
           return res.json({ canAccess: false });
       }
 
@@ -2605,7 +2604,6 @@ app.get('/api/event/check-page-access', async (req, res) => {
       await client.close();
   }
 });
-
 
 /**
  * [HELPER] 날짜 객체를 KST 문자열(YYYY. MM. DD. 오후 H:mm:ss)로 변환

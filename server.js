@@ -2566,15 +2566,22 @@ app.post('/api/event/check', async (req, res) => {
       await client.close();
   }
 });
+
+
+
 /**
- * 🛡️ [수정] 특정 상품 페이지 접근 권한 확인 API (ObjectId 기준)
- * [GET] /api/event/check-page-access?userId=...&objectId=...
- * 요청받은 objectId에 해당하는 주차의 당첨자가 맞는지 확인
+ * 🛡️ [수정] 특정 상품 페이지 접근 권한 확인 API (안전장치 추가)
  */
 app.get('/api/event/check-page-access', async (req, res) => {
   const { userId, objectId } = req.query;
 
   if (!userId || !objectId) {
+      return res.json({ canAccess: false });
+  }
+
+  // ⭐ [추가] ObjectId 형식이 맞는지 먼저 확인 (서버 다운 방지)
+  if (!ObjectId.isValid(objectId)) {
+      console.log('유효하지 않은 ObjectId 요청:', objectId);
       return res.json({ canAccess: false });
   }
 
@@ -2584,16 +2591,13 @@ app.get('/api/event/check-page-access', async (req, res) => {
       const db = client.db(DB_NAME);
       const eventConfigsCollection = db.collection('eventBlackF');
 
-      // 1. 프론트에서 보낸 objectId로 해당 문서(주차 데이터)를 찾습니다.
       const eventData = await eventConfigsCollection.findOne({ 
           _id: new ObjectId(objectId) 
       });
 
-      // 2. 데이터가 있고, 당첨자가 설정되어 있으며, 그 당첨자가 현재 유저와 같다면 '통과'
       if (eventData && eventData.winner && eventData.winner.userId === userId) {
           return res.json({ canAccess: true });
       } else {
-          // 당첨자가 없거나(null), 다른 사람이면 '차단'
           return res.json({ canAccess: false });
       }
 
@@ -2604,6 +2608,8 @@ app.get('/api/event/check-page-access', async (req, res) => {
       await client.close();
   }
 });
+
+
 
 /**
  * [HELPER] 날짜 객체를 KST 문자열(YYYY. MM. DD. 오후 H:mm:ss)로 변환

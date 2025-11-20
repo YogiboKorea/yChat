@@ -2567,14 +2567,14 @@ app.post('/api/event/check', async (req, res) => {
   }
 });
 
+
 /**
- * 🛡️ [수정] 당첨자 본인 확인 API
+ * 🛡️ [API] 당첨자 본인 확인 (DB와 비교)
  * [GET] /api/event/check-page-access?userId=...&objectId=...
  */
 app.get('/api/event/check-page-access', async (req, res) => {
-  const { userId, objectId } = req.query; // 프론트에서 보낸 memberId가 여기 userId로 들어옵니다.
+  const { userId, objectId } = req.query;
 
-  // 1. 필수 값 체크
   if (!userId || !objectId) {
       return res.json({ canAccess: false });
   }
@@ -2585,24 +2585,23 @@ app.get('/api/event/check-page-access', async (req, res) => {
       const db = client.db(DB_NAME);
       const eventConfigsCollection = db.collection('eventBlackF');
 
-      // 2. DB에서 해당 주차의 당첨 데이터를 가져옵니다.
+      // 1. DB에서 해당 주차(ObjectId) 데이터를 가져옵니다.
       const eventData = await eventConfigsCollection.findOne({ 
           _id: new ObjectId(objectId) 
       });
 
-      // 3. [핵심 비교 로직]
-      // DB에 있는 당첨자(winner.userId) === 현재 접속한 사람(userId) 인지 확인
+      // 2. [핵심 비교] DB의 winner.userId 와 프론트에서 온 userId가 같은지 비교
       if (eventData && eventData.winner && eventData.winner.userId === userId) {
-          console.log(`✅ 당첨자 확인 성공! (접속자: ${userId})`);
+          console.log(`✅ 당첨자 확인 성공: ${userId}`);
           return res.json({ canAccess: true });
       } else {
-          console.log(`🚫 접근 차단 (접속자: ${userId} / 실제 당첨자: ${eventData?.winner?.userId})`);
+          console.log(`🚫 접근 차단: ${userId} (실제 당첨자: ${eventData?.winner?.userId})`);
           return res.json({ canAccess: false });
       }
 
   } catch (error) {
       console.error('검증 오류:', error);
-      res.status(500).json({ canAccess: false, error: '서버 오류' });
+      res.status(500).json({ canAccess: false });
   } finally {
       await client.close();
   }

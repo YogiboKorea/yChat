@@ -2569,8 +2569,7 @@ app.post('/api/event/check', async (req, res) => {
 
 
 /**
- * 🛡️ [API] 당첨자 본인 확인 (DB와 비교)
- * [GET] /api/event/check-page-access?userId=...&objectId=...
+ * 🛡️ [수정] 당첨자 본인 확인 API (디버깅용 winnerId 반환 추가)
  */
 app.get('/api/event/check-page-access', async (req, res) => {
   const { userId, objectId } = req.query;
@@ -2585,19 +2584,21 @@ app.get('/api/event/check-page-access', async (req, res) => {
       const db = client.db(DB_NAME);
       const eventConfigsCollection = db.collection('eventBlackF');
 
-      // 1. DB에서 해당 주차(ObjectId) 데이터를 가져옵니다.
       const eventData = await eventConfigsCollection.findOne({ 
           _id: new ObjectId(objectId) 
       });
 
-      // 2. [핵심 비교] DB의 winner.userId 와 프론트에서 온 userId가 같은지 비교
-      if (eventData && eventData.winner && eventData.winner.userId === userId) {
-          console.log(`✅ 당첨자 확인 성공: ${userId}`);
-          return res.json({ canAccess: true });
-      } else {
-          console.log(`🚫 접근 차단: ${userId} (실제 당첨자: ${eventData?.winner?.userId})`);
-          return res.json({ canAccess: false });
-      }
+      // DB에 저장된 당첨자 ID 확인
+      const dbWinnerId = (eventData && eventData.winner) ? eventData.winner.userId : null;
+
+      // 검증 로직
+      const isMatch = (dbWinnerId && dbWinnerId === userId);
+
+      // ⭐ [수정] canAccess와 함께 'winnerId'도 반환합니다.
+      return res.json({ 
+          canAccess: isMatch,
+          winnerId: dbWinnerId // 프론트 콘솔 확인용
+      });
 
   } catch (error) {
       console.error('검증 오류:', error);

@@ -2567,17 +2567,17 @@ app.post('/api/event/check', async (req, res) => {
   }
 });
 
-
-
 /**
- * 🛡️ [추가] 당첨자 본인 확인 검증 API
- * [GET] /api/event/validate-winner?userId=...
- * DB의 eventBlackF 컬렉션을 조회하여 해당 userId가 'winner'로 기록되어 있는지 확인합니다.
+ * 🛡️ [추가] 특정 상품 페이지 접근 권한 확인 API
+ * [GET] /api/event/check-page-access
+ * 요청받은 objectId 문서의 winner.userId와 현재 접속자의 userId가 일치하는지 확인
  */
-app.get('/api/event/validate-winner', async (req, res) => {
-  const { userId } = req.query;
-  if (!userId) {
-      return res.json({ isWinner: false });
+app.get('/api/event/check-page-access', async (req, res) => {
+  const { userId, objectId } = req.query;
+
+  // 필수 정보가 없으면 접근 불가 처리
+  if (!userId || !objectId) {
+      return res.json({ canAccess: false });
   }
 
   const client = new MongoClient(MONGODB_URI);
@@ -2586,28 +2586,26 @@ app.get('/api/event/validate-winner', async (req, res) => {
       const db = client.db(DB_NAME);
       const eventConfigsCollection = db.collection('eventBlackF');
 
-      // 1. 해당 userId가 winner.userId로 등록된 주차가 있는지 찾습니다.
-      // (1, 2, 3주차 중 하나라도 당첨된 기록이 있는지 확인)
-      const winRecord = await eventConfigsCollection.findOne({
-          "winner.userId": userId
+      // 1. 프론트에서 보낸 objectId로 해당 주차 데이터를 찾습니다.
+      const eventData = await eventConfigsCollection.findOne({ 
+          _id: new ObjectId(objectId) 
       });
 
-      if (winRecord) {
-          // 당첨 기록이 있음
-          return res.json({ isWinner: true, week: winRecord.week });
+      // 2. 데이터가 있고, 당첨자가 설정되어 있으며, 그 당첨자가 현재 유저와 같다면 '통과'
+      if (eventData && eventData.winner && eventData.winner.userId === userId) {
+          return res.json({ canAccess: true });
       } else {
-          // 당첨 기록 없음
-          return res.json({ isWinner: false });
+          // 당첨자가 없거나(null), 다른 사람이면 '차단'
+          return res.json({ canAccess: false });
       }
 
   } catch (error) {
-      console.error('당첨자 검증 중 오류:', error);
-      res.status(500).json({ isWinner: false, error: '서버 오류' });
+      console.error('페이지 접근 확인 중 오류:', error);
+      res.status(500).json({ canAccess: false, error: '서버 오류' });
   } finally {
       await client.close();
   }
 });
-
 
 
 /**

@@ -2567,18 +2567,15 @@ app.post('/api/event/check', async (req, res) => {
   }
 });
 
-
 /**
- * 🛡️ [수정] 특정 상품 페이지 접근 권한 확인 API (디버깅 기능 추가)
+ * 🛡️ [수정] 당첨자 본인 확인 API
+ * [GET] /api/event/check-page-access?userId=...&objectId=...
  */
 app.get('/api/event/check-page-access', async (req, res) => {
-  const { userId, objectId } = req.query;
+  const { userId, objectId } = req.query; // 프론트에서 보낸 memberId가 여기 userId로 들어옵니다.
 
+  // 1. 필수 값 체크
   if (!userId || !objectId) {
-      return res.json({ canAccess: false });
-  }
-
-  if (!ObjectId.isValid(objectId)) {
       return res.json({ canAccess: false });
   }
 
@@ -2588,43 +2585,23 @@ app.get('/api/event/check-page-access', async (req, res) => {
       const db = client.db(DB_NAME);
       const eventConfigsCollection = db.collection('eventBlackF');
 
-      // 1. DB에서 해당 문서를 찾습니다.
+      // 2. DB에서 해당 주차의 당첨 데이터를 가져옵니다.
       const eventData = await eventConfigsCollection.findOne({ 
           _id: new ObjectId(objectId) 
       });
 
-      // ⭐ [디버깅 로그] 서버 콘솔에 DB 조회 결과를 출력합니다.
-      console.log("=== 🔍 [디버깅] DB 조회 결과 ===");
-      console.log("요청 ObjectId:", objectId);
-      console.log("DB 데이터:", eventData);
-
-      let dbWinnerId = null;
-      if (eventData && eventData.winner) {
-          dbWinnerId = eventData.winner.userId;
-          console.log("👉 DB에 저장된 당첨자 ID:", dbWinnerId);
+      // 3. [핵심 비교 로직]
+      // DB에 있는 당첨자(winner.userId) === 현재 접속한 사람(userId) 인지 확인
+      if (eventData && eventData.winner && eventData.winner.userId === userId) {
+          console.log(`✅ 당첨자 확인 성공! (접속자: ${userId})`);
+          return res.json({ canAccess: true });
       } else {
-          console.log("👉 DB에 당첨자 정보가 없습니다 (null).");
-      }
-      console.log("👉 현재 접속한 유저 ID:", userId);
-      console.log("==============================");
-
-      // 2. 검증 로직
-      if (dbWinnerId && dbWinnerId === userId) {
-          // 당첨자 일치
-          return res.json({ 
-              canAccess: true, 
-              winnerId: dbWinnerId // ⭐ 프론트 확인용으로 당첨자 ID 반환
-          });
-      } else {
-          // 불일치
-          return res.json({ 
-              canAccess: false,
-              winnerId: dbWinnerId // ⭐ 확인용 반환
-          });
+          console.log(`🚫 접근 차단 (접속자: ${userId} / 실제 당첨자: ${eventData?.winner?.userId})`);
+          return res.json({ canAccess: false });
       }
 
   } catch (error) {
-      console.error('페이지 접근 확인 중 오류:', error);
+      console.error('검증 오류:', error);
       res.status(500).json({ canAccess: false, error: '서버 오류' });
   } finally {
       await client.close();

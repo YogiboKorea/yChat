@@ -2318,8 +2318,8 @@ async function initializeEventData() {
               "week": 1,
               "startDate": new Date("2025-11-09T15:00:00.000Z"), // KST: 2025-11-03 00:00
               "endDate": new Date("2025-11-16T14:59:59.999Z"),   // KST: 2025-11-09 23:59
-              "probabilities": { "day1_4": 0.0001, "day5_6": 0.05 },
-              "day7NthWinner": 100,
+              "probabilities": { "day1_4": 0.0001, "day5_6": 0.0005 },
+              "day7NthWinner": 1000,
               "winner": { "userId": null, "winDate": null },
               "winnerUrl": "https://yogibo.kr/surl/P/2478"
             },
@@ -2327,8 +2327,8 @@ async function initializeEventData() {
               "week": 2,
               "startDate": new Date("2025-11-16T15:00:00.000Z"), // KST: 2025-11-10 00:00
               "endDate": new Date("2025-11-23T14:59:59.999Z"),   // KST: 2025-11-16 23:59
-              "probabilities": { "day1_4": 0.000005, "day5_6": 0.000005 },
-              "day7NthWinner": 100,
+              "probabilities": { "day1_4": 0.0001, "day5_6": 0.0005 },
+              "day7NthWinner": 1000,
               "winner": { "userId": null, "winDate": null },
               "winnerUrl": "https://yogibo.kr/surl/P/2479"
             },
@@ -2336,8 +2336,8 @@ async function initializeEventData() {
               "week": 3,
               "startDate": new Date("2025-11-23T15:00:00.000Z"), // KST: 2025-11-17 00:00
               "endDate": new Date("2025-11-30T14:59:59.999Z"),   // KST: 2025-11-23 23:59
-              "probabilities": { "day1_4": 0.0001, "day5_6": 0.05 },
-              "day7NthWinner": 100,
+              "probabilities": { "day1_4": 0.0001, "day5_6": 0.0005 },
+              "day7NthWinner": 1000,
               "winner": { "userId": null, "winDate": null },
               "winnerUrl": "https://yogibo.kr/surl/P/2480"
             }
@@ -2569,7 +2569,7 @@ app.post('/api/event/check', async (req, res) => {
 
 
 /**
- * 🛡️ [수정] 당첨자 본인 확인 API (디버깅용 winnerId 반환 추가)
+ * 🛡️ 당첨자 아이디빌 권한 설정 작업완료 
  */
 app.get('/api/event/check-page-access', async (req, res) => {
   const { userId, objectId } = req.query;
@@ -2625,6 +2625,8 @@ function formatKST(date) {
       hour12: true // '오전/오후' 형식 사용
   });
 }
+
+
 
 /**
 * 🎁 [추가] 블랙프라이데이 이벤트 참여자 엑셀 다운로드 API
@@ -2692,7 +2694,7 @@ app.get('/api/event/download', async (req, res) => {
 // ========== [블랙 프라이데이 누적 매출 로직] ==========
 
 // ⬇️ [수정 1] 온라인 매출 집계 시작일을 '2025-11-10'로 변경
-const EVENT_START_DATE = '2025-11-08'; // 🎁 온라인 매출 집계 시작일
+const EVENT_START_DATE = '2025-11-10'; // 🎁 온라인 매출 집계 시작일
 const SALES_STATUS_DB = 'blackSalesStatus'; // ⭐️ 온라인/오프라인 상태 통합 저장 컬렉션
 const OFFLINE_TARGET_DB = 'blackOffData'; // 일별 오프라인 '목표액' 저장 컬렉션
 
@@ -2732,16 +2734,17 @@ async function initializeOfflineSalesData() {
     { "dateString": "2025-11-18", "targetAmount": 8785110 },
     { "dateString": "2025-11-19", "targetAmount": 13078460 },
     { "dateString": "2025-11-20", "targetAmount": 4172020},
-    { "dateString": "2025-11-21", "targetAmount": 5300000 },
-    { "dateString": "2025-11-22", "targetAmount": 5300000 },
-    { "dateString": "2025-11-23", "targetAmount": 5300000 },
-    { "dateString": "2025-11-24", "targetAmount": 5300000 },
-    { "dateString": "2025-11-25", "targetAmount": 5300000 },
-    { "dateString": "2025-11-26", "targetAmount": 5300000 },
-    { "dateString": "2025-11-27", "targetAmount": 5300000 },
+    { "dateString": "2025-11-21", "targetAmount": 6922300 },
+    { "dateString": "2025-11-22", "targetAmount": 10000000 },
+    { "dateString": "2025-11-23", "targetAmount": 10000000 },
+    { "dateString": "2025-11-24", "targetAmount": 13666830},
+    { "dateString": "2025-11-25", "targetAmount": 6727200 },
+    { "dateString": "2025-11-26", "targetAmount": 8345740 },
+    { "dateString": "2025-11-27", "targetAmount": 7962980 },
     { "dateString": "2025-11-28", "targetAmount": 5300000 },
     { "dateString": "2025-11-29", "targetAmount": 5300000 },
     { "dateString": "2025-11-30", "targetAmount": 5300000 },
+    { "dateString": "2025-12-01", "targetAmount": 2000000 },
   ];
 
   if (offlineSalesData.length === 0) {

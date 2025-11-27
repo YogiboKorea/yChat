@@ -2313,6 +2313,7 @@ async function initializeEventData() {
           // 데이터가 없으면, 기본 데이터를 삽입합니다.
           console.log("⚠️ 이벤트 데이터가 없습니다. 3주치 기본 데이터를 생성합니다...");
 
+          
           const initialEventData = [
             {
               "week": 1,
@@ -2742,9 +2743,9 @@ async function initializeOfflineSalesData() {
     { "dateString": "2025-11-26", "targetAmount": 8345740 },
     { "dateString": "2025-11-27", "targetAmount": 7962980 },
     { "dateString": "2025-11-28", "targetAmount": 5300000 },
-    { "dateString": "2025-11-29", "targetAmount": 5300000 },
-    { "dateString": "2025-11-30", "targetAmount": 5300000 },
-    { "dateString": "2025-12-01", "targetAmount": 2000000 },
+    { "dateString": "2025-11-29", "targetAmount": 10000000 },
+    { "dateString": "2025-11-30", "targetAmount": 10000000 },
+    { "dateString": "2025-12-01", "targetAmount": 15000000 },
   ];
 
   if (offlineSalesData.length === 0) {

@@ -1126,28 +1126,26 @@ app.post(
   }
 );
 
-
 // ========== [서버 실행 및 프롬프트 초기화] ==========
 (async function initialize() {
   try {
     console.log("🟡 서버 시작 중...");
 
-    // 토큰 불러오기
+    // 1. 토큰 불러오기
     await getTokensFromDB();
-    await initializeEventData();
-    // 2. [추가] DB 인덱스(중복 방지) 자동 설정
-    await ensureIndexes(); 
-    //실시간 판매 데이터 
-    await initializeOfflineSalesData()
-    startSalesScheduler();
 
-    // 시스템 프롬프트 한 번만 초기화
+    // 2. 오류 발생 지점: 정의되지 않은 함수들 주석 처리
+    // await initializeEventData(); 
+    // await ensureIndexes(); 
+    // await initializeOfflineSalesData();
+    // startSalesScheduler();
+
+    // 3. 시스템 프롬프트 초기화
     combinedSystemPrompt = await initializeChatPrompt();
-
 
     console.log("✅ 시스템 프롬프트 초기화 완료");
 
-    // 서버 실행
+    // 4. 서버 실행
     app.listen(PORT, () => {
       console.log(`🚀 서버 실행 완료! 포트: ${PORT}`);
     });
@@ -1157,5 +1155,3 @@ app.post(
     process.exit(1);
   }
 })();
-
-

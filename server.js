@@ -269,12 +269,11 @@ async function getShipmentDetail(orderId) {
     throw error;
   }
 }
-
 // ========== [★ 핵심 로직: findAnswer] ==========
 async function findAnswer(userInput, memberId) {
   const normalized = normalizeSentence(userInput);
 
-  // 1. 상담사 연결 (명시적 요청 시)
+  // 1. 상담사 연결
   if (normalized.includes("상담사 연결") || normalized.includes("상담원 연결")) {
     return { text: `상담사와 연결을 도와드리겠습니다.${COUNSELOR_LINKS_HTML}` };
   }
@@ -291,7 +290,7 @@ async function findAnswer(userInput, memberId) {
       : { text: `로그인이 필요한 서비스입니다.<br>아래 버튼을 눌러 로그인해주세요.${LOGIN_BTN_HTML}` };
   }
 
-  // 4. 주문번호로 배송 조회
+  // 4. 주문번호로 배송 조회 (이건 명확하니까 유지)
   if (containsOrderNumber(normalized)) {
     if (isUserLoggedIn(memberId)) {
       try {
@@ -322,8 +321,16 @@ async function findAnswer(userInput, memberId) {
     return { text: `정확한 조회를 위해 로그인이 필요합니다.${LOGIN_BTN_HTML}` };
   }
 
-  // 5. 일반 배송/주문 조회
-  if ((normalized.includes("배송") || normalized.includes("주문상태") || normalized.includes("배송정보")) && !containsOrderNumber(normalized)) {
+  // 5. [수정됨] 일반 배송/주문 조회 (조건 강화!)
+  // 단순히 "배송"만 들어갔다고 조회하는 게 아니라, "조회", "확인", "언제" 같은 의도가 있어야만 실행
+  const isTrackingIntent = 
+    (normalized.includes("배송") || normalized.includes("주문")) && 
+    (normalized.includes("조회") || normalized.includes("확인") || normalized.includes("언제") || normalized.includes("어디"));
+
+  // "배송비", "배송주소" 같은 질문은 API 조회가 아니라 FAQ로 넘어가야 함
+  const isFAQIntent = normalized.includes("비용") || normalized.includes("비") || normalized.includes("주소") || normalized.includes("변경");
+
+  if (isTrackingIntent && !isFAQIntent && !containsOrderNumber(normalized)) {
     if (isUserLoggedIn(memberId)) {
       try {
         const data = await getOrderShippingInfo(memberId);
@@ -352,6 +359,8 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
+  // [JSON 하드코딩 로직들] (그대로 유지)
+  // ... (나머지 로직들은 기존과 동일하게 아래에 배치)
   // [JSON 하드코딩 로직들]
 
   // (1) 커버링

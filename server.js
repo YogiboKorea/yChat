@@ -77,13 +77,12 @@ const LOGIN_BTN_HTML = `
 // ========== [시스템 프롬프트 설정] ==========
 function convertPromptLinks(promptText) { return promptText; }
 
-// ✅ [수정] 가독성 지침 추가
 const basePrompt = `
 1. 역할 및 말투
 전문가 역할: 요기보(Yogibo) 브랜드의 전문 상담원입니다.
 존대 및 공손: 고객에게 항상 존댓말과 공손한 말투를 사용합니다.
 이모티콘 활용: 대화 중 적절히 이모티콘을 사용합니다.
-가독성: 답변 시 줄바꿈(Enter)을 자주 사용하여 읽기 편하게 작성하세요. 문단 사이에는 빈 줄을 하나 더 넣으세요.
+가독성: 답변 시 줄바꿈(Enter)을 자주 사용하여 읽기 편하게 작성하세요.
 
 2. ★ 답변 원칙 (매우 중요)
 제공된 [참고 정보]에 있는 내용으로만 답변하세요.
@@ -174,7 +173,19 @@ async function getGPT3TurboResponse(input, context = []) {
 // ========== [유틸 함수] ==========
 function normalizeSentence(s) { return s.replace(/[?!！？]/g, "").replace(/없나요/g, "없어요").trim(); }
 function containsOrderNumber(s) { return /\d{8}-\d{7}/.test(s); }
-function addSpaceAfterPeriod(t) { return t.replace(/\.([^\s])/g, '. $1'); }
+
+// ✅ https://zinee-world.tistory.com/339 (새로 추가됨)
+function linkify(text) {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  return text.replace(urlRegex, function(url) {
+    // URL 끝에 마침표나 콤마가 붙어있으면 제거 (간단한 처리)
+    let cleanUrl = url;
+    if (url.endsWith('.') || url.endsWith(',')) {
+        cleanUrl = url.slice(0, -1);
+    }
+    return `<a href="${cleanUrl}" target="_blank" style="color:#58b5ca; font-weight:bold; text-decoration:underline;">${cleanUrl}</a>`;
+  });
+}
 
 // ✅ [로그인 체크]
 function isUserLoggedIn(id) {
@@ -194,7 +205,7 @@ async function getOrderShippingInfo(id) {
   });
 }
 
-// ✅ [배송 상세 조회 + 송장 링크]
+// ✅ [배송 상세 조회]
 async function getShipmentDetail(orderId) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders/${orderId}/shipments`;
   try {
@@ -233,7 +244,7 @@ async function getShipmentDetail(orderId) {
 async function findAnswer(userInput, memberId) {
   const normalized = normalizeSentence(userInput);
 
-  // 1. 상담사 연결 (명시적 요청 시)
+  // 1. 상담사 연결
   if (normalized.includes("상담사 연결") || normalized.includes("상담원 연결")) {
     return { text: `상담사와 연결을 도와드리겠습니다.${COUNSELOR_LINKS_HTML}` };
   }
@@ -344,7 +355,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // (3) 비즈 안내 (로직 강화: 환각 차단)
+  // (3) 비즈 안내
   if (normalized.includes("비즈") || normalized.includes("충전재") || normalized.includes("알갱이")) {
     let key = null;
     if (normalized.includes("프리미엄 플러스")) key = "프리미엄 플러스 비즈 에 대해 알고 싶어";
@@ -375,7 +386,7 @@ async function findAnswer(userInput, memberId) {
       }
   }
 
-  // (5) 기타 정보 (유사도)
+  // (5) 기타 정보
   if (companyData.goodsInfo) {
     let b=null, m=6; for(let k in companyData.goodsInfo){const d=levenshtein.get(normalized,normalizeSentence(k));if(d<m){m=d;b=companyData.goodsInfo[k];}}
     if(b) return { text: Array.isArray(b.description)?b.description.join("\n"):b.description, imageUrl: b.imageUrl };
@@ -398,7 +409,7 @@ app.post("/chat", async (req, res) => {
   if (!message) return res.status(400).json({ error: "No message" });
 
   try {
-    // 1. 규칙(JSON/API) 답변 시도 (이 경우엔 상담사 버튼 안 붙음)
+    // 1. 규칙(JSON/API) 답변 시도 (버튼 없음)
     const ruleAnswer = await findAnswer(message, memberId);
     if (ruleAnswer) {
       if (message !== "내 아이디") await saveConversationLog(memberId, message, ruleAnswer.text);
@@ -408,9 +419,11 @@ app.post("/chat", async (req, res) => {
     // 2. 규칙 없으면 RAG + GPT
     const docs = findRelevantContent(message);
     let gptAnswer = await getGPT3TurboResponse(message, docs);
-    gptAnswer = addSpaceAfterPeriod(gptAnswer);
+    
+    // ✅ 링크 자동 변환 적용 (https://... -> <a href...>)
+    gptAnswer = linkify(gptAnswer);
 
-    // ✅ [수정] 검색된 정보가 없을 때(=모르는 내용)만 상담사 연결 유도
+    // ✅ 검색 결과 없을 때만 상담사 버튼 부착
     if (docs.length === 0) {
         gptAnswer += FALLBACK_MESSAGE_HTML;
     }

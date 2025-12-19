@@ -55,7 +55,7 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }
 });
 
-// ========== [DB 유틸리티 (공용)] ==========
+// ========== [DB 유틸리티] ==========
 const runDb = async (callback) => {
   const client = new MongoClient(MONGODB_URI, { maxPoolSize: 10 });
   try {
@@ -70,7 +70,7 @@ const runDb = async (callback) => {
 let pendingCoveringContext = false;
 let allSearchableData = [...staticFaqList];
 
-// ========== [챗봇 상수: 링크 및 버튼] ==========
+// ========== [챗봇 상수] ==========
 const COUNSELOR_LINKS_HTML = `
 <br><br>
 📮 <a href="javascript:void(0)" onclick="window.open('http://pf.kakao.com/_lxmZsxj/chat','kakao','width=500,height=600,scrollbars=yes');" style="color:#3b1e1e; font-weight:bold; text-decoration:underline; cursor:pointer;">카카오플친 연결하기 (팝업)</a><br>
@@ -79,7 +79,6 @@ const COUNSELOR_LINKS_HTML = `
 const FALLBACK_MESSAGE_HTML = `<br><br>---------------------------------<br><strong>원하시는 답변을 찾지 못하셨나요? 상담사 연결을 도와드릴까요?</strong>${COUNSELOR_LINKS_HTML}`;
 const LOGIN_BTN_HTML = `<div style="margin-top:15px;"><a href="/member/login.html" style="display: inline-block; padding: 10px 20px; background-color: #58b5ca; color: #ffffff; text-decoration: none; border-radius: 25px; font-weight: bold; font-size: 14px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">로그인 페이지 이동하기 →</a></div>`;
 
-// ========== [챗봇 시스템 프롬프트] ==========
 const YOGIBO_SYSTEM_PROMPT = `
 1. 역할 및 말투
 전문가 역할: 요기보(Yogibo) 브랜드의 전문 상담원입니다.
@@ -130,7 +129,7 @@ async function apiRequest(method, url, data = {}, params = {}) {
   }
 }
 
-// ========== [챗봇 RAG 로직] ==========
+// ========== [RAG & Chatbot Logic] ==========
 async function updateSearchableData() {
   await runDb(async (db) => {
     const notes = await db.collection("postItNotes").find({}).toArray();
@@ -203,7 +202,7 @@ async function getShipmentDetail(orderId) {
   return null;
 }
 
-// ========== [챗봇 findAnswer (최신 로직)] ==========
+// ========== [챗봇 findAnswer] ==========
 async function findAnswer(userInput, memberId) {
   const normalized = normalizeSentence(userInput);
   if (normalized.includes("상담사 연결") || normalized.includes("상담원 연결")) return { text: `상담사와 연결을 도와드리겠습니다.${COUNSELOR_LINKS_HTML}` };
@@ -354,7 +353,7 @@ app.post('/send-email', upload.single('attachment'), async(req,res)=>{ try{
 // [Temple 기능 통합구역 - 원본 로직 그대로 복원]
 // ============================================
 
-// 1. FTP Upload
+// 1. FTP Upload (Advanced Version - User Provided)
 const FTP_PUBLIC_URL_BASE = (FTP_PUBLIC_BASE || `http://${MALL_ID}.openhost.cafe24.com/web/img/temple`).replace(/\/+$/,'');
 
 app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => {
@@ -480,7 +479,7 @@ function mountEventRoutes(basePath) {
 }
 
 mountEventRoutes('/eventTemple');
-// Alias for /events
+// Alias for /events (Legacy Support)
 app.use('/api/:_any/events', (req, res, next) => { req.url = req.url.replace('/events', '/eventTemple'); next(); });
 
 

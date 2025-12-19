@@ -77,6 +77,7 @@ const LOGIN_BTN_HTML = `
 // ========== [시스템 프롬프트 설정] ==========
 function convertPromptLinks(promptText) { return promptText; }
 
+// ✅ [환각 방지 + 전화번호 지어내기 금지]
 const basePrompt = `
 1. 역할 및 말투
 전문가 역할: 요기보(Yogibo) 브랜드의 전문 상담원입니다.
@@ -87,8 +88,8 @@ const basePrompt = `
 2. ★ 답변 원칙 (매우 중요)
 제공된 [참고 정보]에 있는 내용으로만 답변하세요.
 "엔젤 비즈", "마이크로 비즈" 등 요기보 제품이 아닌 용어는 절대 사용하지 마세요.
+전화번호나 주소 같은 중요 정보는 [참고 정보]에 없으면 절대 지어내지 마세요.
 [참고 정보]에 없는 내용은 솔직하게 모른다고 답하세요.
-없는 정보를 지어내면 해고됩니다.
 
 3. ★ 추천 상품 가이드
 고객이 추천 상품을 원할 경우 요기보의 대표상품 '맥스(Max)'를 우선 추천하세요.
@@ -144,13 +145,16 @@ async function updateSearchableData() {
     const notes = await client.db(DB_NAME).collection("postItNotes").find({}).toArray();
     const dynamic = notes.map(n => ({ c: n.category || "etc", q: n.question, a: n.answer }));
     allSearchableData = [...staticFaqList, ...dynamic];
-    console.log(`✅ 검색 데이터 갱신 완료: 총 ${allSearchableData.length}개 로드됨`);
+    console.log(`✅ 검색 데이터 갱신 완료: 총 ${allSearchableData.length}개 로드됨 (정적 ${staticFaqList.length} + 포스트잇 ${dynamic.length})`);
   } catch (err) { console.error("데이터 갱신 실패:", err); } finally { await client.close(); }
 }
 
+// ✅ [수정] 검색 로직 완화 및 로그 추가
 function findRelevantContent(msg) {
   const kws = msg.split(/\s+/).filter(w => w.length > 1);
   if (!kws.length) return [];
+
+  console.log(`🔍 검색 시작: "${msg}" (키워드: ${kws})`);
 
   const scored = allSearchableData.map(item => {
     let score = 0;
@@ -170,7 +174,13 @@ function findRelevantContent(msg) {
     return { ...item, score };
   });
 
-  return scored.filter(i => i.score >= 10).sort((a, b) => b.score - a.score).slice(0, 3);
+  // ✅ 기준 점수 완화 (10 -> 5) : 키워드가 하나라도(특히 질문에) 포함되면 가져오도록 함
+  const results = scored.filter(i => i.score >= 5).sort((a, b) => b.score - a.score).slice(0, 3);
+  
+  console.log(`📊 검색 결과: ${results.length}개 발견`);
+  if(results.length > 0) console.log(`   👉 1위: Q: ${results[0].q} / Score: ${results[0].score}`);
+
+  return results;
 }
 
 async function getGPT3TurboResponse(input, context = []) {
@@ -187,7 +197,7 @@ async function getGPT3TurboResponse(input, context = []) {
 // ========== [유틸 함수: 텍스트 포맷팅] ==========
 function formatResponseText(text) {
   if (!text) return "";
-  let formatted = text.replace(/([가-힣]+)[.]\s/g, '$1.\n\n'); // 문단 줄바꿈
+  let formatted = text.replace(/([가-힣]+)[.]\s/g, '$1.\n\n'); 
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   formatted = formatted.replace(urlRegex, function(url) {
     let cleanUrl = url.replace(/[.,]$/, ''); 
@@ -256,20 +266,24 @@ async function findAnswer(userInput, memberId) {
     return { text: `상담사와 연결을 도와드리겠습니다.${COUNSELOR_LINKS_HTML}` };
   }
 
-// 2. 매장 안내
-if (normalized.includes("오프라인 매장") || normalized.includes("매장안내")) {
-  // ✅ [수정] 링크 주소를 /why.stroe.html -> /why/store.html 로 변경
-  return { text: `가까운 매장을 안내해 드립니다.<br><a href="/why/store.html" target="_blank" style="color:#58b5ca; font-weight:bold; text-decoration:underline;">매장안내 바로가기</a>` };
-}
+  // 2. [안전장치] 고객센터 전화번호 (검색 실패 대비 하드코딩)
+  if (normalized.includes("고객센터") && (normalized.includes("번호") || normalized.includes("전화"))) {
+      return { text: "요기보 고객센터 전화번호는 **02-557-0920** 입니다. 😊<br>운영시간: 평일 10:00 ~ 17:30 (점심시간 12:00~13:00)" };
+  }
 
-  // 3. 내 아이디 조회
+  // 3. 매장 안내
+  if (normalized.includes("오프라인 매장") || normalized.includes("매장안내")) {
+    return { text: `가까운 매장을 안내해 드립니다.<br><a href="/why.stroe.html" target="_blank">매장안내 바로가기</a>` };
+  }
+
+  // 4. 내 아이디 조회
   if (normalized.includes("내 아이디") || normalized.includes("아이디 조회")) {
     return isUserLoggedIn(memberId)
       ? { text: `안녕하세요 ${memberId} 고객님, 무엇을 도와드릴까요?` }
       : { text: `로그인이 필요한 서비스입니다.<br>아래 버튼을 눌러 로그인해주세요.${LOGIN_BTN_HTML}` };
   }
 
-  // 4. 주문번호로 배송 조회
+  // 5. 주문번호로 배송 조회
   if (containsOrderNumber(normalized)) {
     if (isUserLoggedIn(memberId)) {
       try {
@@ -298,10 +312,9 @@ if (normalized.includes("오프라인 매장") || normalized.includes("매장안
     return { text: `정확한 조회를 위해 로그인이 필요합니다.${LOGIN_BTN_HTML}` };
   }
 
-  // 5. 일반 배송/주문 조회 (조건 강화: '조회', '확인', '언제' 등이 있어야만 실행)
+  // 6. 일반 배송/주문 조회 (조건 강화)
   const isTracking = (normalized.includes("배송") || normalized.includes("주문")) && 
                      (normalized.includes("조회") || normalized.includes("확인") || normalized.includes("언제") || normalized.includes("어디"));
-  // 배송비, 주소 등은 제외
   const isFAQ = normalized.includes("비용") || normalized.includes("비") || normalized.includes("주소") || normalized.includes("변경");
 
   if (isTracking && !isFAQ && !containsOrderNumber(normalized)) {
@@ -364,9 +377,8 @@ if (normalized.includes("오프라인 매장") || normalized.includes("매장안
     }
   }
 
-  // (3) 비즈 안내 (✅ 수정됨: 충전/방법/버리는법 등은 검색으로 넘김)
+  // (3) 비즈 안내
   if (normalized.includes("비즈") || normalized.includes("충전재") || normalized.includes("알갱이")) {
-    // 🚨 '충전', '방법', '리필', '버리', '폐기' 등이 있으면 하드코딩 건너뛰고 검색(RAG)으로 PASS
     const actionKeywords = ["충전", "방법", "넣는", "보충", "리필", "세탁", "버리", "폐기", "교체", "구매", "파는"];
     if (actionKeywords.some(keyword => normalized.includes(keyword))) {
         return null; // 검색 로직으로 이동
@@ -378,7 +390,6 @@ if (normalized.includes("오프라인 매장") || normalized.includes("매장안
     else if (normalized.includes("스탠다드")) key = "스탠다드 비즈 에 대해 알고 싶어";
     
     if (key && companyData.biz?.[key]) { return { text: formatResponseText(companyData.biz[key].description) }; }
-
     // 단순 '비즈 종류' 문의에 대한 답변
     return {
       text: formatResponseText(`요기보의 정품 비즈(충전재)는 3가지 종류가 있습니다. 😊. 

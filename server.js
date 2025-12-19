@@ -9,11 +9,11 @@ const { MongoClient, ObjectId } = require("mongodb");
 const levenshtein = require("fast-levenshtein");
 const ExcelJS = require("exceljs");
 const cron = require('node-cron');
-require("dotenv").config();
 const nodemailer = require('nodemailer');
 const multer = require('multer');
 const ftp = require('basic-ftp');
 const dayjs = require('dayjs');
+require("dotenv").config();
 
 // ✅ 정적 FAQ 데이터 불러오기
 const staticFaqList = require("./faq");
@@ -25,8 +25,13 @@ const {
   FINETUNED_MODEL = "gpt-3.5-turbo", CAFE24_API_VERSION = "2024-06-01",
   PORT = 5000, FTP_PUBLIC_BASE,
   SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS,
-  FTP_HOST, FTP_USER, FTP_PASS
+  // FTP 설정 (없으면 기본값 사용)
+  FTP_HOST = 'yogibo.ftp.cafe24.com',
+  FTP_USER = 'yogibo',
+  FTP_PASS = 'korea2025!!'
 } = process.env;
+
+const MALL_ID = CAFE24_MALLID || 'yogibo'; // 몰 아이디 통합
 
 let accessToken = ACCESS_TOKEN;
 let refreshToken = REFRESH_TOKEN;
@@ -38,24 +43,32 @@ app.use(compression());
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-// ========== [글로벌 상태] ==========
-let pendingCoveringContext = false;
-let allSearchableData = [...staticFaqList];
+// 멀터 설정 (이미지 업로드용)
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (r, f, c) => c(null, path.join(__dirname, 'uploads')),
+    filename: (r, f, c) => c(null, `${Date.now()}_${f.originalname}`)
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB 제한
+});
 
-// ========== [DB 유틸리티 함수] ==========
-// Temple 기능과 챗봇 기능 모두에서 사용하는 DB 연결 래퍼
+// ========== [DB 유틸리티 (공용)] ==========
 const runDb = async (callback) => {
-  const client = new MongoClient(MONGODB_URI);
+  const client = new MongoClient(MONGODB_URI, { maxPoolSize: 10 });
   try {
     await client.connect();
     return await callback(client.db(DB_NAME));
   } catch (err) {
-    console.error("DB Error:", err);
+    console.error("❌ DB Error:", err);
     throw err;
   } finally {
     await client.close();
   }
 };
+
+// ========== [글로벌 상태 (챗봇용)] ==========
+let pendingCoveringContext = false;
+let allSearchableData = [...staticFaqList];
 
 // ========== [상수: 링크 및 버튼 HTML] ==========
 const COUNSELOR_LINKS_HTML = `
@@ -100,8 +113,8 @@ const basePrompt = `
 2. ★ 답변 원칙 (매우 중요)
 제공된 [참고 정보]에 있는 내용으로만 답변하세요.
 "엔젤 비즈", "마이크로 비즈" 등 요기보 제품이 아닌 용어는 절대 사용하지 마세요.
+전화번호나 주소 같은 중요 정보는 [참고 정보]에 없으면 절대 지어내지 마세요.
 [참고 정보]에 없는 내용은 솔직하게 모른다고 답하세요.
-없는 정보를 지어내면 해고됩니다.
 
 3. ★ 추천 상품 가이드
 고객이 추천 상품을 원할 경우 요기보의 대표상품 '맥스(Max)'를 우선 추천하세요.
@@ -145,13 +158,13 @@ async function apiRequest(method, url, data = {}, params = {}) {
   }
 }
 
-// ========== [RAG 로직] ==========
+// ========== [RAG 로직 (검색 강화)] ==========
 async function updateSearchableData() {
   await runDb(async (db) => {
     const notes = await db.collection("postItNotes").find({}).toArray();
     const dynamic = notes.map(n => ({ c: n.category || "etc", q: n.question, a: n.answer }));
     allSearchableData = [...staticFaqList, ...dynamic];
-    console.log(`✅ 검색 데이터 갱신 완료: 총 ${allSearchableData.length}개 로드됨`);
+    console.log(`✅ 검색 데이터 갱신 완료: 총 ${allSearchableData.length}개 로드됨 (정적 ${staticFaqList.length} + 포스트잇 ${dynamic.length})`);
   });
 }
 
@@ -159,12 +172,15 @@ function findRelevantContent(msg) {
   const kws = msg.split(/\s+/).filter(w => w.length > 1);
   if (!kws.length) return [];
 
+  console.log(`🔍 검색 시작: "${msg}" (키워드: ${kws})`);
+
   const scored = allSearchableData.map(item => {
     let score = 0;
     const q = (item.q || "").toLowerCase().replace(/\s+/g, "");
     const a = (item.a || "").toLowerCase();
     const cleanMsg = msg.toLowerCase().replace(/\s+/g, "");
 
+    // 질문 전체 포함 시 가산점
     if (q.includes(cleanMsg) || cleanMsg.includes(q)) score += 20;
 
     kws.forEach(w => {
@@ -175,7 +191,12 @@ function findRelevantContent(msg) {
     return { ...item, score };
   });
 
-  return scored.filter(i => i.score >= 5).sort((a, b) => b.score - a.score).slice(0, 3);
+  // 기준 점수 완화 (10 -> 5)
+  const results = scored.filter(i => i.score >= 5).sort((a, b) => b.score - a.score).slice(0, 3);
+  console.log(`📊 검색 결과: ${results.length}개 발견`);
+  if(results.length > 0) console.log(`   👉 1위: Q: ${results[0].q} / Score: ${results[0].score}`);
+
+  return results;
 }
 
 async function getGPT3TurboResponse(input, context = []) {
@@ -189,7 +210,7 @@ async function getGPT3TurboResponse(input, context = []) {
   } catch (e) { return "답변 생성 중 문제가 발생했습니다."; }
 }
 
-// ========== [유틸 함수] ==========
+// ========== [유틸 함수: 텍스트 포맷팅] ==========
 function formatResponseText(text) {
   if (!text) return "";
   let formatted = text.replace(/([가-힣]+)[.]\s/g, '$1.\n\n'); 
@@ -244,7 +265,7 @@ async function getShipmentDetail(orderId) {
   } catch (error) { throw error; }
 }
 
-// ========== [★ 핵심 로직: findAnswer] ==========
+// ========== [★ 챗봇 핵심 로직: findAnswer] ==========
 async function findAnswer(userInput, memberId) {
   const normalized = normalizeSentence(userInput);
 
@@ -260,7 +281,7 @@ async function findAnswer(userInput, memberId) {
 
   // 3. 매장 안내
   if (normalized.includes("오프라인 매장") || normalized.includes("매장안내")) {
-    return { text: `가까운 매장을 안내해 드립니다.<br><a href="/why/store.html" target="_blank">매장안내 바로가기</a>` };
+    return { text: `가까운 매장을 안내해 드립니다.<br><a href="/why/store.html" target="_blank" style="color:#58b5ca; font-weight:bold; text-decoration:underline;">매장안내 바로가기</a>` };
   }
 
   // 4. 내 아이디 조회
@@ -413,16 +434,19 @@ app.post("/chat", async (req, res) => {
   if (!message) return res.status(400).json({ error: "No message" });
 
   try {
+    // 1. 규칙(JSON/API) 답변 시도
     const ruleAnswer = await findAnswer(message, memberId);
     if (ruleAnswer) {
       if (message !== "내 아이디") await saveConversationLog(memberId, message, ruleAnswer.text);
       return res.json(ruleAnswer);
     }
 
+    // 2. 규칙 없으면 RAG + GPT
     const docs = findRelevantContent(message);
     let gptAnswer = await getGPT3TurboResponse(message, docs);
     gptAnswer = formatResponseText(gptAnswer);
 
+    // ✅ 검색된 정보가 없을 때만 상담사 연결 버튼 부착
     if (docs.length === 0) {
         gptAnswer += FALLBACK_MESSAGE_HTML;
     }
@@ -460,7 +484,7 @@ app.post("/postIt", async(req,res)=>{ await runDb(async(db)=>{ await db.collecti
 app.put("/postIt/:id", async(req,res)=>{ await runDb(async(db)=>{ await db.collection("postItNotes").updateOne({_id:new ObjectId(req.params.id)},{$set:{...req.body,updatedAt:new Date()}}); await updateSearchableData(); res.json({message:"OK"}); }); });
 app.delete("/postIt/:id", async(req,res)=>{ await runDb(async(db)=>{ await db.collection("postItNotes").deleteOne({_id:new ObjectId(req.params.id)}); await updateSearchableData(); res.json({message:"OK"}); }); });
 
-// ========== [기타 API: 엑셀/이메일/FTP] ==========
+// ========== [기타 API: 엑셀/이메일] ==========
 app.get('/chatConnet', async(req,res)=>{ 
   await runDb(async(db)=>{
     const d=await db.collection("conversationLogs").find({}).toArray();
@@ -471,97 +495,250 @@ app.get('/chatConnet', async(req,res)=>{
   });
 });
 
-const upload = multer({storage:multer.diskStorage({destination:(r,f,c)=>c(null,path.join(__dirname,'uploads')),filename:(r,f,c)=>c(null,`${Date.now()}_${f.originalname}`)}),limits:{fileSize:5*1024*1024}});
 const transporter = nodemailer.createTransport({host:SMTP_HOST,port:Number(SMTP_PORT),secure:SMTP_SECURE==='true',auth:{user:SMTP_USER,pass:SMTP_PASS}});
 app.post('/send-email', upload.single('attachment'), async(req,res)=>{ try{
   await transporter.sendMail({from:req.body.companyName,to:'contact@yogico.kr',replyTo:req.body.companyEmail,subject:`Contact: ${req.body.companyName}`,text:req.body.message,attachments:req.file?[{path:req.file.path}]:[]});
   res.json({success:true});}catch(e){res.status(500).json({success:false,error:e.message})} });
 
-app.post('/api/:_any/uploads/image', upload.single('file'), async(req,res)=>{
-  if(!req.file) return res.status(400).json({error:'No file'}); const c=new ftp.Client();
-  try{await c.access({host:FTP_HOST||'yogibo.ftp.cafe24.com',user:FTP_USER||'yogibo',password:FTP_PASS||'korea2025!!',secure:false});
-    const dir=`yogibo/${dayjs().format('YYYY/MM/DD')}`; await c.cd('web/img/temple/uploads').catch(()=>{}); await c.ensureDir(dir); await c.uploadFrom(req.file.path,req.file.filename);
-    res.json({url:`${FTP_PUBLIC_BASE}/uploads/${dir}/${req.file.filename}`.replace(/([^:]\/)\/+/g,'$1')});
-  }catch(e){res.status(500).json({error:e.message})}finally{c.close();fs.unlink(req.file.path,()=>{})}
+
+// ============================================
+// [Temple 기능 통합구역] (FTP, Events, Tracking)
+// ============================================
+
+// 1. FTP 이미지 업로드 (Advanced Version)
+const FTP_PUBLIC_URL_BASE = (process.env.FTP_PUBLIC_BASE || `http://${MALL_ID}.openhost.cafe24.com/web/img/temple`).replace(/\/+$/,'');
+
+app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => {
+  const localPath = req.file?.path;
+  const filename = req.file?.filename;
+  if (!localPath || !filename) return res.status(400).json({ error: '파일이 없습니다.' });
+
+  const client = new ftp.Client(15000);
+  client.ftp.verbose = false;
+
+  try {
+    await client.access({ host: FTP_HOST, user: FTP_USER, password: FTP_PASS, secure: false });
+    const ymd = dayjs().format('YYYY/MM/DD');
+    const relSuffix = `${MALL_ID}/${ymd}`;
+    const baseCandidates = ['web/img/temple/uploads', 'img/temple/uploads', 'temple/uploads'];
+
+    let finalPwd = null;
+    for (const base of baseCandidates) {
+      try {
+        try { await client.cd('/'); } catch {}
+        await client.cd(base);
+        await client.ensureDir(relSuffix);
+        finalPwd = await client.pwd();
+        await client.uploadFrom(localPath, filename);
+        
+        const url = `${FTP_PUBLIC_URL_BASE}/uploads/${relSuffix}/${filename}`.replace(/([^:]\/)\/+/g, '$1');
+        return res.json({ url, ftpPath: `${finalPwd}/${filename}` });
+      } catch (e) { continue; }
+    }
+    return res.status(500).json({ error: '업로드 경로 진입 실패' });
+  } catch (err) {
+    console.error('[FTP UPLOAD ERROR]', err);
+    return res.status(500).json({ error: 'FTP 업로드 실패' });
+  } finally {
+    client.close();
+    fs.unlink(localPath, () => {});
+  }
 });
 
-// ========== [Temple 기능 통합 (Event / Analytics)] ==========
+// 2. Temple Event & Helper
 const EVENT_COLL = 'eventTemple';
 function normalizeBlocks(blocks = []) {
+  if (!Array.isArray(blocks)) return [];
   return blocks.map(b => (b?.type === 'video' ? { ...b, autoplay: !!b.autoplay } : b));
 }
 
-// 1. 이벤트 CRUD
-app.post('/api/:_any/events', async (req, res) => {
+// Event CRUD
+app.post('/api/:_any/eventTemple', async (req, res) => {
   try {
-    const doc = { ...req.body, createdAt: new Date() };
-    if (doc.content?.blocks) doc.content.blocks = normalizeBlocks(doc.content.blocks);
+    const payload = req.body || {};
+    if (!payload.title) return res.status(400).json({ error: '제목(title) 필요' });
+    
+    const content = payload.content || {};
+    if (Array.isArray(content.blocks)) content.blocks = normalizeBlocks(content.blocks);
+
+    const doc = {
+      mallId: MALL_ID,
+      title: payload.title.trim(),
+      content,
+      images: payload.images || [],
+      gridSize: payload.gridSize ?? null,
+      layoutType: payload.layoutType || 'none',
+      classification: payload.classification || {},
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
     await runDb(async (db) => {
       const r = await db.collection(EVENT_COLL).insertOne(doc);
       res.json({ _id: r.insertedId, ...doc });
     });
-  } catch (e) { res.status(500).json({ error: 'Error' }); }
+  } catch (err) { res.status(500).json({ error: '이벤트 생성 실패' }); }
 });
-app.get('/api/:_any/events', async (req, res) => {
+
+app.get('/api/:_any/eventTemple', async (req, res) => {
   await runDb(async (db) => {
-    const l = await db.collection(EVENT_COLL).find({ mallId: CAFE24_MALLID }).sort({ createdAt: -1 }).toArray();
-    res.json(l);
+    const list = await db.collection(EVENT_COLL).find({ mallId: MALL_ID }).sort({ createdAt: -1 }).toArray();
+    res.json(list);
   });
 });
-app.get('/api/:_any/events/:id', async (req, res) => {
+
+app.get('/api/:_any/eventTemple/:id', async (req, res) => {
+  if (!ObjectId.isValid(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
   await runDb(async (db) => {
-    const d = await db.collection(EVENT_COLL).findOne({ _id: new ObjectId(req.params.id) });
-    res.json(d);
+    const ev = await db.collection(EVENT_COLL).findOne({ _id: new ObjectId(req.params.id), mallId: MALL_ID });
+    ev ? res.json(ev) : res.status(404).json({ error: 'Not Found' });
   });
 });
-app.put('/api/:_any/events/:id', async (req, res) => {
-  try {
-    const s = { ...req.body, updatedAt: new Date() };
-    if (s.content?.blocks) s.content.blocks = normalizeBlocks(s.content.blocks);
-    delete s._id;
-    await runDb(async (db) => {
-      await db.collection(EVENT_COLL).updateOne({ _id: new ObjectId(req.params.id) }, { $set: s });
-      res.json({ success: true });
-    });
-  } catch (e) { res.status(500).json({ error: 'Error' }); }
-});
-app.delete('/api/:_any/events/:id', async (req, res) => {
+
+app.put('/api/:_any/eventTemple/:id', async (req, res) => {
+  if (!ObjectId.isValid(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+  const p = req.body;
+  const set = { updatedAt: new Date() };
+  if (p.title) set.title = String(p.title).trim();
+  if (p.content) {
+    if (Array.isArray(p.content.blocks)) p.content.blocks = normalizeBlocks(p.content.blocks);
+    set.content = p.content;
+  }
+  if (p.images) set.images = p.images;
+  if (p.gridSize !== undefined) set.gridSize = p.gridSize;
+  if (p.layoutType) set.layoutType = p.layoutType;
+  if (p.classification) set.classification = p.classification;
+
   await runDb(async (db) => {
-    await db.collection(EVENT_COLL).deleteOne({ _id: new ObjectId(req.params.id) });
+    await db.collection(EVENT_COLL).updateOne({ _id: new ObjectId(req.params.id), mallId: MALL_ID }, { $set: set });
     res.json({ success: true });
   });
 });
 
-// 2. Temple 트래킹
-app.post('/api/:_any/track', async (req, res) => {
-  try {
-    const { pageId, type, timestamp, productNo } = req.body;
-    if (!pageId || !type) return res.sendStatus(400);
-    const kst = new Date(new Date(timestamp).getTime() + 9 * 60 * 60 * 1000);
-    await runDb(async (db) => {
-      if (type === 'click' && req.body.element === 'product') {
-        await db.collection(`prdClick_${CAFE24_MALLID}`).updateOne({ pageId, productNo }, { $inc: { clickCount: 1 }, $set: { lastClickAt: kst } }, { upsert: true });
-      } else {
-        const coll = type === 'click' ? `clicks_${CAFE24_MALLID}` : `visits_${CAFE24_MALLID}`;
-        await db.collection(coll).insertOne({ ...req.body, timestamp: kst });
-      }
-    });
-    res.sendStatus(204);
-  } catch (e) { res.status(500).json({ error: 'Track Error' }); }
+app.delete('/api/:_any/eventTemple/:id', async (req, res) => {
+  if (!ObjectId.isValid(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+  await runDb(async (db) => {
+    await db.collection(EVENT_COLL).deleteOne({ _id: new ObjectId(req.params.id), mallId: MALL_ID });
+    // 연관 로그 삭제
+    await Promise.all([
+      db.collection(`visits_${MALL_ID}`).deleteMany({ pageId: req.params.id }),
+      db.collection(`clicks_${MALL_ID}`).deleteMany({ pageId: req.params.id }),
+      db.collection(`prdClick_${MALL_ID}`).deleteMany({ pageId: req.params.id })
+    ]);
+    res.json({ success: true });
+  });
 });
 
-// 3. 카테고리/상품/쿠폰
+// Alias for /events (EventTemple과 동일 로직 사용)
+app.post('/api/:_any/events', (req, res) => app._router.handle({ ...req, url: req.url.replace('/events', '/eventTemple') }, res));
+app.get('/api/:_any/events', (req, res) => app._router.handle({ ...req, url: req.url.replace('/events', '/eventTemple') }, res));
+app.get('/api/:_any/events/:id', (req, res) => app._router.handle({ ...req, url: req.url.replace('/events', '/eventTemple') }, res));
+app.put('/api/:_any/events/:id', (req, res) => app._router.handle({ ...req, url: req.url.replace('/events', '/eventTemple') }, res));
+app.delete('/api/:_any/events/:id', (req, res) => app._router.handle({ ...req, url: req.url.replace('/events', '/eventTemple') }, res));
+
+
+// 3. 트래킹 (Track)
+app.post('/api/:_any/track', async (req, res) => {
+  const { pageId, pageUrl, visitorId, referrer, device, type, element, timestamp, productNo } = req.body;
+  if (!pageId || !visitorId || !type) return res.sendStatus(400);
+  if (!ObjectId.isValid(pageId)) return res.sendStatus(204);
+
+  const kst = new Date(new Date(timestamp).getTime() + 9 * 60 * 60 * 1000);
+  const dateKey = kst.toISOString().slice(0, 10);
+  let pathOnly; try { pathOnly = new URL(pageUrl).pathname; } catch { pathOnly = pageUrl; }
+
+  await runDb(async (db) => {
+    // 상품 클릭
+    if (type === 'click' && element === 'product' && productNo) {
+      await db.collection(`prdClick_${MALL_ID}`).updateOne(
+        { pageId, productNo },
+        { $inc: { clickCount: 1 }, $setOnInsert: { firstClickAt: kst, pageUrl: pathOnly }, $set: { lastClickAt: kst } },
+        { upsert: true }
+      );
+    } 
+    // 쿠폰/URL 클릭
+    else if (type === 'click') {
+      const coupons = (element === 'coupon' && Array.isArray(productNo)) ? productNo : [productNo];
+      await Promise.all(coupons.map(cpn => 
+        db.collection(`clicks_${MALL_ID}`).insertOne({
+          pageId, visitorId, dateKey, pageUrl: pathOnly, referrer, device, type, element, timestamp: kst, couponNo: cpn
+        })
+      ));
+    }
+    // 조회/재방문
+    else {
+      const update = { $set: { lastVisit: kst, pageUrl: pathOnly, referrer, device }, $setOnInsert: { firstVisit: kst }, $inc: {} };
+      if (type === 'view') update.$inc.viewCount = 1;
+      if (type === 'revisit') update.$inc.revisitCount = 1;
+      await db.collection(`visits_${MALL_ID}`).updateOne({ pageId, visitorId, dateKey }, update, { upsert: true });
+    }
+  });
+  res.sendStatus(204);
+});
+
+// 4. Cafe24 연동 (카테고리/쿠폰/상품)
 app.get('/api/:_any/categories/all', async (req, res) => {
   try {
-    const d = await apiRequest('GET', `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/categories`, {}, { limit: 100 });
-    res.json(d.categories);
+    const all = []; let offset = 0;
+    while(true) {
+      const d = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/categories`, {}, { limit: 100, offset });
+      if (!d.categories?.length) break;
+      all.push(...d.categories); offset += d.categories.length;
+    }
+    res.json(all);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
 app.get('/api/:_any/coupons', async (req, res) => {
   try {
-    const d = await apiRequest('GET', `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/coupons`, {}, { shop_no: 1, limit: 100 });
-    res.json(d.coupons);
+    const all = []; let offset = 0;
+    while(true) {
+      const d = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/coupons`, {}, { shop_no: 1, limit: 100, offset });
+      if (!d.coupons?.length) break;
+      all.push(...d.coupons); offset += d.coupons.length;
+    }
+    res.json(all);
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/:_any/products', async (req, res) => {
+  try {
+    const q = (req.query.q || '').trim();
+    const params = { shop_no: 1, limit: 1000, offset: req.query.offset || 0 };
+    if (q) params['search[product_name]'] = q;
+    const d = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/products`, {}, params);
+    const slim = (d.products || []).map(p => ({ product_no: p.product_no, product_name: p.product_name, price: p.price, list_image: p.list_image }));
+    res.json({ products: slim, total: d.total_count });
+  } catch (e) { res.status(500).json({ error: '상품 조회 실패' }); }
+});
+
+// 5. 통계 API (방문자/클릭/디바이스 등)
+app.get('/api/:_any/analytics/:pageId/visitors-by-date', async (req, res) => {
+  const { pageId } = req.params; const { start_date, end_date } = req.query;
+  const match = { pageId, dateKey: { $gte: start_date.slice(0,10), $lte: end_date.slice(0,10) } };
+  await runDb(async (db) => {
+    const stats = await db.collection(`visits_${MALL_ID}`).aggregate([
+      { $match: match },
+      { $group: { _id: { date: '$dateKey', visitorId: '$visitorId' }, viewCount: { $sum: '$viewCount' }, revisitCount: { $sum: '$revisitCount' } } },
+      { $group: { _id: '$_id.date', totalVisitors: { $sum: 1 }, newVisitors: { $sum: { $cond: [{ $gt: ['$viewCount', 0] }, 1, 0] } }, returningVisitors: { $sum: { $cond: [{ $gt: ['$revisitCount', 0] }, 1, 0] } } } },
+      { $sort: { _id: 1 } }
+    ]).toArray();
+    res.json(stats.map(s => ({ date: s._id, ...s })));
+  });
+});
+
+app.get('/api/:_any/analytics/:pageId/clicks-by-date', async (req, res) => {
+  const { pageId } = req.params; const { start_date, end_date } = req.query;
+  const match = { pageId, dateKey: { $gte: start_date.slice(0,10), $lte: end_date.slice(0,10) } };
+  await runDb(async (db) => {
+    const data = await db.collection(`clicks_${MALL_ID}`).aggregate([
+      { $match: match },
+      { $group: { _id: { date: '$dateKey', element: '$element' }, count: { $sum: 1 } } },
+      { $group: { _id: '$_id.date', url: { $sum: { $cond: [{ $eq: ['$_id.element','url'] }, '$count', 0] } }, coupon: { $sum: { $cond: [{ $eq: ['$_id.element','coupon'] }, '$count', 0] } } } },
+      { $sort: { _id: 1 } }
+    ]).toArray();
+    res.json(data.map(d => ({ date: d._id, ...d })));
+  });
 });
 
 // ========== [서버 실행] ==========
@@ -571,7 +748,7 @@ app.get('/api/:_any/coupons', async (req, res) => {
     await getTokensFromDB();
     await updateSearchableData();
     
-    // [경고] 아래 함수들은 정의가 포함되지 않았으므로 주석 처리합니다. 필요 시 주석 해제.
+    // [참고] 정의되지 않은 함수들은 주석 처리했습니다. 필요 시 구현 후 주석 해제하세요.
     // await initializeEventData();
     // await ensureIndexes();
     // await initializeOfflineSalesData();

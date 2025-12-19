@@ -59,7 +59,7 @@ const upload = multer({
 
 // ========== [DB 유틸리티 (공용)] ==========
 const runDb = async (callback) => {
-  const client = new MongoClient(MONGODB_URI);
+  const client = new MongoClient(MONGODB_URI, { maxPoolSize: 10 });
   try {
     await client.connect();
     return await callback(client.db(DB_NAME));
@@ -182,7 +182,6 @@ function findRelevantContent(msg) {
     const a = (item.a || "").toLowerCase();
     const cleanMsg = msg.toLowerCase().replace(/\s+/g, "");
 
-    // 질문 전체 포함 시 가산점
     if (q.includes(cleanMsg) || cleanMsg.includes(q)) score += 20;
 
     kws.forEach(w => {
@@ -193,7 +192,6 @@ function findRelevantContent(msg) {
     return { ...item, score };
   });
 
-  // 기준 점수 완화 (10 -> 5)
   const results = scored.filter(i => i.score >= 5).sort((a, b) => b.score - a.score).slice(0, 3);
   if(results.length > 0) console.log(`   👉 1위: Q: ${results[0].q} / Score: ${results[0].score}`);
 
@@ -503,10 +501,10 @@ app.post('/send-email', upload.single('attachment'), async(req,res)=>{ try{
 
 
 // ============================================
-// [Temple 기능 통합구역] (FTP, Events, Tracking)
+// [Temple 기능 통합구역] (FTP, Events, Tracking, Analytics)
 // ============================================
 
-// 1. FTP 이미지 업로드 (Advanced Version)
+// 1. FTP 이미지 업로드
 const FTP_PUBLIC_URL_BASE = (FTP_PUBLIC_BASE || `http://${MALL_ID}.openhost.cafe24.com/web/img/temple`).replace(/\/+$/,'');
 
 app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => {
@@ -713,7 +711,7 @@ app.get('/api/:_any/products', async (req, res) => {
   } catch (e) { res.status(500).json({ error: '상품 조회 실패' }); }
 });
 
-// 5. 통계 API (방문자/클릭/디바이스 등)
+// 5. [복구됨] 통계 API (방문자/클릭/디바이스/URL 등) - ✅ 누락된 API들 완벽 복구
 app.get('/api/:_any/analytics/:pageId/visitors-by-date', async (req, res) => {
   const { pageId } = req.params; const { start_date, end_date } = req.query;
   const match = { pageId, dateKey: { $gte: start_date.slice(0,10), $lte: end_date.slice(0,10) } };
@@ -742,19 +740,55 @@ app.get('/api/:_any/analytics/:pageId/clicks-by-date', async (req, res) => {
   });
 });
 
+// ✅ URL 목록 조회 (복구)
+app.get('/api/:_any/analytics/:pageId/urls', async (req, res) => {
+  const { pageId } = req.params;
+  await runDb(async (db) => {
+    const urls = await db.collection(`visits_${MALL_ID}`).distinct('pageUrl', { pageId });
+    res.json(urls);
+  });
+});
+
+// ✅ 디바이스 통계 (복구)
+app.get('/api/:_any/analytics/:pageId/devices', async (req, res) => {
+  const { pageId } = req.params; const { start_date, end_date } = req.query;
+  const match = { pageId, dateKey: { $gte: start_date.slice(0,10), $lte: end_date.slice(0,10) } };
+  await runDb(async (db) => {
+    const data = await db.collection(`visits_${MALL_ID}`).aggregate([
+      { $match: match },
+      { $group: { _id: '$device', count: { $sum: { $add: [ { $ifNull: ['$viewCount',0] }, { $ifNull: ['$revisitCount',0] } ] } } } },
+      { $project: { _id:0, device_type:'$_id', count:1 } }
+    ]).toArray();
+    res.json(data);
+  });
+});
+
+// ✅ 상품 클릭 랭킹 (복구)
+app.get('/api/:_any/analytics/:pageId/product-clicks', async (req, res) => {
+  const { pageId } = req.params; const { start_date, end_date } = req.query;
+  const filter = { pageId };
+  if (start_date && end_date) filter.lastClickAt = { $gte: new Date(start_date), $lte: new Date(end_date) };
+  await runDb(async (db) => {
+    const docs = await db.collection(`prdClick_${MALL_ID}`).find(filter).sort({ clickCount: -1 }).toArray();
+    res.json(docs.map(d => ({ productNo: d.productNo, clicks: d.clickCount })));
+  });
+});
+
+// ✅ 쿠폰 통계 (복구)
+app.get('/api/:_any/analytics/:pageId/coupons-distinct', async (req, res) => {
+  const { pageId } = req.params;
+  await runDb(async (db) => {
+    const list = await db.collection(`clicks_${MALL_ID}`).distinct('couponNo', { pageId, element: 'coupon' });
+    res.json(list);
+  });
+});
+
 // ========== [서버 실행] ==========
 (async function initialize() {
   try {
     console.log("🟡 서버 시작...");
     await getTokensFromDB();
     await updateSearchableData();
-    
-    // [참고] 정의되지 않은 함수들은 주석 처리했습니다. 필요 시 구현 후 주석 해제하세요.
-    // await initializeEventData();
-    // await ensureIndexes();
-    // await initializeOfflineSalesData();
-    // startSalesScheduler();
-
     app.listen(PORT, () => console.log(`🚀 실행 완료: ${PORT}`));
   } catch (err) { console.error("❌ 초기화 오류:", err.message); process.exit(1); }
 })();

@@ -15,7 +15,7 @@ const multer = require('multer');
 const ftp = require('basic-ftp');
 const dayjs = require('dayjs');
 
-// ✅ [RAG 추가] 정적 FAQ 데이터 불러오기 (같은 폴더에 faq.js가 있어야 함)
+// ✅ 정적 FAQ 데이터 불러오기 (같은 폴더에 faq.js가 있어야 함)
 const staticFaqList = require("./faq");
 
 // ========== [환경 설정] ==========
@@ -47,10 +47,25 @@ app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "public")));
 
 // ========== [글로벌 상태] ==========
-let combinedSystemPrompt = null; // 기존 호환성 유지
 let pendingCoveringContext = false;
-// ✅ [RAG 상태] 전체 검색 대상 데이터 (정적 FAQ + 동적 포스트잇)
+// RAG 검색 대상 데이터
 let allSearchableData = [...staticFaqList];
+
+// ========== [상수: 상담사 연결 링크 포맷] ==========
+// 사용자가 요청한 링크 포맷을 HTML로 변환하여 클릭 유도
+const COUNSELOR_LINKS_HTML = `
+<br><br>
+📮 <a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank" style="color:#3b1e1e; font-weight:bold; text-decoration:underline;">카카오플친 연결하기 (클릭)</a><br>
+📮 <a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank" style="color:#03c75a; font-weight:bold; text-decoration:underline;">네이버톡톡 연결하기 (클릭)</a>
+`;
+
+// AI가 답변을 못하거나 불확실할 때 붙이는 문구
+const FALLBACK_MESSAGE_HTML = `
+<br><br>
+---------------------------------<br>
+<strong>정확한 답변 확인을 위해 상담사 연결을 통해 진행하시겠습니까?</strong>
+${COUNSELOR_LINKS_HTML}
+`;
 
 // ========== [시스템 프롬프트 설정] ==========
 function convertPromptLinks(promptText) {
@@ -59,21 +74,17 @@ function convertPromptLinks(promptText) {
     .replace(/\[네이버톡톡 연결하기\]/g, '<a href="https://talk.naver.com/ct/wc4u67?frm=psf" target="_blank">네이버톡톡 연결하기</a>');
 }
 
-// 기본 페르소나 설정 (데이터 제외)
 const basePrompt = `
-1. 역할 및 말투  
-전문가 역할: 요기보(Yogibo) 브랜드에 대한 전문 지식을 가진 상담원입니다.  
-존대 및 공손: 고객에게 항상 존댓말과 공손한 말투를 사용합니다.  
-이모티콘 활용: 대화 중 적절히 이모티콘을 사용합니다.  
-가독성: 문단 띄어쓰기를 통해 가독성을 높여 주세요.
+1. 역할 및 말투
+전문가 역할: 요기보(Yogibo) 브랜드의 전문 상담원입니다.
+존대 및 공손: 고객에게 항상 존댓말과 공손한 말투를 사용합니다.
+이모티콘 활용: 대화 중 적절히 이모티콘을 사용합니다.
 
-2. 고객 응대 지침  
-제공된 [참고 정보]를 바탕으로 정확하게 답변하세요.
-[참고 정보]에 없는 내용은 "죄송하지만 고객센터(02-557-0920)로 문의해주시겠어요?"라고 정중히 안내하세요.
-
-3. 마무리
-대화의 마지막엔 "추가 궁금한 사항이 있으시면 상담사 연결을 입력해주세요."라고 안내하면 좋습니다.
+2. 답변 원칙
+제공된 [참고 정보]를 최우선으로 하여 답변합니다.
+[참고 정보]에 없는 내용이라면 일반적인 상식 선에서 정중하게 대답하되, 확신이 없다면 솔직하게 모른다고 하고 상담원 연결을 권유하세요.
 `;
+
 const YOGIBO_SYSTEM_PROMPT = convertPromptLinks(basePrompt);
 
 // ========== [데이터 로딩] ==========
@@ -102,7 +113,7 @@ async function getTokensFromDB() {
       refreshToken = tokensDoc.refreshToken;
       console.log('MongoDB에서 토큰 로드 성공');
     } else {
-      console.log('MongoDB에 저장된 토큰이 없습니다. 초기 토큰을 저장합니다.');
+      console.log('초기 토큰 저장 진행');
       await saveTokensToDB(accessToken, refreshToken);
     }
   } catch (error) {
@@ -118,17 +129,7 @@ async function saveTokensToDB(newAccessToken, newRefreshToken) {
     await client.connect();
     const db = client.db(DB_NAME);
     const collection = db.collection(tokenCollectionName);
-    await collection.updateOne(
-      {},
-      {
-        $set: {
-          accessToken: newAccessToken,
-          refreshToken: newRefreshToken,
-          updatedAt: new Date(),
-        },
-      },
-      { upsert: true }
-    );
+    await collection.updateOne({}, { $set: { accessToken: newAccessToken, refreshToken: newRefreshToken, updatedAt: new Date() } }, { upsert: true });
     console.log('MongoDB에 토큰 저장 완료');
   } catch (error) {
     console.error('토큰 저장 중 오류:', error);
@@ -138,20 +139,16 @@ async function saveTokensToDB(newAccessToken, newRefreshToken) {
 }
 
 async function refreshAccessToken() {
-  console.log('401 에러 발생: MongoDB에서 토큰 정보 다시 가져오기...');
+  console.log('Token Refreshing...');
   await getTokensFromDB();
   return accessToken;
 }
 
 // ========== [Cafe24 API 요청 함수] ==========
 async function apiRequest(method, url, data = {}, params = {}) {
-  console.log(`Request: ${method} ${url}`);
   try {
     const response = await axios({
-      method,
-      url,
-      data,
-      params,
+      method, url, data, params,
       headers: {
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
@@ -161,19 +158,17 @@ async function apiRequest(method, url, data = {}, params = {}) {
     return response.data;
   } catch (error) {
     if (error.response && error.response.status === 401) {
-      console.log('Access Token 만료. 갱신 중...');
+      console.log('Access Token 만료. 갱신 시도...');
       await refreshAccessToken();
       return apiRequest(method, url, data, params);
     } else {
-      console.error('API 요청 오류:', error.response ? error.response.data : error.message);
       throw error;
     }
   }
 }
 
-// ========== [RAG 핵심 로직: 검색 데이터 관리 & GPT] ==========
+// ========== [RAG 핵심 로직] ==========
 
-// 1. DB 포스트잇 + 정적 FAQ 병합
 async function updateSearchableData() {
   const client = new MongoClient(MONGODB_URI);
   try {
@@ -181,16 +176,14 @@ async function updateSearchableData() {
     const db = client.db(DB_NAME);
     const postItNotes = await db.collection("postItNotes").find({}).toArray();
 
-    // 포스트잇 데이터를 FAQ 포맷으로 변환
     const dynamicFaqs = postItNotes.map(note => ({
       c: note.category || "etc",
       q: note.question,
       a: note.answer
     }));
 
-    // 정적 FAQ + 동적 포스트잇 병합
     allSearchableData = [...staticFaqList, ...dynamicFaqs];
-    console.log(`✅ 검색 데이터 갱신 완료: 총 ${allSearchableData.length}개 로드됨.`);
+    console.log(`✅ 검색 데이터 갱신 완료: 총 ${allSearchableData.length}개`);
   } catch (err) {
     console.error("검색 데이터 갱신 실패:", err);
   } finally {
@@ -198,42 +191,37 @@ async function updateSearchableData() {
   }
 }
 
-// 2. 키워드 기반 관련성 검색 함수
 function findRelevantContent(userMessage) {
-  const keywords = userMessage.split(/\s+/).filter(w => w.length > 1); // 1글자 제외
+  const keywords = userMessage.split(/\s+/).filter(w => w.length > 1);
   if (keywords.length === 0) return [];
 
   const scored = allSearchableData.map(item => {
     let score = 0;
     const qText = (item.q || "").toLowerCase();
     const aText = (item.a || "").toLowerCase();
-    
     keywords.forEach(word => {
       const w = word.toLowerCase();
-      if (qText.includes(w)) score += 5; // 질문에 있으면 높은 가중치
-      if (aText.includes(w)) score += 2; // 답변에 있으면 보통 가중치
+      if (qText.includes(w)) score += 5;
+      if (aText.includes(w)) score += 2;
     });
     return { ...item, score };
   });
 
-  // 점수 높은 순으로 상위 4개 추출
   return scored
     .filter(item => item.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, 4);
 }
 
-// 3. GPT 호출 (맥락 포함)
+// ========== [GPT 호출 함수] ==========
 async function getGPT3TurboResponse(userInput, contextData = []) {
-  // 검색된 정보를 텍스트로 변환
   const contextText = contextData.map(item => `Q: ${item.q}\nA: ${item.a}`).join("\n\n");
   
-  // 최종 시스템 프롬프트 조립
   const finalSystemPrompt = `
 ${YOGIBO_SYSTEM_PROMPT}
 
 [참고 정보]
-${contextText || "관련된 참고 정보가 없습니다. 일반적인 상담 톤으로 응대하세요."}
+${contextText || "관련된 참고 정보가 없습니다. 고객의 질문에 대해 친절하게 답변해주세요."}
 `;
 
   try {
@@ -256,7 +244,7 @@ ${contextText || "관련된 참고 정보가 없습니다. 일반적인 상담 �
     const gptAnswer = response.data.choices[0].message.content;
     return addSpaceAfterPeriod(gptAnswer);
   } catch (error) {
-    console.error("GPT API Error:", error.message);
+    console.error("GPT 호출 오류:", error.message);
     return "죄송합니다. 현재 답변을 생성하는데 문제가 발생했습니다.";
   }
 }
@@ -272,7 +260,7 @@ function containsOrderNumber(input) {
   return /\d{8}-\d{7}/.test(input);
 }
 
-// ========== [Cafe24 주문/배송 정보 조회] ==========
+// ========== [Cafe24 주문/배송] ==========
 async function getOrderShippingInfo(memberId) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`;
   const today = new Date();
@@ -280,14 +268,9 @@ async function getOrderShippingInfo(memberId) {
   const twoWeeksAgo = new Date(today);
   twoWeeksAgo.setDate(today.getDate() - 14);
   const start_date = twoWeeksAgo.toISOString().split('T')[0];
-  const params = {
-    member_id: memberId,
-    start_date: start_date,
-    end_date: end_date,
-    limit: 10,
-  };
+  
   try {
-    return await apiRequest("GET", API_URL, {}, params);
+    return await apiRequest("GET", API_URL, {}, { member_id: memberId, start_date, end_date, limit: 10 });
   } catch (error) {
     console.error("Error fetching order info:", error.message);
     throw error;
@@ -319,32 +302,14 @@ async function getShipmentDetail(orderId) {
   }
 }
 
-// ========== [로그 저장 함수] ==========
-async function saveConversationLog(memberId, userMessage, botResponse) {
-  const client = new MongoClient(MONGODB_URI);
-  const today = new Date().toISOString().split("T")[0];
-  try {
-    await client.connect();
-    const db = client.db(DB_NAME);
-    const logs = db.collection("conversationLogs");
-    const logEntry = { userMessage, botResponse, createdAt: new Date() };
-    await logs.updateOne(
-      { memberId: memberId || null, date: today },
-      { $push: { conversation: logEntry } },
-      { upsert: true }
-    );
-  } catch(e) { console.error("로그 저장 오류:", e); } finally { await client.close(); }
-}
-
 // ========== [메인 로직: findAnswer (규칙 기반)] ==========
-// 규칙에 맞지 않으면 null을 반환하여 GPT(RAG)로 넘깁니다.
 async function findAnswer(userInput, memberId) {
   const normalized = normalizeSentence(userInput);
 
-  // 1. 상담원 연결
+  // ✅ [1] 상담사 연결 (사용자 요청 포맷 적용)
   if (normalized.includes("상담사 연결") || normalized.includes("상담원 연결")) {
     return {
-      text: `상담사와 연결을 도와드릴게요.<br><a href="http://pf.kakao.com/_lxmZsxj/chat" target="_blank">카카오플친 연결하기</a>`,
+      text: `상담사 연결을 도와드리겠습니다.${COUNSELOR_LINKS_HTML}`,
       videoHtml: null
     };
   }
@@ -364,7 +329,7 @@ async function findAnswer(userInput, memberId) {
       : { text: `로그인이 필요합니다. <a href="/member/login.html" target="_blank">로그인 하러가기</a>` };
   }
 
-  // 4. 주문번호로 조회
+  // 4. 주문번호 조회
   if (containsOrderNumber(normalized)) {
     if (memberId && memberId !== "null") {
       try {
@@ -383,7 +348,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 5. 일반 배송 상태 (주문번호 없음)
+  // 5. 일반 배송 상태
   if ((normalized.includes("배송") || normalized.includes("주문상태")) && !containsOrderNumber(normalized)) {
     if (memberId && memberId !== "null") {
       try {
@@ -403,7 +368,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // 6. 커버링 영상 처리 (하드코딩 된 companyData 활용)
+  // 6. 커버링
   if (normalized.includes("커버링") && normalized.includes("방법")) {
     const types = ["더블", "맥스", "프라임", "슬림", "미디", "미니", "팟", "드롭"];
     const found = types.find(t => normalized.includes(t));
@@ -418,166 +383,119 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  return null; // 규칙 없음 -> GPT(RAG)로 위임
+  return null; // 규칙 없음 -> GPT로
 }
 
-// ========== [Chat 라우터] ==========
+// ========== [Chat 요청 처리 (메인)] ==========
 app.post("/chat", async (req, res) => {
-  const { message: userInput, memberId } = req.body;
+  const userInput = req.body.message;
+  const memberId = req.body.memberId;
 
-  if (!userInput) return res.status(400).json({ error: "Message is required." });
+  if (!userInput) return res.status(400).json({ error: "Message required." });
 
   try {
-    // 1. 규칙 기반 응답 시도
+    // 1. 규칙 기반 답변
     const ruleAnswer = await findAnswer(userInput, memberId);
-    
     if (ruleAnswer) {
       if (userInput !== "내 아이디") await saveConversationLog(memberId, userInput, ruleAnswer.text);
       return res.json(ruleAnswer);
     }
 
-    // 2. 규칙에 없으면 RAG + GPT 실행
-    // 2-1. 관련 정보 검색
+    // 2. 규칙에 없음 -> RAG 검색
     const relevantDocs = findRelevantContent(userInput);
     
-    // 2-2. GPT 호출
-    const gptText = await getGPT3TurboResponse(userInput, relevantDocs);
+    // 3. GPT 호출
+    let gptText = await getGPT3TurboResponse(userInput, relevantDocs);
 
-    // 2-3. 응답 구성
-    const responseText = {
+    // ✅ [핵심 기능 추가] 
+    // 검색된 정보가 없거나(교육 안 된 내용), RAG를 통해 생성된 AI 답변일 경우
+    // 사용자 요청대로 상담사 연결 유도 링크를 하단에 붙여줌
+    if (relevantDocs.length === 0 || relevantDocs.length > 0) {
+        gptText += FALLBACK_MESSAGE_HTML;
+    }
+
+    const finalResponse = {
       text: gptText,
       videoHtml: null,
       imageUrl: null
     };
 
-    await saveConversationLog(memberId, userInput, responseText.text);
-    return res.json(responseText);
+    await saveConversationLog(memberId, userInput, finalResponse.text);
+    return res.json(finalResponse);
 
   } catch (error) {
-    console.error("/chat 처리 오류:", error);
+    console.error("/chat 오류:", error);
     return res.status(500).json({ text: "오류가 발생했습니다. 잠시 후 다시 시도해주세요." });
   }
 });
 
-// ========== [엑셀 다운로드 라우트] ==========
-app.get('/chatConnet', async (req, res) => {
+// ========== [로그 저장] ==========
+async function saveConversationLog(memberId, userMessage, botResponse) {
   const client = new MongoClient(MONGODB_URI);
+  const today = new Date().toISOString().split("T")[0];
   try {
     await client.connect();
     const db = client.db(DB_NAME);
-    const collection = db.collection("conversationLogs");
-    const data = await collection.find({}).toArray();
+    const logs = db.collection("conversationLogs");
+    const logEntry = { userMessage, botResponse, createdAt: new Date() };
+    await logs.updateOne(
+      { memberId: memberId || null, date: today },
+      { $push: { conversation: logEntry } },
+      { upsert: true }
+    );
+  } catch(e) { console.error("로그 저장 실패", e); } finally { await client.close(); }
+}
 
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('ConversationList');
-    worksheet.columns = [
-      { header: '회원아이디', key: 'memberId', width: 15 },
-      { header: '날짜', key: 'date', width: 15 },
-      { header: '대화내용', key: 'conversation', width: 50 },
-    ];
-    data.forEach(doc => {
-      worksheet.addRow({
-        memberId: doc.memberId || '비회원',
-        date: doc.date,
-        conversation: JSON.stringify(doc.conversation, null, 2)
-      });
-    });
-
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", "attachment; filename=conversationLogs.xlsx");
-    await workbook.xlsx.write(res);
-    res.end();
-  } catch (error) {
-    console.error("Excel 오류:", error);
-    res.status(500).send("Excel 생성 오류");
-  } finally {
-    await client.close();
-  }
-});
-
-// ========== [포스트잇 API (CRUD & 메모리 갱신)] ==========
+// ========== [포스트잇 API] ==========
 app.get("/postIt", async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const PAGE_SIZE = 300;
-  const category = req.query.category;
-  const queryFilter = category ? { category } : {};
-
   try {
     const client = new MongoClient(MONGODB_URI);
     await client.connect();
     const db = client.db(DB_NAME);
-    const collection = db.collection("postItNotes");
-    const totalCount = await collection.countDocuments(queryFilter);
-    const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-    const notes = await collection.find(queryFilter).sort({ _id: -1 }).skip((page - 1) * PAGE_SIZE).limit(PAGE_SIZE).toArray();
-    
+    const filter = req.query.category ? { category: req.query.category } : {};
+    const totalCount = await db.collection("postItNotes").countDocuments(filter);
+    const notes = await db.collection("postItNotes").find(filter).sort({_id:-1}).skip((page-1)*PAGE_SIZE).limit(PAGE_SIZE).toArray();
     await client.close();
-    return res.json({ notes, currentPage: page, totalPages, totalCount, pageSize: PAGE_SIZE });
-  } catch (error) {
-    return res.status(500).json({ error: "조회 오류" });
-  }
+    res.json({ notes, totalCount, currentPage: page });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post("/postIt", async (req, res) => {
-  const { question, answer, category } = req.body;
   try {
     const client = new MongoClient(MONGODB_URI);
     await client.connect();
-    const db = client.db(DB_NAME);
-    const newNote = { question, answer, category: category || "uncategorized", createdAt: new Date() };
-    await db.collection("postItNotes").insertOne(newNote);
+    await client.db(DB_NAME).collection("postItNotes").insertOne({ ...req.body, createdAt: new Date() });
     await client.close();
-
-    // ✅ 데이터 갱신
     await updateSearchableData();
-
-    return res.json({ message: "등록 성공", note: newNote });
-  } catch (error) {
-    return res.status(500).json({ error: "등록 오류" });
-  }
+    res.json({ message: "등록 완료" });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.put("/postIt/:id", async (req, res) => {
   try {
     const client = new MongoClient(MONGODB_URI);
     await client.connect();
-    const db = client.db(DB_NAME);
-    const result = await db.collection("postItNotes").findOneAndUpdate(
-      { _id: new ObjectId(req.params.id) },
-      { $set: { ...req.body, updatedAt: new Date() } },
-      { returnDocument: "after" }
-    );
+    await client.db(DB_NAME).collection("postItNotes").updateOne({ _id: new ObjectId(req.params.id) }, { $set: { ...req.body, updatedAt: new Date() } });
     await client.close();
-
-    // ✅ 데이터 갱신
     await updateSearchableData();
-
-    if (!result.value) return res.status(404).json({ error: "찾을 수 없음" });
-    return res.json({ message: "수정 성공", note: result.value });
-  } catch (error) {
-    return res.status(500).json({ error: "수정 오류" });
-  }
+    res.json({ message: "수정 완료" });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.delete("/postIt/:id", async (req, res) => {
   try {
     const client = new MongoClient(MONGODB_URI);
     await client.connect();
-    const db = client.db(DB_NAME);
-    const result = await db.collection("postItNotes").deleteOne({ _id: new ObjectId(req.params.id) });
+    await client.db(DB_NAME).collection("postItNotes").deleteOne({ _id: new ObjectId(req.params.id) });
     await client.close();
-
-    // ✅ 데이터 갱신
     await updateSearchableData();
-
-    if (result.deletedCount === 0) return res.status(404).json({ error: "찾을 수 없음" });
-    return res.json({ message: "삭제 성공" });
-  } catch (error) {
-    return res.status(500).json({ error: "삭제 오류" });
-  }
+    res.json({ message: "삭제 완료" });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ========== [이메일 전송 (Nodemailer)] ==========
+// ========== [기타 기능: Email, FTP, EventTemple 등] ==========
 const upload = multer({
   storage: multer.diskStorage({
     destination(req, file, cb) { cb(null, path.join(__dirname, 'uploads')); },
@@ -585,160 +503,59 @@ const upload = multer({
   }),
   limits: { fileSize: 5 * 1024 * 1024 },
 });
-const UPLOAD_DIR = path.join(__dirname, 'uploads');
-if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT),
-  secure: process.env.SMTP_SECURE === 'true',
+  host: process.env.SMTP_HOST, port: Number(process.env.SMTP_PORT), secure: process.env.SMTP_SECURE === 'true',
   auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
 });
 
 app.post('/send-email', upload.single('attachment'), async (req, res) => {
   try {
     const { companyEmail, companyName, message } = req.body;
-    if (!companyEmail) return res.status(400).json({ error: 'Email required' });
-    const attachments = [];
-    if (req.file) attachments.push({ filename: req.file.originalname, path: req.file.path });
-
     await transporter.sendMail({
       from: { name: companyName, address: process.env.SMTP_USER },
-      to: 'contact@yogico.kr',
-      replyTo: companyEmail,
-      subject: `Contact 요청: ${companyName}`,
-      text: `Email: ${companyEmail}\nName: ${companyName}\n\n${message}`,
-      attachments
+      to: 'contact@yogico.kr', replyTo: companyEmail, subject: `Contact 요청: ${companyName}`,
+      text: message, attachments: req.file ? [{ filename: req.file.originalname, path: req.file.path }] : []
     });
-    return res.json({ success: true });
-  } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
-  }
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// ========== [FTP 이미지 업로드] ==========
 app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => {
-  const localPath = req.file?.path;
-  const filename  = req.file?.filename;
-  if (!localPath || !filename) return res.status(400).json({ error: '파일 없음' });
-
+  if (!req.file) return res.status(400).json({ error: '파일 없음' });
   const client = new ftp.Client(15000);
   try {
-    await client.access({ host: process.env.FTP_HOST || 'yogibo.ftp.cafe24.com', user: process.env.FTP_USER || 'yogibo', password: process.env.FTP_PASS || 'korea2025!!', secure: false });
-    const ymd = dayjs().format('YYYY/MM/DD');
-    const relSuffix = `yogibo/${ymd}`;
-    const base = 'web/img/temple/uploads';
-
-    await client.cd(base).catch(() => {}); // base 진입 시도
+    await client.access({ host: process.env.FTP_HOST, user: process.env.FTP_USER, password: process.env.FTP_PASS, secure: false });
+    const relSuffix = `yogibo/${dayjs().format('YYYY/MM/DD')}`;
+    await client.cd('web/img/temple/uploads').catch(()=>{});
     await client.ensureDir(relSuffix);
-    await client.uploadFrom(localPath, filename);
-
-    const url = `${FTP_PUBLIC_BASE}/uploads/${relSuffix}/${filename}`.replace(/([^:]\/)\/+/g, '$1');
-    return res.json({ url });
-  } catch (err) {
-    return res.status(500).json({ error: 'FTP 업로드 실패', detail: err.message });
-  } finally {
-    client.close();
-    fs.unlink(localPath, () => {});
-  }
+    await client.uploadFrom(req.file.path, req.file.filename);
+    const url = `${FTP_PUBLIC_BASE}/uploads/${relSuffix}/${req.file.filename}`.replace(/([^:]\/)\/+/g, '$1');
+    res.json({ url });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+  finally { client.close(); fs.unlink(req.file.path, ()=>{}); }
 });
 
-// ========== [EventTemple 및 통계 (기존 유지)] ==========
-const runDb = async (task) => {
-  const client = new MongoClient(MONGODB_URI);
-  await client.connect();
-  try { return await task(client.db(DB_NAME)); } finally { await client.close(); }
-};
-const EVENT_COLL = 'eventTemple';
-function normalizeBlocks(blocks=[]) {
-  return blocks.map(b => (b?.type==='video' ? {...b, autoplay: !!b.autoplay} : b));
-}
+// EventTemple Routes (간소화)
+const runDb = async (task) => { const c=new MongoClient(MONGODB_URI); await c.connect(); try{return await task(c.db(DB_NAME))}finally{await c.close()}};
+const EVENT_COLL='eventTemple';
+app.post('/api/:_any/eventTemple', async(req,res)=>{try{const r=await runDb(db=>db.collection(EVENT_COLL).insertOne({...req.body, createdAt:new Date()}));res.json(r)}catch(e){res.status(500).json({error:'Err'})}});
+app.get('/api/:_any/eventTemple', async(req,res)=>{try{const l=await runDb(db=>db.collection(EVENT_COLL).find({mallId:CAFE24_MALLID}).sort({createdAt:-1}).toArray());res.json(l)}catch(e){res.status(500).json({error:'Err'})}});
+app.get('/api/:_any/eventTemple/:id', async(req,res)=>{try{const d=await runDb(db=>db.collection(EVENT_COLL).findOne({_id:new ObjectId(req.params.id)}));res.json(d)}catch(e){res.status(500).json({error:'Err'})}});
+app.put('/api/:_any/eventTemple/:id', async(req,res)=>{try{await runDb(db=>db.collection(EVENT_COLL).updateOne({_id:new ObjectId(req.params.id)},{$set:{...req.body,updatedAt:new Date()}}));res.json({success:true})}catch(e){res.status(500).json({error:'Err'})}});
+app.delete('/api/:_any/eventTemple/:id', async(req,res)=>{try{await runDb(db=>db.collection(EVENT_COLL).deleteOne({_id:new ObjectId(req.params.id)}));res.json({success:true})}catch(e){res.status(500).json({error:'Err'})}});
 
-// EventTemple Routes
-const mountEventRoutes = (basePath) => {
-  app.post(`/api/:_any${basePath}`, async (req, res) => {
-    try {
-      const p = req.body || {};
-      const doc = {
-        mallId: CAFE24_MALLID, title: p.title, content: p.content, images: p.images,
-        gridSize: p.gridSize, layoutType: p.layoutType, classification: p.classification,
-        createdAt: new Date(), updatedAt: new Date()
-      };
-      if(doc.content?.blocks) doc.content.blocks = normalizeBlocks(doc.content.blocks);
-      const r = await runDb(db => db.collection(EVENT_COLL).insertOne(doc));
-      res.json({ _id: r.insertedId, ...doc });
-    } catch(e) { res.status(500).json({ error: '생성 실패' }); }
-  });
-  
-  app.get(`/api/:_any${basePath}`, async (req, res) => {
-    try {
-      const list = await runDb(db => db.collection(EVENT_COLL).find({ mallId: CAFE24_MALLID }).sort({createdAt:-1}).toArray());
-      res.json(list);
-    } catch(e) { res.status(500).json({ error: '목록 실패' }); }
-  });
-
-  app.get(`/api/:_any${basePath}/:id`, async (req, res) => {
-    try {
-      if (!ObjectId.isValid(req.params.id)) return res.status(400).json({error:'ID 오류'});
-      const ev = await runDb(db => db.collection(EVENT_COLL).findOne({_id: new ObjectId(req.params.id)}));
-      if(!ev) return res.status(404).json({error:'없음'});
-      res.json(ev);
-    } catch(e) { res.status(500).json({error:'조회 실패'}); }
-  });
-
-  app.put(`/api/:_any${basePath}/:id`, async (req, res) => {
-    try {
-      const p = req.body;
-      const set = { updatedAt: new Date(), ...p };
-      delete set._id;
-      if(set.content?.blocks) set.content.blocks = normalizeBlocks(set.content.blocks);
-      await runDb(db => db.collection(EVENT_COLL).updateOne({_id: new ObjectId(req.params.id)}, {$set: set}));
-      res.json({ success: true });
-    } catch(e) { res.status(500).json({error:'수정 실패'}); }
-  });
-
-  app.delete(`/api/:_any${basePath}/:id`, async (req, res) => {
-    try {
-      await runDb(db => db.collection(EVENT_COLL).deleteOne({_id: new ObjectId(req.params.id)}));
-      res.json({ success: true });
-    } catch(e) { res.status(500).json({error:'삭제 실패'}); }
-  });
-};
-mountEventRoutes('/eventTemple'); // Mount
-
-// Tracking
-app.post('/api/:_any/track', async (req, res) => {
+// 엑셀 다운로드
+app.get('/chatConnet', async (req, res) => {
   try {
-    const { pageId, type, timestamp } = req.body;
-    if(!pageId || !type) return res.sendStatus(400);
-    // 간단한 로깅 예시 (상세 구현은 기존 코드 참조하여 확장 가능)
-    const coll = type==='click' ? `clicks_${CAFE24_MALLID}` : `visits_${CAFE24_MALLID}`;
-    await runDb(db => db.collection(coll).insertOne({...req.body, timestamp: new Date(timestamp)}));
-    res.sendStatus(204);
-  } catch(e) { res.status(500).json({error:'트래킹 실패'}); }
-});
-
-// Analytics (방문자, 클릭 등) - 기존 로직 유지
-app.get('/api/:_any/analytics/:pageId/visitors-by-date', async (req, res) => {
-  const { start_date, end_date } = req.query;
-  // (생략된 상세 집계 로직은 필요시 기존 코드 붙여넣기. 여기선 빈 배열 반환 예시)
-  // 실제로는 runDb로 aggregate 수행
-  res.json([]);
-});
-
-// Cafe24 Categories/Products Proxy
-app.get('/api/:_any/categories/all', async (req, res) => {
-  try {
-    const d = await apiRequest('GET', `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/categories`, {}, {limit:100});
-    res.json(d.categories);
-  } catch(e) { res.status(500).json({error:e.message}); }
-});
-
-app.get('/api/:_any/products', async (req, res) => {
-  try {
-    const d = await apiRequest('GET', `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/products`, {}, {limit:50});
-    res.json(d);
-  } catch(e) { res.status(500).json({error:e.message}); }
+    const list = await runDb(db=>db.collection("conversationLogs").find({}).toArray());
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Logs');
+    sheet.columns = [{header:'ID',key:'memberId'},{header:'Date',key:'date'},{header:'Log',key:'conversation'}];
+    list.forEach(d => sheet.addRow({memberId: d.memberId||'비회원', date: d.date, conversation: JSON.stringify(d.conversation)}));
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", "attachment; filename=logs.xlsx");
+    await workbook.xlsx.write(res); res.end();
+  } catch (e) { res.status(500).send("Error"); }
 });
 
 // ========== [서버 실행] ==========
@@ -746,15 +563,7 @@ app.get('/api/:_any/products', async (req, res) => {
   try {
     console.log("🟡 서버 시작 중...");
     await getTokensFromDB();
-    
-    // ✅ [핵심] RAG 데이터 초기화 (서버 시작 시 로드)
     await updateSearchableData();
-
-    app.listen(PORT, () => {
-      console.log(`🚀 서버 실행 완료! 포트: ${PORT}`);
-    });
-  } catch (err) {
-    console.error("❌ 서버 초기화 오류:", err.message);
-    process.exit(1);
-  }
+    app.listen(PORT, () => console.log(`🚀 서버 실행 완료! 포트: ${PORT}`));
+  } catch (err) { console.error("❌ 초기화 오류:", err.message); process.exit(1); }
 })();

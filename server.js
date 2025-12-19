@@ -501,10 +501,10 @@ app.post('/send-email', upload.single('attachment'), async(req,res)=>{ try{
 
 
 // ============================================
-// [Temple 기능 통합구역] (FTP, Events, Tracking, Analytics)
+// [Temple 기능 통합구역] (FTP, Events, Tracking)
 // ============================================
 
-// 1. FTP 이미지 업로드
+// 1. FTP 이미지 업로드 (Advanced Version)
 const FTP_PUBLIC_URL_BASE = (FTP_PUBLIC_BASE || `http://${MALL_ID}.openhost.cafe24.com/web/img/temple`).replace(/\/+$/,'');
 
 app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => {
@@ -781,6 +781,38 @@ app.get('/api/:_any/analytics/:pageId/coupons-distinct', async (req, res) => {
     const list = await db.collection(`clicks_${MALL_ID}`).distinct('couponNo', { pageId, element: 'coupon' });
     res.json(list);
   });
+});
+
+// ✅ 상품 퍼포먼스 통계 (복구)
+app.get('/api/:_any/analytics/:pageId/product-performance', async (req, res) => {
+  try {
+    const clicks = await runDb(async (db) =>
+      db.collection(`prdClick_${MALL_ID}`).aggregate([
+        { $match: { pageId: req.params.pageId } },
+        { $group: { _id: '$productNo', clicks: { $sum: '$clickCount' } } }
+      ]).toArray()
+    );
+    if (!clicks.length) return res.json([]);
+
+    const productNos = clicks.map(c => c._id);
+    const urlProds = `https://${MALL_ID}.cafe24api.com/api/v2/admin/products`;
+    const prodRes = await apiRequest('GET', urlProds, {}, {
+      shop_no: 1,
+      product_no: productNos.join(','),
+      limit: productNos.length,
+      fields: 'product_no,product_name'
+    });
+    const detailMap = (prodRes.products || []).reduce((m,p) => { m[p.product_no]=p.product_name; return m; }, {});
+
+    const performance = clicks
+      .map(c => ({ productNo: c._id, productName: detailMap[c._id] || '이름없음', clicks: c.clicks }))
+      .sort((a,b)=>b.clicks-a.clicks);
+
+    res.json(performance);
+  } catch (err) {
+    console.error('[PRODUCT PERFORMANCE ERROR]', err);
+    res.status(500).json({ error: '상품 퍼포먼스 집계 실패' });
+  }
 });
 
 // ========== [서버 실행] ==========

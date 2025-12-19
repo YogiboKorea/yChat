@@ -1691,12 +1691,34 @@ app.get('/api/:_any/analytics/:pageId/product-performance', async (req, res) => 
 });
 
 
-// ========== [서버 실행] ==========
+
+// ========== [서버 실행 및 프롬프트 초기화] ==========
 (async function initialize() {
   try {
-    console.log("🟡 서버 시작...");
+    console.log("🟡 서버 시작 중...");
+
+    // 토큰 불러오기
     await getTokensFromDB();
-    await updateSearchableData();
-    app.listen(PORT, () => console.log(`🚀 실행 완료: ${PORT}`));
-  } catch (err) { console.error("❌ 초기화 오류:", err.message); process.exit(1); }
+    await initializeEventData();
+    // 2. [추가] DB 인덱스(중복 방지) 자동 설정
+    await ensureIndexes(); 
+    //실시간 판매 데이터 
+    await initializeOfflineSalesData()
+    startSalesScheduler();
+
+    // 시스템 프롬프트 한 번만 초기화
+    combinedSystemPrompt = await initializeChatPrompt();
+
+
+    console.log("✅ 시스템 프롬프트 초기화 완료");
+
+    // 서버 실행
+    app.listen(PORT, () => {
+      console.log(`🚀 서버 실행 완료! 포트: ${PORT}`);
+    });
+
+  } catch (err) {
+    console.error("❌ 서버 초기화 오류:", err.message);
+    process.exit(1);
+  }
 })();

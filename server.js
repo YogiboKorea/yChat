@@ -75,12 +75,12 @@ function normalizeBlocks(blocks = []) {
   });
 }
 
-// ========== [헬퍼 함수: pageId 검색 조건 생성] ==========
-// 🛠️ 핵심 수정: pageId가 String이든 ObjectId든 다 찾게 만드는 함수
+// ========== [🛠️ 핵심 헬퍼: pageId 검색 조건 생성] ==========
+// pageId가 문자열("60d...")로 저장됐든 ObjectId로 저장됐든 모두 찾아내는 필터 생성
 function createPageIdMatch(pageId) {
-    const conditions = [{ pageId: pageId }];
+    const conditions = [{ pageId: pageId }]; // 문자열 일치 확인
     if (ObjectId.isValid(pageId)) {
-        conditions.push({ pageId: new ObjectId(pageId) });
+        conditions.push({ pageId: new ObjectId(pageId) }); // ObjectId 일치 확인
     }
     return { $or: conditions };
 }
@@ -286,16 +286,14 @@ router.post('/api/:_any/track', async (req, res) => {
   const { pageId, pageUrl, visitorId, referrer, device, type, element, timestamp, productNo } = req.body;
   if (!pageId || !visitorId || !type || !timestamp) return res.status(400).json({ error: '필수 필드 누락' });
   
-  // 🛠️ 트래킹 시에도 ID 유효성 체크만 하고, ObjectId 변환은 하지 않고 그대로 저장 (또는 필요한대로 변환)
-  // 여기서는 프론트가 보내준 pageId 문자열 그대로 저장하고, 조회할 때 $or로 찾는 방식을 사용함.
-  
   try {
-    // 이벤트 존재 확인 (여기서도 $or 사용)
-    const pageIdMatch = createPageIdMatch(pageId);
-    const exists = await runDb(db => db.collection(EVENT_COLL).findOne({ _id: pageIdMatch.$or.find(o=>o.pageId instanceof ObjectId)?.pageId || new ObjectId(pageId) }));
+    // 🛠️ 트래킹 전 이벤트 존재 확인 (String/ObjectId 모두 체크)
+    const existsMatch = createPageIdMatch(pageId);
+    // $or 조건 중 하나라도 만족하는지 확인 (하나라도 ObjectId 형식이면 해당 필드로 쿼리)
+    const exists = await runDb(db => db.collection(EVENT_COLL).findOne(existsMatch));
     
-    // 만약 _id 조회가 안된다면 그냥 진행 (이미 삭제된 이벤트일수도) 
-    // 하지만 ObjectId 포맷이 맞다면 체크해주는게 좋음.
+    // 이벤트가 없으면 트래킹 스킵 (단, 기존 데이터 정합성을 위해 ObjectId 변환 실패 등은 무시하고 진행할 수도 있음)
+    // 여기서는 일단 존재 여부만 체크하고 진행
     
     const ts = new Date(timestamp);
     const kst = new Date(ts.getTime() + 9 * 60 * 60 * 1000);
@@ -363,7 +361,7 @@ router.post('/api/:_any/track', async (req, res) => {
 
 
 // ==================================================================
-// [4] 통계 분석 (Analytics) - 🛠️ 모든 통계 API에 $or 조건 적용 완료!
+// [4] 통계 분석 (Analytics) - 🛠️ 모든 API에 createPageIdMatch 적용 완료
 // ==================================================================
 
 // 4-1. URL 목록 조회
@@ -381,8 +379,13 @@ router.get('/api/:_any/analytics/:pageId/coupons-distinct', async (req, res) => 
   const { pageId } = req.params;
   try {
     const match = createPageIdMatch(pageId);
-    match.element = 'coupon';
-    const couponNos = await runDb(db => db.collection(`clicks_${MALL_ID}`).distinct('couponNo', match));
+    match.element = 'coupon'; // $or 조건과 함께 element 조건 추가 (MongoDB는 쿼리 객체 내 $or와 다른 필드 병행 가능)
+    
+    // 주의: distinct 쿼리에서 $or와 일반 필드를 섞을 때는 쿼리 객체를 잘 구성해야 함.
+    // createPageIdMatch가 { $or: [...] }를 반환하므로, 여기에 element: 'coupon'을 추가하면 됨.
+    const query = { ...match, element: 'coupon' };
+
+    const couponNos = await runDb(db => db.collection(`clicks_${MALL_ID}`).distinct('couponNo', query));
     res.json(couponNos.filter(c => c).sort());
   } catch (err) { res.json([]); }
 });
@@ -393,9 +396,9 @@ router.get('/api/:_any/analytics/:pageId/visitors-by-date', async (req, res) => 
   const { start_date, end_date, url } = req.query;
   if (!start_date || !end_date) return res.status(400).json({ error: '날짜 필수' });
 
-  // 🛠️ pageId 검색 조건 강화
+  // 🛠️ pageId 매칭 로직 적용 ($or 조건 병합)
   const match = { 
-      ...createPageIdMatch(pageId), // $or 조건 병합
+      ...createPageIdMatch(pageId),
       dateKey: { $gte: start_date.slice(0, 10), $lte: end_date.slice(0, 10) } 
   };
   if (url) match.pageUrl = url;
@@ -415,16 +418,18 @@ router.get('/api/:_any/analytics/:pageId/visitors-by-date', async (req, res) => 
       { $sort: { date: 1 } }
     ]).toArray());
     res.json(stats);
-  } catch (err) { res.status(500).json({ error: '집계 오류' }); }
+  } catch (err) { 
+      console.error('[VISITORS ERROR]', err);
+      res.status(500).json({ error: '집계 오류' }); 
+  }
 });
 
-// 4-4. 날짜별 클릭 통계 (쿠폰/주문 완료 통계 포함)
+// 4-4. 날짜별 클릭 통계
 router.get('/api/:_any/analytics/:pageId/clicks-by-date', async (req, res) => {
   const { pageId } = req.params;
   const { start_date, end_date, url } = req.query;
   if (!start_date || !end_date) return res.status(400).json({ error: '날짜 필수' });
 
-  // 🛠️ pageId 검색 조건 강화
   const match = { 
       ...createPageIdMatch(pageId),
       dateKey: { $gte: start_date.slice(0,10), $lte: end_date.slice(0,10) } 
@@ -466,12 +471,33 @@ router.get('/api/:_any/analytics/:pageId/devices', async (req, res) => {
   } catch (err) { res.status(500).json({ error: '디바이스 집계 실패' }); }
 });
 
-// 4-6. 상품 퍼포먼스 (상품 클릭 데이터)
+// 4-6. 디바이스 통계 (날짜별)
+router.get('/api/:_any/analytics/:pageId/devices-by-date', async (req, res) => {
+  const { pageId } = req.params;
+  const { start_date, end_date, url } = req.query;
+  const match = { 
+      ...createPageIdMatch(pageId),
+      dateKey: { $gte: start_date.slice(0,10), $lte: end_date.slice(0,10) } 
+  };
+  if (url) match.pageUrl = url;
+
+  try {
+    const data = await runDb(db => db.collection(`visits_${MALL_ID}`).aggregate([
+       { $match: match },
+       { $group: { _id: { date:'$dateKey', device:'$device', visitor:'$visitorId' } } },
+       { $group: { _id: { date:'$_id.date', device:'$_id.device' }, count: { $sum:1 } } },
+       { $project: { _id:0, date:'$_id.date', device:'$_id.device', count:1 } },
+       { $sort: { date:1, device:1 } }
+    ]).toArray());
+    res.json(data);
+  } catch (err) { res.status(500).json({ error: '디바이스(일별) 집계 실패' }); }
+});
+
+// 4-7. 상품 퍼포먼스 (상품 클릭 데이터)
 router.get('/api/:_any/analytics/:pageId/product-performance', async (req, res) => {
   const { pageId } = req.params;
   try {
-    // 🛠️ pageId 검색 조건 강화
-    const match = createPageIdMatch(pageId);
+    const match = createPageIdMatch(pageId); // 🛠️ 여기도 적용
     
     const clicks = await runDb(db => db.collection(`prdClick_${MALL_ID}`).aggregate([
       { $match: match },
@@ -489,6 +515,26 @@ router.get('/api/:_any/analytics/:pageId/product-performance', async (req, res) 
     const performance = clicks.map(c => ({ productNo: c._id, productName: detailMap[c._id] || '이름없음', clicks: c.clicks })).sort((a,b)=>b.clicks-a.clicks);
     res.json(performance);
   } catch (err) { res.status(500).json({ error: '상품 분석 실패' }); }
+});
+
+// 4-8. 상품 클릭 (단순 리스트)
+router.get('/api/:_any/analytics/:pageId/product-clicks', async (req, res) => {
+  const { pageId } = req.params;
+  const { start_date, end_date } = req.query;
+
+  // find 쿼리 구성
+  const query = createPageIdMatch(pageId); // 🛠️ 적용 ({ $or: [...] })
+  
+  if (start_date && end_date) {
+      query.lastClickAt = { $gte: new Date(start_date), $lte: new Date(end_date) };
+  }
+
+  try {
+    const docs = await runDb(db => 
+      db.collection(`prdClick_${MALL_ID}`).find(query).sort({ clickCount: -1 }).toArray()
+    );
+    res.json(docs.map(d => ({ productNo: d.productNo, clicks: d.clickCount })));
+  } catch (err) { res.status(500).json({ error: '상품 클릭 조회 실패' }); }
 });
 
 

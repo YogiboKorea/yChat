@@ -45,8 +45,8 @@ let allSearchableData = [...staticFaqList];
 // 1. 상담사 연결 (팝업)
 const COUNSELOR_LINKS_HTML = `
 <br><br>
-📮 <a href="javascript:void(0)" onclick="window.open('http://pf.kakao.com/_lxmZsxj/chat','kakao','width=500,height=600,scrollbars=yes');" style="color:#3b1e1e; font-weight:bold; text-decoration:underline;">카카오플친 연결하기 (팝업)</a><br>
-📮 <a href="javascript:void(0)" onclick="window.open('https://talk.naver.com/ct/wc4u67?frm=psf','naver','width=500,height=600,scrollbars=yes');" style="color:#03c75a; font-weight:bold; text-decoration:underline;">네이버톡톡 연결하기 (팝업)</a>
+📮 <a href="javascript:void(0)" onclick="window.open('http://pf.kakao.com/_lxmZsxj/chat','kakao','width=500,height=600,scrollbars=yes');" style="color:#3b1e1e; font-weight:bold; text-decoration:underline;cursor:pointer;">카카오플친 연결하기 (팝업)</a><br>
+📮 <a href="javascript:void(0)" onclick="window.open('https://talk.naver.com/ct/wc4u67?frm=psf','naver','width=500,height=600,scrollbars=yes');" style="color:#03c75a; font-weight:bold; text-decoration:underline;cursor:pointer;">네이버톡톡 연결하기 (팝업)</a>
 `;
 
 // 2. 답변 하단 기본 문구

@@ -168,7 +168,7 @@ function normalizeSentence(s) { return s.replace(/[?!！？]/g, "").replace(/없
 function containsOrderNumber(s) { return /\d{8}-\d{7}/.test(s); }
 function addSpaceAfterPeriod(t) { return t.replace(/\.([^\s])/g, '. $1'); }
 
-// ✅ [로그인 체크 함수]
+// ✅ [로그인 체크]
 function isUserLoggedIn(id) {
   if (!id) return false;
   if (id === "null") return false;
@@ -177,7 +177,7 @@ function isUserLoggedIn(id) {
   return true;
 }
 
-// ========== [배송 조회 함수 (개선됨)] ==========
+// ========== [배송 조회 함수] ==========
 async function getOrderShippingInfo(id) {
   const today = new Date();
   const start = new Date(); start.setDate(today.getDate() - 14);
@@ -186,21 +186,37 @@ async function getOrderShippingInfo(id) {
   });
 }
 
-// ✅ [수정] 배송 상세 조회 함수 (송장번호 처리 강화)
+// ✅ [수정] 배송 상세 + 송장번호 링크 생성
 async function getShipmentDetail(orderId) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders/${orderId}/shipments`;
   try {
     const response = await apiRequest("GET", API_URL, {}, { shop_no: 1 });
     
-    // 🔍 디버깅용 로그
+    // 디버깅 로그
     console.log(`[배송조회] ${orderId}:`, JSON.stringify(response));
 
     if (response.shipments && response.shipments.length > 0) {
       const shipment = response.shipments[0];
-      const map = { "0019": "롯데 택배", "0039": "경동 택배", "0023": "경동 택배" };
       
-      // 배송사 이름 매핑
-      shipment.shipping_company_name = map[shipment.shipping_company_code] || shipment.shipping_company_name || "물류 창고";
+      // 택배사별 URL 매핑 정보
+      const carrierMap = {
+        "0019": { name: "롯데 택배", url: "https://www.lotteglogis.com/home/reservation/tracking/linkView?InvNo=" },
+        "0039": { name: "경동 택배", url: "https://kdexp.com/service/delivery/tracking.do?barcode=" },
+        "0023": { name: "경동 택배", url: "https://kdexp.com/service/delivery/tracking.do?barcode=" }
+      };
+
+      const carrierInfo = carrierMap[shipment.shipping_company_code] || { name: shipment.shipping_company_name || "지정 택배사", url: "" };
+      
+      // 정보 주입
+      shipment.shipping_company_name = carrierInfo.name;
+      
+      // ✅ 송장번호가 있고 URL 패턴이 있으면 전체 추적 링크 생성
+      if (shipment.tracking_no && carrierInfo.url) {
+        shipment.tracking_url = carrierInfo.url + shipment.tracking_no;
+      } else {
+        shipment.tracking_url = null;
+      }
+
       return shipment;
     }
     return null;
@@ -238,17 +254,26 @@ async function findAnswer(userInput, memberId) {
         const orderId = normalized.match(/\d{8}-\d{7}/)[0];
         const ship = await getShipmentDetail(orderId);
         
-        // ✅ [수정] 송장번호가 없으면 '등록 대기중' 표시
         if (ship) {
-            const trackingNo = ship.tracking_no ? ship.tracking_no : "등록 대기중";
             const status = ship.status || "배송 준비중";
+            
+            // ✅ 송장번호 표시 및 링크 생성 (송장 있으면 링크 걸기)
+            let trackingDisplay = "등록 대기중";
+            if (ship.tracking_no) {
+                if (ship.tracking_url) {
+                    trackingDisplay = `<a href="${ship.tracking_url}" target="_blank" style="color:#58b5ca; font-weight:bold; text-decoration:underline;">${ship.tracking_no}</a> (클릭)`;
+                } else {
+                    trackingDisplay = ship.tracking_no;
+                }
+            }
+
             return {
                 text: `주문번호 <strong>${orderId}</strong>의 배송 상태는 <strong>${status}</strong>입니다.<br>
                        🚚 택배사: ${ship.shipping_company_name}<br>
-                       📄 송장번호: <strong>${trackingNo}</strong>`
+                       📄 송장번호: ${trackingDisplay}`
             };
         } else {
-            return { text: "해당 주문번호의 배송 정보를 찾을 수 없습니다. (아직 배송 처리가 안 되었을 수 있습니다.)" };
+            return { text: "해당 주문번호의 배송 정보를 찾을 수 없습니다." };
         }
       } catch (e) { return { text: "조회 오류가 발생했습니다." }; }
     }
@@ -265,8 +290,17 @@ async function findAnswer(userInput, memberId) {
           const ship = await getShipmentDetail(t.order_id);
           
           if (ship) {
-             const trackingNo = ship.tracking_no ? ship.tracking_no : "등록 대기중";
-             return { text: `최근 주문(<strong>${t.order_id}</strong>)은 <strong>${ship.shipping_company_name}</strong> 배송 중입니다.<br>📄 송장번호: <strong>${trackingNo}</strong>` };
+             // ✅ 최근 주문 조회 시에도 송장번호 링크 적용
+             let trackingDisplay = "등록 대기중";
+             if (ship.tracking_no) {
+                 if (ship.tracking_url) {
+                     trackingDisplay = `<a href="${ship.tracking_url}" target="_blank" style="color:#58b5ca; font-weight:bold; text-decoration:underline;">${ship.tracking_no}</a>`;
+                 } else {
+                     trackingDisplay = ship.tracking_no;
+                 }
+             }
+             
+             return { text: `최근 주문(<strong>${t.order_id}</strong>)은 <strong>${ship.shipping_company_name}</strong> 배송 중입니다.<br>📄 송장번호: ${trackingDisplay}` };
           }
           return { text: "최근 주문 확인 중입니다." };
         }
@@ -310,7 +344,7 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // (3) 비즈 안내 (우선순위 적용)
+  // (3) 비즈 안내
   if (normalized.includes("비즈") || normalized.includes("충전재")) {
     let key = null;
     if (normalized.includes("프리미엄 플러스")) key = "프리미엄 플러스 비즈 에 대해 알고 싶어";
@@ -320,7 +354,7 @@ async function findAnswer(userInput, memberId) {
     if (key && companyData.biz?.[key]) return { text: companyData.biz[key].description };
   }
 
-  // (4) goodsInfo / homePage / asInfo (유사도)
+  // (4) 기타 정보
   if (companyData.goodsInfo) {
     let b=null, m=6; for(let k in companyData.goodsInfo){const d=levenshtein.get(normalized,normalizeSentence(k));if(d<m){m=d;b=companyData.goodsInfo[k];}}
     if(b) return { text: Array.isArray(b.description)?b.description.join("\n"):b.description, imageUrl: b.imageUrl };
@@ -354,7 +388,8 @@ app.post("/chat", async (req, res) => {
     gptAnswer = addSpaceAfterPeriod(gptAnswer) + FALLBACK_MESSAGE_HTML;
 
     await saveConversationLog(memberId, message, gptAnswer);
-    res.json({ text: gptAnswer });
+    res.json({ text: gptAnswer, videoHtml: null });
+
   } catch (e) {
     console.error(e);
     res.status(500).json({ text: "오류가 발생했습니다." });

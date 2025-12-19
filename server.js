@@ -23,15 +23,16 @@ const {
   ACCESS_TOKEN, REFRESH_TOKEN, CAFE24_CLIENT_ID, CAFE24_CLIENT_SECRET,
   DB_NAME, MONGODB_URI, CAFE24_MALLID, OPEN_URL, API_KEY,
   FINETUNED_MODEL = "gpt-3.5-turbo", CAFE24_API_VERSION = "2024-06-01",
-  PORT = 5000, FTP_PUBLIC_BASE,
+  PORT = 5000,
   SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS,
-  // FTP 설정 (없으면 기본값 사용)
+  // FTP 설정
   FTP_HOST = 'yogibo.ftp.cafe24.com',
   FTP_USER = 'yogibo',
-  FTP_PASS = 'korea2025!!'
+  FTP_PASS = 'korea2025!!',
+  FTP_PUBLIC_BASE
 } = process.env;
 
-const MALL_ID = CAFE24_MALLID || 'yogibo'; // 몰 아이디 통합
+const MALL_ID = CAFE24_MALLID || 'yogibo';
 
 let accessToken = ACCESS_TOKEN;
 let refreshToken = REFRESH_TOKEN;
@@ -43,24 +44,25 @@ app.use(compression());
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-// 멀터 설정 (이미지 업로드용)
+// Multer 설정 (이미지 업로드용)
 const upload = multer({
   storage: multer.diskStorage({
-    destination: (r, f, c) => c(null, path.join(__dirname, 'uploads')),
+    destination: (r, f, c) => {
+      const dir = path.join(__dirname, 'uploads');
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      c(null, dir);
+    },
     filename: (r, f, c) => c(null, `${Date.now()}_${f.originalname}`)
   }),
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB 제한
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB
 });
 
 // ========== [DB 유틸리티 (공용)] ==========
 const runDb = async (callback) => {
-  const client = new MongoClient(MONGODB_URI, { maxPoolSize: 10 });
+  const client = new MongoClient(MONGODB_URI);
   try {
     await client.connect();
     return await callback(client.db(DB_NAME));
-  } catch (err) {
-    console.error("❌ DB Error:", err);
-    throw err;
   } finally {
     await client.close();
   }
@@ -164,7 +166,7 @@ async function updateSearchableData() {
     const notes = await db.collection("postItNotes").find({}).toArray();
     const dynamic = notes.map(n => ({ c: n.category || "etc", q: n.question, a: n.answer }));
     allSearchableData = [...staticFaqList, ...dynamic];
-    console.log(`✅ 검색 데이터 갱신 완료: 총 ${allSearchableData.length}개 로드됨 (정적 ${staticFaqList.length} + 포스트잇 ${dynamic.length})`);
+    console.log(`✅ 검색 데이터 갱신 완료: 총 ${allSearchableData.length}개 로드됨`);
   });
 }
 
@@ -172,7 +174,7 @@ function findRelevantContent(msg) {
   const kws = msg.split(/\s+/).filter(w => w.length > 1);
   if (!kws.length) return [];
 
-  console.log(`🔍 검색 시작: "${msg}" (키워드: ${kws})`);
+  console.log(`🔍 검색 시작: "${msg}"`);
 
   const scored = allSearchableData.map(item => {
     let score = 0;
@@ -193,7 +195,6 @@ function findRelevantContent(msg) {
 
   // 기준 점수 완화 (10 -> 5)
   const results = scored.filter(i => i.score >= 5).sort((a, b) => b.score - a.score).slice(0, 3);
-  console.log(`📊 검색 결과: ${results.length}개 발견`);
   if(results.length > 0) console.log(`   👉 1위: Q: ${results[0].q} / Score: ${results[0].score}`);
 
   return results;
@@ -320,7 +321,7 @@ async function findAnswer(userInput, memberId) {
     return { text: `정확한 조회를 위해 로그인이 필요합니다.${LOGIN_BTN_HTML}` };
   }
 
-  // 6. 일반 배송/주문 조회
+  // 6. 일반 배송/주문 조회 (조건 강화)
   const isTracking = (normalized.includes("배송") || normalized.includes("주문")) && 
                      (normalized.includes("조회") || normalized.includes("확인") || normalized.includes("언제") || normalized.includes("어디"));
   const isFAQ = normalized.includes("비용") || normalized.includes("비") || normalized.includes("주소") || normalized.includes("변경");
@@ -506,7 +507,7 @@ app.post('/send-email', upload.single('attachment'), async(req,res)=>{ try{
 // ============================================
 
 // 1. FTP 이미지 업로드 (Advanced Version)
-const FTP_PUBLIC_URL_BASE = (process.env.FTP_PUBLIC_BASE || `http://${MALL_ID}.openhost.cafe24.com/web/img/temple`).replace(/\/+$/,'');
+const FTP_PUBLIC_URL_BASE = (FTP_PUBLIC_BASE || `http://${MALL_ID}.openhost.cafe24.com/web/img/temple`).replace(/\/+$/,'');
 
 app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => {
   const localPath = req.file?.path;

@@ -49,11 +49,11 @@ const COUNSELOR_LINKS_HTML = `
 📮 <a href="javascript:void(0)" onclick="window.open('https://talk.naver.com/ct/wc4u67?frm=psf','naver','width=500,height=600,scrollbars=yes');" style="color:#03c75a; font-weight:bold; text-decoration:underline; cursor:pointer;">네이버톡톡 연결하기 (팝업)</a>
 `;
 
-// 2. 답변 하단 기본 문구
+// 2. 답변 하단 기본 문구 (모르는 질문일 때만 사용)
 const FALLBACK_MESSAGE_HTML = `
 <br><br>
 ---------------------------------<br>
-<strong>정확한 답변 확인을 위해 상담사 연결을 통해 진행하시겠습니까?</strong>
+<strong>원하시는 답변을 찾지 못하셨나요? 상담사 연결을 도와드릴까요?</strong>
 ${COUNSELOR_LINKS_HTML}
 `;
 
@@ -74,19 +74,21 @@ const LOGIN_BTN_HTML = `
 </div>
 `;
 
-// ========== [시스템 프롬프트 설정 (환각 방지 강화)] ==========
+// ========== [시스템 프롬프트 설정] ==========
 function convertPromptLinks(promptText) { return promptText; }
 
+// ✅ [수정] 가독성 지침 추가
 const basePrompt = `
 1. 역할 및 말투
 전문가 역할: 요기보(Yogibo) 브랜드의 전문 상담원입니다.
 존대 및 공손: 고객에게 항상 존댓말과 공손한 말투를 사용합니다.
 이모티콘 활용: 대화 중 적절히 이모티콘을 사용합니다.
+가독성: 답변 시 줄바꿈(Enter)을 자주 사용하여 읽기 편하게 작성하세요. 문단 사이에는 빈 줄을 하나 더 넣으세요.
 
 2. ★ 답변 원칙 (매우 중요)
 제공된 [참고 정보]에 있는 내용으로만 답변하세요.
 "엔젤 비즈", "마이크로 비즈" 등 요기보 제품이 아닌 용어는 절대 사용하지 마세요.
-[참고 정보]에 없는 내용은 솔직하게 모른다고 하고 상담원 연결을 권유하세요.
+[참고 정보]에 없는 내용은 솔직하게 모른다고 답하세요.
 없는 정보를 지어내면 해고됩니다.
 
 3. ★ 추천 상품 가이드
@@ -231,7 +233,7 @@ async function getShipmentDetail(orderId) {
 async function findAnswer(userInput, memberId) {
   const normalized = normalizeSentence(userInput);
 
-  // 1. 상담사 연결
+  // 1. 상담사 연결 (명시적 요청 시)
   if (normalized.includes("상담사 연결") || normalized.includes("상담원 연결")) {
     return { text: `상담사와 연결을 도와드리겠습니다.${COUNSELOR_LINKS_HTML}` };
   }
@@ -351,7 +353,6 @@ async function findAnswer(userInput, memberId) {
     
     if (key && companyData.biz?.[key]) { return { text: companyData.biz[key].description }; }
 
-    // ✅ 강제 정답 반환 (AI 생성 차단)
     return {
       text: `요기보의 정품 비즈(충전재)는 3가지 종류가 있습니다. 😊<br><br>
       1️⃣ <strong>스탠다드 비즈</strong>: 가장 기본적이고 대중적인 편안함<br>
@@ -361,20 +362,20 @@ async function findAnswer(userInput, memberId) {
     };
   }
 
-  // (4) 추천 상품 (규칙 추가)
+  // (4) 추천 상품
   if (normalized.includes("추천") || normalized.includes("인기")) {
       const maxInfo = companyData.sizeInfo?.["맥스 사이즈 또는 크기."];
       if (maxInfo) {
           return {
-              text: `요기보의 베스트셀러, **맥스(Max)**를 추천드려요! 👍<br>
-              가장 인기 있는 사이즈로, 침대/소파/의자 등 다양하게 활용 가능합니다.<br><br>
+              text: `요기보의 베스트셀러, **맥스(Max)**를 추천드려요! 👍<br><br>
+              가장 인기 있는 사이즈로, 침대/소파/의자 등 다양하게 활용 가능합니다.<br>
               ${maxInfo.description}`,
               imageUrl: maxInfo.imageUrl
           };
       }
   }
 
-  // (5) 기타 정보
+  // (5) 기타 정보 (유사도)
   if (companyData.goodsInfo) {
     let b=null, m=6; for(let k in companyData.goodsInfo){const d=levenshtein.get(normalized,normalizeSentence(k));if(d<m){m=d;b=companyData.goodsInfo[k];}}
     if(b) return { text: Array.isArray(b.description)?b.description.join("\n"):b.description, imageUrl: b.imageUrl };
@@ -397,15 +398,22 @@ app.post("/chat", async (req, res) => {
   if (!message) return res.status(400).json({ error: "No message" });
 
   try {
+    // 1. 규칙(JSON/API) 답변 시도 (이 경우엔 상담사 버튼 안 붙음)
     const ruleAnswer = await findAnswer(message, memberId);
     if (ruleAnswer) {
       if (message !== "내 아이디") await saveConversationLog(memberId, message, ruleAnswer.text);
       return res.json(ruleAnswer);
     }
 
+    // 2. 규칙 없으면 RAG + GPT
     const docs = findRelevantContent(message);
     let gptAnswer = await getGPT3TurboResponse(message, docs);
-    gptAnswer = addSpaceAfterPeriod(gptAnswer) + FALLBACK_MESSAGE_HTML;
+    gptAnswer = addSpaceAfterPeriod(gptAnswer);
+
+    // ✅ [수정] 검색된 정보가 없을 때(=모르는 내용)만 상담사 연결 유도
+    if (docs.length === 0) {
+        gptAnswer += FALLBACK_MESSAGE_HTML;
+    }
 
     await saveConversationLog(memberId, message, gptAnswer);
     res.json({ text: gptAnswer, videoHtml: null });

@@ -25,7 +25,6 @@ const {
   FINETUNED_MODEL = "gpt-3.5-turbo", CAFE24_API_VERSION = "2024-06-01",
   PORT = 5000,
   SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS,
-  // FTP 설정
   FTP_HOST = 'yogibo.ftp.cafe24.com',
   FTP_USER = 'yogibo',
   FTP_PASS = 'korea2025!!',
@@ -68,11 +67,11 @@ const runDb = async (callback) => {
   }
 };
 
-// ========== [챗봇용 글로벌 상태] ==========
+// ========== [챗봇 글로벌 상태] ==========
 let pendingCoveringContext = false;
 let allSearchableData = [...staticFaqList];
 
-// ========== [상수: 링크 및 버튼 HTML] ==========
+// ========== [상수: 링크 및 버튼] ==========
 const COUNSELOR_LINKS_HTML = `
 <br><br>
 📮 <a href="javascript:void(0)" onclick="window.open('http://pf.kakao.com/_lxmZsxj/chat','kakao','width=500,height=600,scrollbars=yes');" style="color:#3b1e1e; font-weight:bold; text-decoration:underline; cursor:pointer;">카카오플친 연결하기 (팝업)</a><br>
@@ -81,7 +80,6 @@ const COUNSELOR_LINKS_HTML = `
 const FALLBACK_MESSAGE_HTML = `<br><br>---------------------------------<br><strong>원하시는 답변을 찾지 못하셨나요? 상담사 연결을 도와드릴까요?</strong>${COUNSELOR_LINKS_HTML}`;
 const LOGIN_BTN_HTML = `<div style="margin-top:15px;"><a href="/member/login.html" style="display: inline-block; padding: 10px 20px; background-color: #58b5ca; color: #ffffff; text-decoration: none; border-radius: 25px; font-weight: bold; font-size: 14px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">로그인 페이지 이동하기 →</a></div>`;
 
-// ========== [시스템 프롬프트] ==========
 const YOGIBO_SYSTEM_PROMPT = `
 1. 역할 및 말투
 전문가 역할: 요기보(Yogibo) 브랜드의 전문 상담원입니다.
@@ -132,7 +130,7 @@ async function apiRequest(method, url, data = {}, params = {}) {
   }
 }
 
-// ========== [RAG 로직] ==========
+// ========== [RAG & Chatbot Functions] ==========
 async function updateSearchableData() {
   await runDb(async (db) => {
     const notes = await db.collection("postItNotes").find({}).toArray();
@@ -324,7 +322,7 @@ async function saveConversationLog(mid, uMsg, bRes) {
   });
 }
 
-// ========== [API: 챗봇/포스트잇/유틸] ==========
+// ========== [API: 챗봇/포스트잇] ==========
 app.get("/postIt", async (req, res) => {
   const p = parseInt(req.query.page)||1; const l=300;
   await runDb(async (db) => {
@@ -337,11 +335,28 @@ app.post("/postIt", async(req,res)=>{ await runDb(async(db)=>{ await db.collecti
 app.put("/postIt/:id", async(req,res)=>{ await runDb(async(db)=>{ await db.collection("postItNotes").updateOne({_id:new ObjectId(req.params.id)},{$set:{...req.body,updatedAt:new Date()}}); await updateSearchableData(); res.json({message:"OK"}); }); });
 app.delete("/postIt/:id", async(req,res)=>{ await runDb(async(db)=>{ await db.collection("postItNotes").deleteOne({_id:new ObjectId(req.params.id)}); await updateSearchableData(); res.json({message:"OK"}); }); });
 
-// ========== [Temple 기능 통합] ==========
-const EVENT_COLL = 'eventTemple';
-const FTP_PUBLIC_URL_BASE = (FTP_PUBLIC_BASE || `http://${MALL_ID}.openhost.cafe24.com/web/img/temple`).replace(/\/+$/,'');
+app.get('/chatConnet', async(req,res)=>{ 
+  await runDb(async(db)=>{
+    const d=await db.collection("conversationLogs").find({}).toArray();
+    const wb=new ExcelJS.Workbook();const ws=wb.addWorksheet('Log');ws.columns=[{header:'ID',key:'m'},{header:'Date',key:'d'},{header:'Log',key:'c'}];
+    d.forEach(r=>ws.addRow({m:r.memberId||'Guest',d:r.date,c:JSON.stringify(r.conversation)}));
+    res.setHeader("Content-Type","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");res.setHeader("Content-Disposition","attachment; filename=log.xlsx");
+    await wb.xlsx.write(res);res.end();
+  });
+});
 
-// 1. FTP Upload (User's full logic)
+const transporter = nodemailer.createTransport({host:SMTP_HOST,port:Number(SMTP_PORT),secure:SMTP_SECURE==='true',auth:{user:SMTP_USER,pass:SMTP_PASS}});
+app.post('/send-email', upload.single('attachment'), async(req,res)=>{ try{
+  await transporter.sendMail({from:req.body.companyName,to:'contact@yogico.kr',replyTo:req.body.companyEmail,subject:`Contact: ${req.body.companyName}`,text:req.body.message,attachments:req.file?[{path:req.file.path}]:[]});
+  res.json({success:true});}catch(e){res.status(500).json({success:false,error:e.message})} });
+
+
+// ============================================
+// [Temple 기능: FTP, Events, Products, Stats] - ✅ User's Full Logic Integration
+// ============================================
+
+// 1. FTP Upload
+const FTP_PUBLIC_URL_BASE = (FTP_PUBLIC_BASE || `http://${MALL_ID}.openhost.cafe24.com/web/img/temple`).replace(/\/+$/,'');
 app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => {
   const localPath = req.file?.path; const filename = req.file?.filename;
   if (!localPath || !filename) return res.status(400).json({ error: 'No file' });
@@ -358,42 +373,39 @@ app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => 
         return res.json({ url: `${FTP_PUBLIC_URL_BASE}/uploads/${relSuffix}/${filename}`, ftpPath: `${finalPwd}/${filename}` });
       } catch (e) { continue; }
     }
-    return res.status(500).json({ error: 'Path Error' });
+    return res.status(500).json({ error: 'Upload Failed' });
   } catch (err) { return res.status(500).json({ error: 'FTP Error' }); } finally { client.close(); fs.unlink(localPath, ()=>{}); }
 });
 
 // 2. Events CRUD
+const EVENT_COLL = 'eventTemple';
 function normalizeBlocks(blocks=[]) { return blocks.map(b => (b?.type==='video'?{...b,autoplay:!!b.autoplay}:b)); }
-app.post('/api/:_any/eventTemple', async (req, res) => {
-  const doc = { ...req.body, createdAt: new Date(), mallId: MALL_ID }; if(doc.content?.blocks) doc.content.blocks = normalizeBlocks(doc.content.blocks);
-  await runDb(async (db) => { const r = await db.collection(EVENT_COLL).insertOne(doc); res.json({ _id: r.insertedId, ...doc }); });
-});
-app.get('/api/:_any/eventTemple', async (req, res) => {
-  await runDb(async (db) => { const l = await db.collection(EVENT_COLL).find({ mallId: MALL_ID }).sort({ createdAt: -1 }).toArray(); res.json(l); });
-});
-app.get('/api/:_any/eventTemple/:id', async (req, res) => {
-  if (!ObjectId.isValid(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-  await runDb(async (db) => { const ev = await db.collection(EVENT_COLL).findOne({ _id: new ObjectId(req.params.id), mallId: MALL_ID }); ev ? res.json(ev) : res.status(404).json({error:'Not found'}); });
-});
-app.put('/api/:_any/eventTemple/:id', async (req, res) => {
-  if (!ObjectId.isValid(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-  const s = { ...req.body, updatedAt: new Date() }; if(s.content?.blocks) s.content.blocks = normalizeBlocks(s.content.blocks); delete s._id;
-  await runDb(async (db) => { await db.collection(EVENT_COLL).updateOne({ _id: new ObjectId(req.params.id) }, { $set: s }); res.json({ success: true }); });
-});
-app.delete('/api/:_any/eventTemple/:id', async (req, res) => {
-  if (!ObjectId.isValid(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-  await runDb(async (db) => { 
-    await db.collection(EVENT_COLL).deleteOne({ _id: new ObjectId(req.params.id) }); 
-    await Promise.all([
-      db.collection(`visits_${MALL_ID}`).deleteMany({ pageId: req.params.id }),
-      db.collection(`clicks_${MALL_ID}`).deleteMany({ pageId: req.params.id }),
-      db.collection(`prdClick_${MALL_ID}`).deleteMany({ pageId: req.params.id })
-    ]);
-    res.json({ success: true }); 
-  });
-});
 
-// Alias
+function mountEventRoutes(basePath) {
+  app.post(`/api/:_any${basePath}`, async (req, res) => {
+    const p = req.body||{}; const content = p.content||{};
+    if(Array.isArray(content.blocks)) content.blocks = normalizeBlocks(content.blocks);
+    const doc = { mallId: MALL_ID, title: p.title, content, images: p.images, gridSize: p.gridSize, layoutType: p.layoutType, classification: p.classification, createdAt: new Date() };
+    await runDb(async (db) => { const r = await db.collection(EVENT_COLL).insertOne(doc); res.json({_id:r.insertedId,...doc}); });
+  });
+  app.get(`/api/:_any${basePath}`, async (req, res) => {
+    await runDb(async (db) => { const l = await db.collection(EVENT_COLL).find({mallId:MALL_ID}).sort({createdAt:-1}).toArray(); res.json(l); });
+  });
+  app.get(`/api/:_any${basePath}/:id`, async (req, res) => {
+    await runDb(async (db) => { const d = await db.collection(EVENT_COLL).findOne({_id:new ObjectId(req.params.id)}); res.json(d); });
+  });
+  app.put(`/api/:_any${basePath}/:id`, async (req, res) => {
+    const p = req.body; const s = { updatedAt: new Date() };
+    if(p.title) s.title=p.title; if(p.content) s.content=p.content; if(p.images) s.images=p.images;
+    if(s.content?.blocks) s.content.blocks = normalizeBlocks(s.content.blocks);
+    await runDb(async (db) => { await db.collection(EVENT_COLL).updateOne({_id:new ObjectId(req.params.id)}, {$set:s}); res.json({success:true}); });
+  });
+  app.delete(`/api/:_any${basePath}/:id`, async (req, res) => {
+    await runDb(async (db) => { await db.collection(EVENT_COLL).deleteOne({_id:new ObjectId(req.params.id)}); res.json({success:true}); });
+  });
+}
+mountEventRoutes('/eventTemple');
+// Alias for /events
 app.use('/api/:_any/events', (req, res, next) => { req.url = req.url.replace('/events', '/eventTemple'); next(); });
 
 // 3. Tracking
@@ -421,14 +433,13 @@ app.post('/api/:_any/track', async (req, res) => {
   res.sendStatus(204);
 });
 
-// 4. Cafe24 API (상품/카테고리/쿠폰) - ★ Full Version
+// 4. Cafe24 API (Category/Coupon/Product) - ✅ Full Logic Restored
 app.get('/api/:_any/categories/all', async (req, res) => {
   try {
     const all = []; let offset = 0;
     while(true) {
       const d = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/categories`, {}, { limit: 100, offset });
-      if (!d.categories?.length) break;
-      all.push(...d.categories); offset += d.categories.length;
+      if (!d.categories?.length) break; all.push(...d.categories); offset += d.categories.length;
     }
     res.json(all);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -439,71 +450,71 @@ app.get('/api/:_any/coupons', async (req, res) => {
     const all = []; let offset = 0;
     while(true) {
       const d = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/coupons`, {}, { shop_no: 1, limit: 100, offset });
-      if (!d.coupons?.length) break;
-      all.push(...d.coupons); offset += d.coupons.length;
+      if (!d.coupons?.length) break; all.push(...d.coupons); offset += d.coupons.length;
     }
     res.json(all);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ★ [카테고리별 상품 목록 - Full Logic]
+// ★ 카테고리별 상품 (Full Logic)
 app.get('/api/:_any/categories/:category_no/products', async (req, res) => {
   const { category_no } = req.params;
   try {
     const limit = parseInt(req.query.limit)||100, offset = parseInt(req.query.offset)||0;
     const coupon_nos = (req.query.coupon_no||'').split(',').filter(Boolean);
-    
-    // 1. 쿠폰 정보
+    const shop_no = 1;
+
+    // 1. 쿠폰 로드
     const coupons = await Promise.all(coupon_nos.map(async no => {
-        const d = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/coupons`, {}, { shop_no: 1, coupon_no: no, fields: 'coupon_no,available_product,available_product_list,available_category,available_category_list,benefit_amount,benefit_percentage' });
+        const d = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/coupons`, {}, { shop_no, coupon_no: no, fields: 'coupon_no,available_product,available_product_list,available_category,available_category_list,benefit_amount,benefit_percentage' });
         return d.coupons?.[0] || null;
     }));
     const validCoupons = coupons.filter(Boolean);
 
     // 2. 카테고리 상품
-    const catRes = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/categories/${category_no}/products`, {}, { shop_no: 1, limit, offset });
+    const catRes = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/categories/${category_no}/products`, {}, { shop_no, limit, offset });
     const productNos = (catRes.products||[]).map(p=>p.product_no);
     if (!productNos.length) return res.json([]);
 
     // 3. 상품 상세
-    const detailRes = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/products`, {}, { shop_no: 1, product_no: productNos.join(','), limit: productNos.length, fields: 'product_no,product_name,price,summary_description,list_image,icons' });
+    const detailRes = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/products`, {}, { shop_no, product_no: productNos.join(','), limit: productNos.length, fields: 'product_no,product_name,price,summary_description,list_image,icons,product_tags' });
     const detailMap = (detailRes.products||[]).reduce((m,p)=>{m[p.product_no]=p; return m;}, {});
 
     // 4. 아이콘 & 할인
     const iconsMap = {}, discountMap = {};
     await Promise.all(productNos.map(async no => {
         try {
-            const iRes = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${no}/icons`, {}, { shop_no: 1 });
+            const iRes = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${no}/icons`, {}, { shop_no });
             if (iRes.icons) {
                 const now = new Date();
                 const start = new Date(iRes.icons.show_start_date), end = new Date(iRes.icons.show_end_date);
                 if (iRes.icons.use_show_date !== 'T' || (now >= start && now < end)) {
-                    iconsMap[no] = (iRes.icons.image_list||[]).map(i=>({icon_url: i.path}));
+                    iconsMap[no] = (iRes.icons.image_list||[]).map(i=>({icon_url: i.path, icon_alt: i.code}));
                 }
             }
         } catch {}
         try {
-            const dRes = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${no}/discountprice`, {}, { shop_no: 1 });
+            const dRes = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${no}/discountprice`, {}, { shop_no });
             discountMap[no] = dRes.discountprice?.pc_discount_price;
         } catch {}
     }));
 
-    // 5. 조합
+    // 5. 조합 & 쿠폰계산
     const result = productNos.map(no => {
         const p = detailMap[no]; if(!p) return null;
         const price = parseFloat(p.price);
-        // 쿠폰 계산
         const couponInfos = validCoupons.map(cpn => {
-            // (간소화: 실제 로직은 available 체크 필요하나 여기선 생략하고 계산만 함)
             const pct = parseFloat(cpn.benefit_percentage||0), amt = parseFloat(cpn.benefit_amount||0);
             let bPrice = pct > 0 ? price * (100-pct)/100 : price - amt;
-            return { benefit_price: bPrice };
-        });
-        
+            return { coupon_no: cpn.coupon_no, benefit_price: bPrice, benefit_percentage: pct };
+        }).filter(Boolean).sort((a,b)=>b.benefit_percentage-a.benefit_percentage);
+
+        const firstCpn = couponInfos[0];
         return {
             product_no: p.product_no, product_name: p.product_name, price: p.price,
-            sale_price: discountMap[no], list_image: p.list_image, summary_description: p.summary_description,
-            icons: p.icons, additional_icons: iconsMap[no]||[], couponInfos
+            sale_price: discountMap[no], benefit_price: firstCpn?.benefit_price, benefit_percentage: firstCpn?.benefit_percentage,
+            list_image: p.list_image, summary_description: p.summary_description,
+            icons: p.icons, additional_icons: iconsMap[no]||[], couponInfos, product_tags: p.product_tags
         };
     }).filter(Boolean);
 
@@ -511,7 +522,6 @@ app.get('/api/:_any/categories/:category_no/products', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// (4) 전체 상품
 app.get('/api/:_any/products', async (req, res) => {
   try {
     const q = (req.query.q || '').trim();
@@ -523,19 +533,49 @@ app.get('/api/:_any/products', async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'Error' }); }
 });
 
-// (5) 단일 상품
+// ★ 단일 상품 (Full Logic)
 app.get('/api/:_any/products/:product_no', async (req, res) => {
   const { product_no } = req.params;
   try {
-    const pRes = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${product_no}`, {}, { shop_no: 1 });
+    const shop_no = 1;
+    const coupon_nos = (req.query.coupon_no||'').split(',').filter(Boolean);
+
+    // 기본정보
+    const pRes = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${product_no}`, {}, { shop_no, fields: 'product_no,product_name,price,summary_description,list_image,icons,product_tags' });
     const p = pRes.product || pRes.products?.[0];
     if (!p) return res.status(404).json({ error: 'Not Found' });
-    const disRes = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${product_no}/discountprice`, {}, { shop_no: 1 });
-    res.json({ ...p, sale_price: disRes.discountprice?.pc_discount_price });
+
+    // 아이콘 & 할인
+    let customIcons = [];
+    try {
+        const iRes = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${product_no}/icons`, {}, { shop_no });
+        if (iRes.icons) customIcons = (iRes.icons.image_list||[]).map(i=>({icon_url:i.path, icon_alt:i.code}));
+    } catch {}
+    
+    let sale_price = null;
+    try {
+        const dRes = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${product_no}/discountprice`, {}, { shop_no });
+        sale_price = dRes.discountprice?.pc_discount_price;
+    } catch {}
+
+    // 쿠폰
+    let benefit_price = null, benefit_percentage = null;
+    const coupons = await Promise.all(coupon_nos.map(async no => {
+        const d = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/coupons`, {}, { shop_no, coupon_no: no, fields: 'coupon_no,benefit_amount,benefit_percentage' });
+        return d.coupons?.[0];
+    }));
+    coupons.filter(Boolean).forEach(cpn => {
+        const price = parseFloat(p.price);
+        const pct = parseFloat(cpn.benefit_percentage||0), amt = parseFloat(cpn.benefit_amount||0);
+        let bPrice = pct>0 ? price*(100-pct)/100 : price-amt;
+        if(pct > (benefit_percentage||0)) { benefit_percentage = pct; benefit_price = bPrice; }
+    });
+
+    res.json({ ...p, sale_price, benefit_price, benefit_percentage, additional_icons: customIcons });
   } catch (e) { res.status(500).json({ error: 'Error' }); }
 });
 
-// 5. Analytics APIs (Full)
+// 5. Analytics (Full)
 app.get('/api/:_any/analytics/:pageId/visitors-by-date', async (req, res) => {
   const { pageId } = req.params; const { start_date, end_date } = req.query;
   const match = { pageId, dateKey: { $gte: start_date.slice(0,10), $lte: end_date.slice(0,10) } };

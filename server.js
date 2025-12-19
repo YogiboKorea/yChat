@@ -77,12 +77,13 @@ const LOGIN_BTN_HTML = `
 // ========== [시스템 프롬프트 설정] ==========
 function convertPromptLinks(promptText) { return promptText; }
 
+// ✅ [가독성 지침 강화]
 const basePrompt = `
 1. 역할 및 말투
 전문가 역할: 요기보(Yogibo) 브랜드의 전문 상담원입니다.
 존대 및 공손: 고객에게 항상 존댓말과 공손한 말투를 사용합니다.
 이모티콘 활용: 대화 중 적절히 이모티콘을 사용합니다.
-가독성: 답변 시 줄바꿈(Enter)을 자주 사용하여 읽기 편하게 작성하세요.
+가독성: 답변 시 줄바꿈(Enter)을 자주 사용하여 읽기 편하게 작성하세요. 문단 사이에는 빈 줄을 하나 더 넣으세요.
 
 2. ★ 답변 원칙 (매우 중요)
 제공된 [참고 정보]에 있는 내용으로만 답변하세요.
@@ -170,22 +171,25 @@ async function getGPT3TurboResponse(input, context = []) {
   } catch (e) { return "답변 생성 중 문제가 발생했습니다."; }
 }
 
-// ========== [유틸 함수] ==========
-function normalizeSentence(s) { return s.replace(/[?!！？]/g, "").replace(/없나요/g, "없어요").trim(); }
-function containsOrderNumber(s) { return /\d{8}-\d{7}/.test(s); }
+// ========== [★ 유틸 함수: 텍스트 포맷팅 (줄바꿈 + 링크)] ==========
+function formatResponseText(text) {
+  if (!text) return "";
 
-// ✅ https://zinee-world.tistory.com/339 (새로 추가됨)
-function linkify(text) {
+  // 1. 한국어 문장 끝(다/요/죠 등 + 마침표 + 공백) 뒤에 줄바꿈 2번 추가하여 문단 분리
+  let formatted = text.replace(/([가-힣]+)[.]\s/g, '$1.\n\n');
+
+  // 2. URL 링크 변환
   const urlRegex = /(https?:\/\/[^\s]+)/g;
-  return text.replace(urlRegex, function(url) {
-    // URL 끝에 마침표나 콤마가 붙어있으면 제거 (간단한 처리)
-    let cleanUrl = url;
-    if (url.endsWith('.') || url.endsWith(',')) {
-        cleanUrl = url.slice(0, -1);
-    }
+  formatted = formatted.replace(urlRegex, function(url) {
+    let cleanUrl = url.replace(/[.,]$/, ''); // URL 끝에 점이나 콤마가 붙으면 제거
     return `<a href="${cleanUrl}" target="_blank" style="color:#58b5ca; font-weight:bold; text-decoration:underline;">${cleanUrl}</a>`;
   });
+
+  return formatted;
 }
+
+function normalizeSentence(s) { return s.replace(/[?!！？]/g, "").replace(/없나요/g, "없어요").trim(); }
+function containsOrderNumber(s) { return /\d{8}-\d{7}/.test(s); }
 
 // ✅ [로그인 체크]
 function isUserLoggedIn(id) {
@@ -205,7 +209,7 @@ async function getOrderShippingInfo(id) {
   });
 }
 
-// ✅ [배송 상세 조회]
+// ✅ [배송 상세 조회 + 송장 링크]
 async function getShipmentDetail(orderId) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders/${orderId}/shipments`;
   try {
@@ -244,7 +248,7 @@ async function getShipmentDetail(orderId) {
 async function findAnswer(userInput, memberId) {
   const normalized = normalizeSentence(userInput);
 
-  // 1. 상담사 연결
+  // 1. 상담사 연결 (명시적 요청 시)
   if (normalized.includes("상담사 연결") || normalized.includes("상담원 연결")) {
     return { text: `상담사와 연결을 도와드리겠습니다.${COUNSELOR_LINKS_HTML}` };
   }
@@ -330,7 +334,7 @@ async function findAnswer(userInput, memberId) {
     if (types.includes(normalized)) {
       const key = `${normalized} 커버링 방법을 알고 싶어`;
       pendingCoveringContext = false;
-      if (companyData.covering?.[key]) return { text: companyData.covering[key].answer, videoHtml: `<iframe width="100%" height="auto" src="${companyData.covering[key].videoUrl}" frameborder="0" allowfullscreen></iframe>` };
+      if (companyData.covering?.[key]) return { text: formatResponseText(companyData.covering[key].answer), videoHtml: `<iframe width="100%" height="auto" src="${companyData.covering[key].videoUrl}" frameborder="0" allowfullscreen></iframe>` };
     }
   }
   if (normalized.includes("커버링") && normalized.includes("방법")) {
@@ -338,7 +342,7 @@ async function findAnswer(userInput, memberId) {
     const found = types.find(t => normalized.includes(t));
     if (found) {
       const key = `${found} 커버링 방법을 알고 싶어`;
-      if (companyData.covering?.[key]) return { text: companyData.covering[key].answer, videoHtml: `<iframe width="100%" height="auto" src="${companyData.covering[key].videoUrl}" frameborder="0" allowfullscreen></iframe>` };
+      if (companyData.covering?.[key]) return { text: formatResponseText(companyData.covering[key].answer), videoHtml: `<iframe width="100%" height="auto" src="${companyData.covering[key].videoUrl}" frameborder="0" allowfullscreen></iframe>` };
     } else {
       pendingCoveringContext = true;
       return { text: "어떤 커버링을 알고 싶으신가요? (맥스, 더블, 슬림 등)" };
@@ -350,7 +354,7 @@ async function findAnswer(userInput, memberId) {
     const types = ["더블", "맥스", "프라임", "슬림", "미디", "미니", "팟", "드롭", "라운저", "피라미드"];
     for (let t of types) {
       if (normalized.includes(t) && companyData.sizeInfo?.[`${t} 사이즈 또는 크기.`]) {
-        return { text: companyData.sizeInfo[`${t} 사이즈 또는 크기.`].description, imageUrl: companyData.sizeInfo[`${t} 사이즈 또는 크기.`].imageUrl };
+        return { text: formatResponseText(companyData.sizeInfo[`${t} 사이즈 또는 크기.`].description), imageUrl: companyData.sizeInfo[`${t} 사이즈 또는 크기.`].imageUrl };
       }
     }
   }
@@ -362,14 +366,10 @@ async function findAnswer(userInput, memberId) {
     else if (normalized.includes("프리미엄")) key = "프리미엄 비즈 에 대해 알고 싶어";
     else if (normalized.includes("스탠다드")) key = "스탠다드 비즈 에 대해 알고 싶어";
     
-    if (key && companyData.biz?.[key]) { return { text: companyData.biz[key].description }; }
+    if (key && companyData.biz?.[key]) { return { text: formatResponseText(companyData.biz[key].description) }; }
 
     return {
-      text: `요기보의 정품 비즈(충전재)는 3가지 종류가 있습니다. 😊<br><br>
-      1️⃣ <strong>스탠다드 비즈</strong>: 가장 기본적이고 대중적인 편안함<br>
-      2️⃣ <strong>프리미엄 비즈</strong>: 복원력과 내구성이 우수한 비즈<br>
-      3️⃣ <strong>프리미엄 플러스</strong>: 열에 강하고 탄탄한 최고급 신소재<br><br>
-      궁금하신 비즈 이름을 말씀해주시면 더 자세히 알려드릴게요!`
+      text: formatResponseText(`요기보의 정품 비즈(충전재)는 3가지 종류가 있습니다. 😊. 1️⃣ 스탠다드 비즈: 가장 기본적이고 대중적인 편안함. 2️⃣ 프리미엄 비즈: 복원력과 내구성이 우수한 비즈. 3️⃣ 프리미엄 플러스: 열에 강하고 탄탄한 최고급 신소재. 궁금하신 비즈 이름을 말씀해주시면 더 자세히 알려드릴게요!`)
     };
   }
 
@@ -378,9 +378,7 @@ async function findAnswer(userInput, memberId) {
       const maxInfo = companyData.sizeInfo?.["맥스 사이즈 또는 크기."];
       if (maxInfo) {
           return {
-              text: `요기보의 베스트셀러, **맥스(Max)**를 추천드려요! 👍<br><br>
-              가장 인기 있는 사이즈로, 침대/소파/의자 등 다양하게 활용 가능합니다.<br>
-              ${maxInfo.description}`,
+              text: formatResponseText(`요기보의 베스트셀러, 맥스(Max)를 추천드려요! 👍. 가장 인기 있는 사이즈로, 침대/소파/의자 등 다양하게 활용 가능합니다. ${maxInfo.description}`),
               imageUrl: maxInfo.imageUrl
           };
       }
@@ -389,15 +387,15 @@ async function findAnswer(userInput, memberId) {
   // (5) 기타 정보
   if (companyData.goodsInfo) {
     let b=null, m=6; for(let k in companyData.goodsInfo){const d=levenshtein.get(normalized,normalizeSentence(k));if(d<m){m=d;b=companyData.goodsInfo[k];}}
-    if(b) return { text: Array.isArray(b.description)?b.description.join("\n"):b.description, imageUrl: b.imageUrl };
+    if(b) return { text: formatResponseText(Array.isArray(b.description)?b.description.join("\n"):b.description), imageUrl: b.imageUrl };
   }
   if (companyData.homePage) {
     let b=null, m=5; for(let k in companyData.homePage){const d=levenshtein.get(normalized,normalizeSentence(k));if(d<m){m=d;b=companyData.homePage[k];}}
-    if(b) return { text: b.description };
+    if(b) return { text: formatResponseText(b.description) };
   }
   if (companyData.asInfo) {
     let b=null, m=8; for(let k in companyData.asInfo){const d=levenshtein.get(normalized,normalizeSentence(k));if(d<m){m=d;b=companyData.asInfo[k];}}
-    if(b) return { text: b.description };
+    if(b) return { text: formatResponseText(b.description) };
   }
 
   return null;
@@ -409,7 +407,7 @@ app.post("/chat", async (req, res) => {
   if (!message) return res.status(400).json({ error: "No message" });
 
   try {
-    // 1. 규칙(JSON/API) 답변 시도 (버튼 없음)
+    // 1. 규칙(JSON/API) 답변 시도
     const ruleAnswer = await findAnswer(message, memberId);
     if (ruleAnswer) {
       if (message !== "내 아이디") await saveConversationLog(memberId, message, ruleAnswer.text);
@@ -420,10 +418,10 @@ app.post("/chat", async (req, res) => {
     const docs = findRelevantContent(message);
     let gptAnswer = await getGPT3TurboResponse(message, docs);
     
-    // ✅ 링크 자동 변환 적용 (https://... -> <a href...>)
-    gptAnswer = linkify(gptAnswer);
+    // ✅ 포맷팅(줄바꿈 + 링크변환) 적용
+    gptAnswer = formatResponseText(gptAnswer);
 
-    // ✅ 검색 결과 없을 때만 상담사 버튼 부착
+    // ✅ 검색된 정보가 없을 때만 상담사 연결 버튼 부착
     if (docs.length === 0) {
         gptAnswer += FALLBACK_MESSAGE_HTML;
     }

@@ -675,7 +675,10 @@ app.post('/api/:_any/track', async (req, res) => {
   res.sendStatus(204);
 });
 
-// 4. Cafe24 연동 (카테고리/쿠폰/상품)
+// ✅ [복구완료] 4. Cafe24 연동 API (카테고리/쿠폰/상품)
+// 이 부분이 누락되어 404가 떴던 핵심 구간입니다.
+
+// (1) 전체 카테고리 조회
 app.get('/api/:_any/categories/all', async (req, res) => {
   try {
     const all = []; let offset = 0;
@@ -688,6 +691,7 @@ app.get('/api/:_any/categories/all', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// (2) 전체 쿠폰 조회
 app.get('/api/:_any/coupons', async (req, res) => {
   try {
     const all = []; let offset = 0;
@@ -700,6 +704,57 @@ app.get('/api/:_any/coupons', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// (3) 카테고리별 상품 목록 (쿠폰 로직 포함) - ★ 여기가 404 원인이었음
+app.get('/api/:_any/categories/:category_no/products', async (req, res) => {
+  const { category_no } = req.params;
+  try {
+    const limit = parseInt(req.query.limit, 10) || 100;
+    const offset = parseInt(req.query.offset, 10) || 0;
+    const shop_no = 1;
+
+    // 1. 카테고리 상품 목록 조회
+    const catRes = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/categories/${category_no}/products`, {}, { shop_no, limit, offset });
+    const productNos = (catRes.products || []).map(p => p.product_no);
+    
+    if (!productNos.length) return res.json([]);
+
+    // 2. 상품 상세 정보 조회 (한번에 여러개)
+    const detailRes = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/products`, {}, { 
+      shop_no, 
+      product_no: productNos.join(','), 
+      limit: productNos.length, 
+      fields: 'product_no,product_name,price,list_image,summary_description,icons,product_tags' 
+    });
+    
+    // 3. 즉시할인가 병렬 조회
+    const discountMap = {};
+    await Promise.all(productNos.map(async no => {
+      try {
+        const d = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${no}/discountprice`, {}, { shop_no });
+        discountMap[no] = d.discountprice?.pc_discount_price || null;
+      } catch (e) { discountMap[no] = null; }
+    }));
+
+    // 응답 조립
+    const result = (detailRes.products || []).map(p => ({
+      product_no: p.product_no,
+      product_name: p.product_name,
+      price: p.price,
+      sale_price: discountMap[p.product_no],
+      list_image: p.list_image,
+      summary_description: p.summary_description,
+      icons: p.icons,
+      product_tags: p.product_tags
+    }));
+    
+    res.json(result);
+  } catch (err) { 
+    console.error("카테고리 상품 로드 실패:", err.message);
+    res.status(500).json({ error: err.message }); 
+  }
+});
+
+// (4) 전체 상품 조회 (검색)
 app.get('/api/:_any/products', async (req, res) => {
   try {
     const q = (req.query.q || '').trim();
@@ -710,6 +765,28 @@ app.get('/api/:_any/products', async (req, res) => {
     res.json({ products: slim, total: d.total_count });
   } catch (e) { res.status(500).json({ error: '상품 조회 실패' }); }
 });
+
+// (5) 단일 상품 상세 (쿠폰/할인 포함)
+app.get('/api/:_any/products/:product_no', async (req, res) => {
+  const { product_no } = req.params;
+  try {
+    const shop_no = 1;
+    // 기본 정보
+    const pRes = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${product_no}`, {}, { 
+      shop_no,
+      fields: 'product_no,product_code,product_name,price,summary_description,list_image,icons,product_tags'
+    });
+    const p = pRes.product || pRes.products?.[0];
+    if (!p) return res.status(404).json({ error: 'Not Found' });
+    
+    // 할인가 정보
+    const disRes = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${product_no}/discountprice`, {}, { shop_no });
+    const sale_price = disRes.discountprice?.pc_discount_price || null;
+
+    res.json({ ...p, sale_price });
+  } catch (e) { res.status(500).json({ error: '상품 상세 조회 실패' }); }
+});
+
 
 // 5. ✅ [복구완료] 통계 API (방문자/클릭/디바이스/URL/상품/쿠폰) 
 app.get('/api/:_any/analytics/:pageId/visitors-by-date', async (req, res) => {
@@ -878,7 +955,7 @@ app.get('/api/:_any/analytics/:pageId/coupons-distinct', async (req, res) => {
     res.json(list);
   });
 });
-//
+
 // ========== [서버 실행] ==========
 (async function initialize() {
   try {

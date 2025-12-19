@@ -476,22 +476,68 @@ router.get('/api/:_any/analytics/:pageId/product-performance', async (req, res) 
   }
 });
 
-// 4-5. 기타 분석 (URL 목록, 쿠폰 목록 등)
+// ==================================================================
+// [4-5. 기타 분석 (URL 목록, 쿠폰 목록 등)] - 수정됨 🛠️
+// ==================================================================
+
 router.get('/api/:_any/analytics/:pageId/urls', async (req, res) => {
+  const { pageId } = req.params;
+  
   try {
-    const urls = await runDb(db => db.collection(`visits_${MALL_ID}`).distinct('pageUrl', { pageId: req.params.pageId }));
-    res.json(urls);
-  } catch (err) { res.status(500).json({ error: 'URL 조회 실패' }); }
+    // 1. 검색 조건 생성 (String ID와 ObjectId 둘 다 체크하여 데이터 누락 방지)
+    const query = { 
+      $or: [
+        { pageId: pageId }, // 문자열로 저장된 경우
+      ] 
+    };
+    
+    // pageId가 유효한 ObjectId 형식이라면 조건에 추가
+    if (ObjectId.isValid(pageId)) {
+      query.$or.push({ pageId: new ObjectId(pageId) });
+    }
+
+    // 2. visits 컬렉션에서 pageUrl 필드만 중복 제거하여 가져오기
+    const urls = await runDb(db => 
+      db.collection(`visits_${MALL_ID}`).distinct('pageUrl', query)
+    );
+
+    // 3. 데이터 정제 (null, undefined, 빈 문자열 제거 및 정렬)
+    const cleanUrls = urls
+      .filter(u => u && u.trim() !== '') // 유효한 URL만 남김
+      .sort(); // 가나다순 정렬
+
+    res.json(cleanUrls);
+  } catch (err) { 
+    console.error('https://web.dev/articles/fetch-api-error-handling', err);
+    // 에러나도 빈 배열을 보내 프론트가 멈추지 않게 처리
+    res.json([]); 
+  }
 });
 
 router.get('/api/:_any/analytics/:pageId/coupons-distinct', async (req, res) => {
+  const { pageId } = req.params;
   try {
-    const couponNos = await runDb(db => db.collection(`clicks_${MALL_ID}`).distinct('couponNo', { pageId: req.params.pageId, element: 'coupon' }));
-    res.json(couponNos);
-  } catch (err) { res.status(500).json({ error: '쿠폰 목록 조회 실패' }); }
+    // 쿠폰도 동일하게 String/ObjectId 모두 체크
+    const query = { 
+      element: 'coupon',
+      $or: [{ pageId: pageId }]
+    };
+    if (ObjectId.isValid(pageId)) {
+      query.$or.push({ pageId: new ObjectId(pageId) });
+    }
+
+    const couponNos = await runDb(db => 
+      db.collection(`clicks_${MALL_ID}`).distinct('couponNo', query)
+    );
+    
+    // 정제 후 반환
+    const cleanCoupons = couponNos.filter(c => c).sort();
+    res.json(cleanCoupons);
+  } catch (err) { 
+    console.error('[COUPON FETCH ERROR]', err);
+    res.json([]); 
+  }
 });
-
-
 // ==================================================================
 // [5] Cafe24 상품/쿠폰/카테고리 연동 (Data Fetching)
 // ==================================================================
@@ -765,3 +811,6 @@ router.get('/api/:_any/products/:product_no', async (req, res) => {
 });
 
 module.exports = router;
+
+
+

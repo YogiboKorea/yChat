@@ -69,7 +69,7 @@ ${COUNSELOR_LINKS_HTML}
 
 // ========== [시스템 프롬프트 설정] ==========
 function convertPromptLinks(promptText) {
-  return promptText; // 프롬프트 내 링크는 텍스트로 유지
+  return promptText;
 }
 
 const basePrompt = `
@@ -385,17 +385,20 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // (4) 비즈 안내
-  const bizKeys = ["스탠다드", "프리미엄", "프리미엄 플러스"];
-  if (normalized.includes("비즈") || bizKeys.some(k => normalized.includes(k))) {
-    const matched = bizKeys.find(k => normalized.includes(k));
-    if (matched) {
-      const key = `${matched} 비즈 에 대해 알고 싶어`;
-      if (companyData.biz && companyData.biz[key]) {
-        return { text: companyData.biz[key].description };
-      }
-    } else {
-      return { text: "어떤 비즈가 궁금하신가요? (스탠다드, 프리미엄 등)" };
+  // (4) 비즈 안내 (수정됨: 프리미엄 플러스 우선 순위)
+  if (normalized.includes("비즈") || normalized.includes("충전재") || normalized.includes("알갱이")) {
+    let targetKey = null;
+
+    if (normalized.includes("프리미엄 플러스")) {
+      targetKey = "프리미엄 플러스 비즈 에 대해 알고 싶어";
+    } else if (normalized.includes("프리미엄")) {
+      targetKey = "프리미엄 비즈 에 대해 알고 싶어";
+    } else if (normalized.includes("스탠다드")) {
+      targetKey = "스탠다드 비즈 에 대해 알고 싶어";
+    }
+
+    if (targetKey && companyData.biz && companyData.biz[targetKey]) {
+      return { text: companyData.biz[targetKey].description };
     }
   }
 
@@ -472,8 +475,6 @@ app.post("/chat", async (req, res) => {
 
     // ✅ [추가] RAG/GPT 답변 하단에 상담사 연결 팝업 유도 링크 부착
     gptAnswer = addSpaceAfterPeriod(gptAnswer); // 마침표 뒤 띄어쓰기 적용
-    
-    // 답변이 있거나 없거나, AI 응답에는 항상 상담 연결 유도
     gptAnswer += FALLBACK_MESSAGE_HTML;
 
     await saveConversationLog(memberId, message, gptAnswer);

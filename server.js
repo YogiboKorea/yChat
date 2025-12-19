@@ -8,7 +8,6 @@ const axios = require("axios");
 const { MongoClient, ObjectId } = require("mongodb");
 const levenshtein = require("fast-levenshtein");
 const ExcelJS = require("exceljs");
-const cron = require('node-cron');
 const nodemailer = require('nodemailer');
 const multer = require('multer');
 const ftp = require('basic-ftp');
@@ -25,7 +24,6 @@ const {
   FINETUNED_MODEL = "gpt-3.5-turbo", CAFE24_API_VERSION = "2024-06-01",
   PORT = 5000,
   SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS,
-  // FTP 설정
   FTP_HOST = 'yogibo.ftp.cafe24.com',
   FTP_USER = 'yogibo',
   FTP_PASS = 'korea2025!!',
@@ -205,7 +203,7 @@ async function getShipmentDetail(orderId) {
   return null;
 }
 
-// ========== [챗봇 findAnswer (개선된 로직)] ==========
+// ========== [챗봇 findAnswer (최신 로직)] ==========
 async function findAnswer(userInput, memberId) {
   const normalized = normalizeSentence(userInput);
   if (normalized.includes("상담사 연결") || normalized.includes("상담원 연결")) return { text: `상담사와 연결을 도와드리겠습니다.${COUNSELOR_LINKS_HTML}` };
@@ -356,7 +354,7 @@ app.post('/send-email', upload.single('attachment'), async(req,res)=>{ try{
 // [Temple 기능 통합구역 - 원본 로직 그대로 복원]
 // ============================================
 
-// 1. FTP Upload (Advanced Version - User Provided)
+// 1. FTP Upload
 const FTP_PUBLIC_URL_BASE = (FTP_PUBLIC_BASE || `http://${MALL_ID}.openhost.cafe24.com/web/img/temple`).replace(/\/+$/,'');
 
 app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => {
@@ -375,10 +373,8 @@ app.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) => 
     for (const base of baseCandidates) {
       try {
         try { await client.cd('/'); } catch {}
-        await client.cd(base);
-        await client.ensureDir(relSuffix);
-        finalPwd = await client.pwd();
-        await client.uploadFrom(localPath, filename);
+        await client.cd(base); await client.ensureDir(relSuffix);
+        finalPwd = await client.pwd(); await client.uploadFrom(localPath, filename);
         usedBase = base;
         const url = `${FTP_PUBLIC_URL_BASE}/uploads/${relSuffix}/${filename}`.replace(/([^:]\/)\/+/g, '$1');
         return res.json({ url, ftpBase: usedBase, ftpDir: finalPwd, ftpPath: `${finalPwd}/${filename}` });
@@ -484,7 +480,7 @@ function mountEventRoutes(basePath) {
 }
 
 mountEventRoutes('/eventTemple');
-// Alias for /events (Legacy Support)
+// Alias for /events
 app.use('/api/:_any/events', (req, res, next) => { req.url = req.url.replace('/events', '/eventTemple'); next(); });
 
 
@@ -851,120 +847,12 @@ app.get('/api/:_any/analytics/:pageId/product-clicks', async (req, res) => {
   await runDb(async (db) => { const docs = await db.collection(`prdClick_${MALL_ID}`).find(filter).sort({ clickCount: -1 }).toArray(); res.json(docs.map(d => ({ productNo: d.productNo, clicks: d.clickCount }))); });
 });
 
-// ========== [블랙프라이데이 & 스케줄러] ==========
-async function initializeEventData() {
-  console.log("🟡 BlackFriday Event Init...");
-  const data = [
-    { week: 1, startDate: new Date("2025-11-02T15:00:00Z"), endDate: new Date("2025-11-09T14:59:59Z"), probabilities: { day1_4: 0.0001, day5_6: 0.05 }, day7NthWinner: 100, winner: { userId: null, winDate: null } },
-    { week: 2, startDate: new Date("2025-11-16T15:00:00Z"), endDate: new Date("2025-11-23T14:59:59Z"), probabilities: { day1_4: 0.0001, day5_6: 0.05 }, day7NthWinner: 100, winner: { userId: null, winDate: null } },
-    { week: 3, startDate: new Date("2025-11-23T15:00:00Z"), endDate: new Date("2025-11-30T14:59:59Z"), probabilities: { day1_4: 0.0001, day5_6: 0.05 }, day7NthWinner: 100, winner: { userId: null, winDate: null } }
-  ];
-  await runDb(async (db) => {
-    if(await db.collection('eventBlackF').countDocuments() === 0) await db.collection('eventBlackF').insertMany(data);
-  });
-}
-async function ensureIndexes() {
-  await runDb(async (db) => { try{ await db.collection('eventBlackEntry').createIndex({eventWeek:1, userId:1}, {unique:true}); }catch(e){} });
-}
-async function initializeOfflineSalesData() {
-  const data = [{dateString:"2025-11-06",targetAmount:5000000},{dateString:"2025-11-07",targetAmount:5500000},{dateString:"2025-11-08",targetAmount:7000000},{dateString:"2025-11-09",targetAmount:6000000},{dateString:"2025-11-10",targetAmount:5000000},{dateString:"2025-11-11",targetAmount:5200000},{dateString:"2025-11-12",targetAmount:5300000}];
-  await runDb(async (db) => {
-    const col = db.collection('blackOffData'); await col.createIndex({dateString:1},{unique:true});
-    const ops = data.map(i=>({updateOne:{filter:{dateString:i.dateString},update:{$setOnInsert:i},upsert:true}}));
-    await col.bulkWrite(ops);
-  });
-}
-function startSalesScheduler() {
-  cron.schedule('*/10 * * * *', async () => {
-    try {
-      let total=0, offset=0;
-      while(true) {
-        const d = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/orders`, {}, {shop_no:1, order_status:'N40', start_date:'2025-11-01', end_date: new Date().toISOString().split('T')[0], limit:100, offset});
-        if(!d.orders?.length) break;
-        d.orders.forEach(o => total += parseFloat(o.actual_order_amount)); offset += d.orders.length;
-      }
-      await runDb(async(db)=>db.collection('blackOnlineTotal').updateOne({eventName:'blackFriday2025'},{$set:{totalOnlineSales:total, lastCheckedTime:new Date()},$setOnInsert:{eventName:'blackFriday2025'}},{upsert:true}));
-    } catch(e){}
-  });
-}
-
-// 🎁 Event Check & Status
-app.get('/api/event/status', async (req, res) => {
-  const { userId } = req.query; if(!userId) return res.json({status:'not_running'});
-  await runDb(async(db)=>{
-    const now = new Date();
-    const evt = await db.collection('eventBlackF').findOne({startDate:{$lte:now}, endDate:{$gte:now}});
-    if(!evt) return res.json({status:'not_running'});
-    const log = await db.collection('eventBlackEntry').findOne({eventWeek:evt.week, userId});
-    res.json(log ? {status:'participated', result:log.result, week:evt.week} : {status:'not_participated', week:evt.week});
-  });
-});
-app.post('/api/event/check', async (req, res) => {
-  const { userId } = req.body; if(!userId) return res.status(400).json({error:'No ID'});
-  await runDb(async(db)=>{
-    const now = new Date();
-    const evt = await db.collection('eventBlackF').findOne({startDate:{$lte:now}, endDate:{$gte:now}});
-    if(!evt) return res.status(404).json({message:'No Event'});
-    
-    if(evt.winner?.userId) {
-        await db.collection('eventBlackEntry').insertOne({eventWeek:evt.week, userId, participationDate:new Date(), result:'lose'}).catch(()=>{});
-        return res.json({result:'lose', week:evt.week});
-    }
-    const log = await db.collection('eventBlackEntry').findOne({eventWeek:evt.week, userId});
-    if(log) return res.status(409).json({message:'Already joined'});
-
-    const days = Math.floor((now - new Date(evt.startDate))/(1000*60*60*24))+1;
-    let isWin = false;
-    if(days === 7) {
-        const todayStart = new Date(); todayStart.setHours(0,0,0,0);
-        const cnt = await db.collection('eventBlackEntry').countDocuments({eventWeek:evt.week, participationDate:{$gte:todayStart}});
-        if(cnt === evt.day7NthWinner-1) isWin = true;
-    } else {
-        const prob = days<=4 ? evt.probabilities.day1_4 : evt.probabilities.day5_6;
-        isWin = Math.random() < prob;
-    }
-    await db.collection('eventBlackEntry').insertOne({eventWeek:evt.week, userId, participationDate:new Date(), result:isWin?'win':'lose'});
-    if(isWin) await db.collection('eventBlackF').updateOne({_id:evt._id}, {$set:{'winner.userId':userId, 'winner.winDate':new Date()}});
-    res.json({result:isWin?'win':'lose', week:evt.week});
-  });
-});
-app.get('/api/event/download', async (req, res) => {
-  await runDb(async(db)=>{
-    const list = await db.collection('eventBlackEntry').find({}).sort({participationDate:-1}).toArray();
-    const wb = new ExcelJS.Workbook(); const ws = wb.addWorksheet('List');
-    ws.columns = [{header:'Date',key:'d'},{header:'ID',key:'u'},{header:'Result',key:'r'}];
-    list.forEach(r=>ws.addRow({d:r.participationDate, u:r.userId, r:r.result}));
-    res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition','attachment; filename="List.xlsx"');
-    await wb.xlsx.write(res); res.end();
-  });
-});
-app.get('/api/total-sales', async (req, res) => {
-  await runDb(async(db)=>{
-    const on = await db.collection('blackOnlineTotal').findOne({eventName:'blackFriday2025'});
-    const off = await db.collection('blackOffData').findOne({dateString:new Date().toISOString().split('T')[0]});
-    const onTotal = on?.totalOnlineSales||0;
-    const offTarget = off?.targetAmount||0;
-    
-    // 오프라인 시간비례 계산
-    const now = new Date(); const start = new Date(now); start.setHours(0,0,0,0);
-    const pct = (now-start)/86400000;
-    const offCurrent = Math.round(offTarget * (pct>1?1:pct));
-    
-    res.json({totalSales:onTotal+offCurrent, online:onTotal, offline:offCurrent});
-  });
-});
-
 // ========== [서버 실행] ==========
 (async function initialize() {
   try {
     console.log("🟡 서버 시작...");
     await getTokensFromDB();
     await updateSearchableData();
-    await initializeEventData();
-    await ensureIndexes();
-    await initializeOfflineSalesData();
-    startSalesScheduler();
     app.listen(PORT, () => console.log(`🚀 실행 완료: ${PORT}`));
   } catch (err) { console.error("❌ 초기화 오류:", err.message); process.exit(1); }
 })();

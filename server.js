@@ -137,7 +137,7 @@ async function apiRequest(method, url, data = {}, params = {}) {
   }
 }
 
-// ========== [RAG 로직] ==========
+// ========== [RAG 로직: 검색 정확도 강화] ==========
 async function updateSearchableData() {
   const client = new MongoClient(MONGODB_URI);
   try {
@@ -145,19 +145,45 @@ async function updateSearchableData() {
     const notes = await client.db(DB_NAME).collection("postItNotes").find({}).toArray();
     const dynamic = notes.map(n => ({ c: n.category || "etc", q: n.question, a: n.answer }));
     allSearchableData = [...staticFaqList, ...dynamic];
-    console.log(`✅ 검색 데이터 갱신: ${allSearchableData.length}개`);
+    console.log(`✅ 검색 데이터 갱신 완료: 총 ${allSearchableData.length}개 로드됨`);
   } catch (err) { console.error("데이터 갱신 실패:", err); } finally { await client.close(); }
 }
 
+// ✅ [핵심 수정] 검색 알고리즘 강화
 function findRelevantContent(msg) {
-  const kws = msg.split(/\s+/).filter(w => w.length > 1);
+  const kws = msg.split(/\s+/).filter(w => w.length > 1); // 1글자 제외
   if (!kws.length) return [];
-  const scored = allSearchableData.map(i => {
-    let s = 0; const q = (i.q||"").toLowerCase(), a = (i.a||"").toLowerCase();
-    kws.forEach(w => { if(q.includes(w)) s+=5; if(a.includes(w)) s+=2; });
-    return { ...i, score: s };
+
+  const scored = allSearchableData.map(item => {
+    let score = 0;
+    const q = (item.q || "").toLowerCase().replace(/\s+/g, ""); // 띄어쓰기 제거 후 비교
+    const a = (item.a || "").toLowerCase();
+    const cleanMsg = msg.toLowerCase().replace(/\s+/g, ""); // 띄어쓰기 제거한 사용자 메시지
+
+    // 1. [강력] 질문 전체가 포함되어 있으면 가산점 (예: "회원탈퇴"가 "회원탈퇴방법"에 포함)
+    if (q.includes(cleanMsg) || cleanMsg.includes(q)) {
+        score += 20; 
+    }
+
+    // 2. 키워드별 점수 계산
+    kws.forEach(w => {
+      const cleanW = w.toLowerCase();
+      // 질문(Q)에 키워드가 있으면 높은 점수 (가중치 10배)
+      if (item.q.toLowerCase().includes(cleanW)) score += 10;
+      
+      // 답변(A)에 키워드가 있으면 낮은 점수 (노이즈 방지)
+      if (item.a.toLowerCase().includes(cleanW)) score += 1;
+    });
+
+    return { ...item, score };
   });
-  return scored.filter(i => i.score > 0).sort((a, b) => b.score - a.score).slice(0, 4);
+
+  // ✅ [필터링] 점수가 10점 미만이면 과감히 버림 (엉뚱한 답변 방지)
+  // 질문에 키워드가 적어도 1개는 포함되어야 10점이 넘음.
+  return scored
+    .filter(i => i.score >= 10) 
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
 }
 
 async function getGPT3TurboResponse(input, context = []) {
@@ -175,13 +201,13 @@ async function getGPT3TurboResponse(input, context = []) {
 function formatResponseText(text) {
   if (!text) return "";
 
-  // 1. 한국어 문장 끝(다/요/죠 등 + 마침표 + 공백) 뒤에 줄바꿈 2번 추가하여 문단 분리
+  // 1. 한국어 문장 끝(다/요/죠 등 + 마침표 + 공백) 뒤에 줄바꿈 2번 추가
   let formatted = text.replace(/([가-힣]+)[.]\s/g, '$1.\n\n');
 
   // 2. URL 링크 변환
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   formatted = formatted.replace(urlRegex, function(url) {
-    let cleanUrl = url.replace(/[.,]$/, ''); // URL 끝에 점이나 콤마가 붙으면 제거
+    let cleanUrl = url.replace(/[.,]$/, ''); 
     return `<a href="${cleanUrl}" target="_blank" style="color:#58b5ca; font-weight:bold; text-decoration:underline;">${cleanUrl}</a>`;
   });
 

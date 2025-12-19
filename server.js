@@ -256,10 +256,11 @@ async function findAnswer(userInput, memberId) {
     return { text: `상담사와 연결을 도와드리겠습니다.${COUNSELOR_LINKS_HTML}` };
   }
 
-  // 2. 매장 안내
-  if (normalized.includes("오프라인 매장") || normalized.includes("매장안내")) {
-    return { text: `가까운 매장을 안내해 드립니다.<br><a href="/why.stroe.html" target="_blank">매장안내 바로가기</a>` };
-  }
+// 2. 매장 안내
+if (normalized.includes("오프라인 매장") || normalized.includes("매장안내")) {
+  // ✅ [수정] 링크 주소를 /why.stroe.html -> /why/store.html 로 변경
+  return { text: `가까운 매장을 안내해 드립니다.<br><a href="/why/store.html" target="_blank" style="color:#58b5ca; font-weight:bold; text-decoration:underline;">매장안내 바로가기</a>` };
+}
 
   // 3. 내 아이디 조회
   if (normalized.includes("내 아이디") || normalized.includes("아이디 조회")) {

@@ -77,7 +77,6 @@ const LOGIN_BTN_HTML = `
 // ========== [시스템 프롬프트 설정] ==========
 function convertPromptLinks(promptText) { return promptText; }
 
-// ✅ [가독성 지침 강화]
 const basePrompt = `
 1. 역할 및 말투
 전문가 역할: 요기보(Yogibo) 브랜드의 전문 상담원입니다.
@@ -137,7 +136,7 @@ async function apiRequest(method, url, data = {}, params = {}) {
   }
 }
 
-// ========== [RAG 로직: 검색 정확도 강화] ==========
+// ========== [RAG 로직] ==========
 async function updateSearchableData() {
   const client = new MongoClient(MONGODB_URI);
   try {
@@ -149,41 +148,29 @@ async function updateSearchableData() {
   } catch (err) { console.error("데이터 갱신 실패:", err); } finally { await client.close(); }
 }
 
-// ✅ [핵심 수정] 검색 알고리즘 강화
 function findRelevantContent(msg) {
-  const kws = msg.split(/\s+/).filter(w => w.length > 1); // 1글자 제외
+  const kws = msg.split(/\s+/).filter(w => w.length > 1);
   if (!kws.length) return [];
 
   const scored = allSearchableData.map(item => {
     let score = 0;
-    const q = (item.q || "").toLowerCase().replace(/\s+/g, ""); // 띄어쓰기 제거 후 비교
+    const q = (item.q || "").toLowerCase().replace(/\s+/g, "");
     const a = (item.a || "").toLowerCase();
-    const cleanMsg = msg.toLowerCase().replace(/\s+/g, ""); // 띄어쓰기 제거한 사용자 메시지
+    const cleanMsg = msg.toLowerCase().replace(/\s+/g, "");
 
-    // 1. [강력] 질문 전체가 포함되어 있으면 가산점 (예: "회원탈퇴"가 "회원탈퇴방법"에 포함)
-    if (q.includes(cleanMsg) || cleanMsg.includes(q)) {
-        score += 20; 
-    }
+    // 질문 전체 포함 시 가산점
+    if (q.includes(cleanMsg) || cleanMsg.includes(q)) score += 20;
 
-    // 2. 키워드별 점수 계산
     kws.forEach(w => {
       const cleanW = w.toLowerCase();
-      // 질문(Q)에 키워드가 있으면 높은 점수 (가중치 10배)
       if (item.q.toLowerCase().includes(cleanW)) score += 10;
-      
-      // 답변(A)에 키워드가 있으면 낮은 점수 (노이즈 방지)
       if (item.a.toLowerCase().includes(cleanW)) score += 1;
     });
 
     return { ...item, score };
   });
 
-  // ✅ [필터링] 점수가 10점 미만이면 과감히 버림 (엉뚱한 답변 방지)
-  // 질문에 키워드가 적어도 1개는 포함되어야 10점이 넘음.
-  return scored
-    .filter(i => i.score >= 10) 
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 3);
+  return scored.filter(i => i.score >= 10).sort((a, b) => b.score - a.score).slice(0, 3);
 }
 
 async function getGPT3TurboResponse(input, context = []) {
@@ -197,20 +184,15 @@ async function getGPT3TurboResponse(input, context = []) {
   } catch (e) { return "답변 생성 중 문제가 발생했습니다."; }
 }
 
-// ========== [★ 유틸 함수: 텍스트 포맷팅 (줄바꿈 + 링크)] ==========
+// ========== [유틸 함수: 텍스트 포맷팅] ==========
 function formatResponseText(text) {
   if (!text) return "";
-
-  // 1. 한국어 문장 끝(다/요/죠 등 + 마침표 + 공백) 뒤에 줄바꿈 2번 추가
-  let formatted = text.replace(/([가-힣]+)[.]\s/g, '$1.\n\n');
-
-  // 2. URL 링크 변환
+  let formatted = text.replace(/([가-힣]+)[.]\s/g, '$1.\n\n'); // 문단 줄바꿈
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   formatted = formatted.replace(urlRegex, function(url) {
     let cleanUrl = url.replace(/[.,]$/, ''); 
     return `<a href="${cleanUrl}" target="_blank" style="color:#58b5ca; font-weight:bold; text-decoration:underline;">${cleanUrl}</a>`;
   });
-
   return formatted;
 }
 
@@ -244,23 +226,18 @@ async function getShipmentDetail(orderId) {
 
     if (response.shipments && response.shipments.length > 0) {
       const shipment = response.shipments[0];
-      
       const carrierMap = {
         "0019": { name: "롯데 택배", url: "https://www.lotteglogis.com/home/reservation/tracking/linkView?InvNo=" },
         "0039": { name: "경동 택배", url: "https://kdexp.com/service/delivery/tracking.do?barcode=" },
         "0023": { name: "경동 택배", url: "https://kdexp.com/service/delivery/tracking.do?barcode=" }
       };
-
       const carrierInfo = carrierMap[shipment.shipping_company_code] || { name: shipment.shipping_company_name || "지정 택배사", url: "" };
-      
       shipment.shipping_company_name = carrierInfo.name;
-      
       if (shipment.tracking_no && carrierInfo.url) {
         shipment.tracking_url = carrierInfo.url + shipment.tracking_no;
       } else {
         shipment.tracking_url = null;
       }
-
       return shipment;
     }
     return null;
@@ -269,6 +246,7 @@ async function getShipmentDetail(orderId) {
     throw error;
   }
 }
+
 // ========== [★ 핵심 로직: findAnswer] ==========
 async function findAnswer(userInput, memberId) {
   const normalized = normalizeSentence(userInput);
@@ -290,13 +268,12 @@ async function findAnswer(userInput, memberId) {
       : { text: `로그인이 필요한 서비스입니다.<br>아래 버튼을 눌러 로그인해주세요.${LOGIN_BTN_HTML}` };
   }
 
-  // 4. 주문번호로 배송 조회 (이건 명확하니까 유지)
+  // 4. 주문번호로 배송 조회
   if (containsOrderNumber(normalized)) {
     if (isUserLoggedIn(memberId)) {
       try {
         const orderId = normalized.match(/\d{8}-\d{7}/)[0];
         const ship = await getShipmentDetail(orderId);
-        
         if (ship) {
             const status = ship.status || "배송 준비중";
             let trackingDisplay = "등록 대기중";
@@ -307,7 +284,6 @@ async function findAnswer(userInput, memberId) {
                     trackingDisplay = ship.tracking_no;
                 }
             }
-
             return {
                 text: `주문번호 <strong>${orderId}</strong>의 배송 상태는 <strong>${status}</strong>입니다.<br>
                        🚚 택배사: ${ship.shipping_company_name}<br>
@@ -321,23 +297,19 @@ async function findAnswer(userInput, memberId) {
     return { text: `정확한 조회를 위해 로그인이 필요합니다.${LOGIN_BTN_HTML}` };
   }
 
-  // 5. [수정됨] 일반 배송/주문 조회 (조건 강화!)
-  // 단순히 "배송"만 들어갔다고 조회하는 게 아니라, "조회", "확인", "언제" 같은 의도가 있어야만 실행
-  const isTrackingIntent = 
-    (normalized.includes("배송") || normalized.includes("주문")) && 
-    (normalized.includes("조회") || normalized.includes("확인") || normalized.includes("언제") || normalized.includes("어디"));
+  // 5. 일반 배송/주문 조회 (조건 강화: '조회', '확인', '언제' 등이 있어야만 실행)
+  const isTracking = (normalized.includes("배송") || normalized.includes("주문")) && 
+                     (normalized.includes("조회") || normalized.includes("확인") || normalized.includes("언제") || normalized.includes("어디"));
+  // 배송비, 주소 등은 제외
+  const isFAQ = normalized.includes("비용") || normalized.includes("비") || normalized.includes("주소") || normalized.includes("변경");
 
-  // "배송비", "배송주소" 같은 질문은 API 조회가 아니라 FAQ로 넘어가야 함
-  const isFAQIntent = normalized.includes("비용") || normalized.includes("비") || normalized.includes("주소") || normalized.includes("변경");
-
-  if (isTrackingIntent && !isFAQIntent && !containsOrderNumber(normalized)) {
+  if (isTracking && !isFAQ && !containsOrderNumber(normalized)) {
     if (isUserLoggedIn(memberId)) {
       try {
         const data = await getOrderShippingInfo(memberId);
         if (data.orders?.[0]) {
           const t = data.orders[0];
           const ship = await getShipmentDetail(t.order_id);
-          
           if (ship) {
              let trackingDisplay = "등록 대기중";
              if (ship.tracking_no) {
@@ -347,7 +319,6 @@ async function findAnswer(userInput, memberId) {
                      trackingDisplay = ship.tracking_no;
                  }
              }
-             
              return { text: `최근 주문(<strong>${t.order_id}</strong>)은 <strong>${ship.shipping_company_name}</strong> 배송 중입니다.<br>📄 송장번호: ${trackingDisplay}` };
           }
           return { text: "최근 주문 확인 중입니다." };
@@ -359,8 +330,6 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // [JSON 하드코딩 로직들] (그대로 유지)
-  // ... (나머지 로직들은 기존과 동일하게 아래에 배치)
   // [JSON 하드코딩 로직들]
 
   // (1) 커버링
@@ -394,8 +363,14 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // (3) 비즈 안내
+  // (3) 비즈 안내 (✅ 수정됨: 충전/방법/버리는법 등은 검색으로 넘김)
   if (normalized.includes("비즈") || normalized.includes("충전재") || normalized.includes("알갱이")) {
+    // 🚨 '충전', '방법', '리필', '버리', '폐기' 등이 있으면 하드코딩 건너뛰고 검색(RAG)으로 PASS
+    const actionKeywords = ["충전", "방법", "넣는", "보충", "리필", "세탁", "버리", "폐기", "교체", "구매", "파는"];
+    if (actionKeywords.some(keyword => normalized.includes(keyword))) {
+        return null; // 검색 로직으로 이동
+    }
+
     let key = null;
     if (normalized.includes("프리미엄 플러스")) key = "프리미엄 플러스 비즈 에 대해 알고 싶어";
     else if (normalized.includes("프리미엄")) key = "프리미엄 비즈 에 대해 알고 싶어";
@@ -403,6 +378,7 @@ async function findAnswer(userInput, memberId) {
     
     if (key && companyData.biz?.[key]) { return { text: formatResponseText(companyData.biz[key].description) }; }
 
+    // 단순 '비즈 종류' 문의에 대한 답변
     return {
       text: formatResponseText(`요기보의 정품 비즈(충전재)는 3가지 종류가 있습니다. 😊. 1️⃣ 스탠다드 비즈: 가장 기본적이고 대중적인 편안함. 2️⃣ 프리미엄 비즈: 복원력과 내구성이 우수한 비즈. 3️⃣ 프리미엄 플러스: 열에 강하고 탄탄한 최고급 신소재. 궁금하신 비즈 이름을 말씀해주시면 더 자세히 알려드릴게요!`)
     };
@@ -452,8 +428,6 @@ app.post("/chat", async (req, res) => {
     // 2. 규칙 없으면 RAG + GPT
     const docs = findRelevantContent(message);
     let gptAnswer = await getGPT3TurboResponse(message, docs);
-    
-    // ✅ 포맷팅(줄바꿈 + 링크변환) 적용
     gptAnswer = formatResponseText(gptAnswer);
 
     // ✅ 검색된 정보가 없을 때만 상담사 연결 버튼 부착

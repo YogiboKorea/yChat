@@ -55,7 +55,7 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }
 });
 
-// ========== [DB 유틸리티] ==========
+// ========== [DB 유틸리티 (공용)] ==========
 const runDb = async (callback) => {
   const client = new MongoClient(MONGODB_URI, { maxPoolSize: 10 });
   try {
@@ -79,6 +79,7 @@ const COUNSELOR_LINKS_HTML = `
 const FALLBACK_MESSAGE_HTML = `<br><br>---------------------------------<br><strong>원하시는 답변을 찾지 못하셨나요? 상담사 연결을 도와드릴까요?</strong>${COUNSELOR_LINKS_HTML}`;
 const LOGIN_BTN_HTML = `<div style="margin-top:15px;"><a href="/member/login.html" style="display: inline-block; padding: 10px 20px; background-color: #58b5ca; color: #ffffff; text-decoration: none; border-radius: 25px; font-weight: bold; font-size: 14px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">로그인 페이지 이동하기 →</a></div>`;
 
+// ========== [챗봇 시스템 프롬프트] ==========
 const YOGIBO_SYSTEM_PROMPT = `
 1. 역할 및 말투
 전문가 역할: 요기보(Yogibo) 브랜드의 전문 상담원입니다.
@@ -129,7 +130,7 @@ async function apiRequest(method, url, data = {}, params = {}) {
   }
 }
 
-// ========== [RAG & Chatbot Logic] ==========
+// ========== [챗봇 RAG 로직] ==========
 async function updateSearchableData() {
   await runDb(async (db) => {
     const notes = await db.collection("postItNotes").find({}).toArray();
@@ -479,7 +480,7 @@ function mountEventRoutes(basePath) {
 }
 
 mountEventRoutes('/eventTemple');
-// Alias for /events (Legacy Support)
+// ✅ [복구완료] 404 오류 해결: /api/yogibo/events -> /eventTemple 매핑
 app.use('/api/:_any/events', (req, res, next) => { req.url = req.url.replace('/events', '/eventTemple'); next(); });
 
 

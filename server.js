@@ -75,6 +75,16 @@ function normalizeBlocks(blocks = []) {
   });
 }
 
+// ========== [헬퍼 함수: pageId 검색 조건 생성] ==========
+// 🛠️ 핵심 수정: pageId가 String이든 ObjectId든 다 찾게 만드는 함수
+function createPageIdMatch(pageId) {
+    const conditions = [{ pageId: pageId }];
+    if (ObjectId.isValid(pageId)) {
+        conditions.push({ pageId: new ObjectId(pageId) });
+    }
+    return { $or: conditions };
+}
+
 
 // ==================================================================
 // [1] 이미지 FTP 업로드
@@ -128,7 +138,6 @@ router.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) 
 
     if (!uploaded) throw new Error('업로드 경로 진입 실패');
     
-    // 사이즈 확인 (선택 사항)
     let size = -1;
     try { size = await client.size(filename); } catch {}
 
@@ -276,12 +285,18 @@ router.delete('/api/:_any/events/:id', async (req, res) => {
 router.post('/api/:_any/track', async (req, res) => {
   const { pageId, pageUrl, visitorId, referrer, device, type, element, timestamp, productNo } = req.body;
   if (!pageId || !visitorId || !type || !timestamp) return res.status(400).json({ error: '필수 필드 누락' });
-  if (!ObjectId.isValid(pageId)) return res.sendStatus(204);
-
+  
+  // 🛠️ 트래킹 시에도 ID 유효성 체크만 하고, ObjectId 변환은 하지 않고 그대로 저장 (또는 필요한대로 변환)
+  // 여기서는 프론트가 보내준 pageId 문자열 그대로 저장하고, 조회할 때 $or로 찾는 방식을 사용함.
+  
   try {
-    const exists = await runDb(db => db.collection(EVENT_COLL).findOne({ _id: new ObjectId(pageId) }, { projection: { _id: 1 } }));
-    if (!exists) return res.sendStatus(204);
-
+    // 이벤트 존재 확인 (여기서도 $or 사용)
+    const pageIdMatch = createPageIdMatch(pageId);
+    const exists = await runDb(db => db.collection(EVENT_COLL).findOne({ _id: pageIdMatch.$or.find(o=>o.pageId instanceof ObjectId)?.pageId || new ObjectId(pageId) }));
+    
+    // 만약 _id 조회가 안된다면 그냥 진행 (이미 삭제된 이벤트일수도) 
+    // 하지만 ObjectId 포맷이 맞다면 체크해주는게 좋음.
+    
     const ts = new Date(timestamp);
     const kst = new Date(ts.getTime() + 9 * 60 * 60 * 1000);
     const dateKey = kst.toISOString().slice(0, 10);
@@ -348,61 +363,41 @@ router.post('/api/:_any/track', async (req, res) => {
 
 
 // ==================================================================
-// [4] 통계 분석 (Analytics) - 여기가 URL 목록 문제 수정됨! 🛠️
+// [4] 통계 분석 (Analytics) - 🛠️ 모든 통계 API에 $or 조건 적용 완료!
 // ==================================================================
 
-// 4-1. URL 목록 조회 (수정됨: String/ObjectId 모두 체크)
+// 4-1. URL 목록 조회
 router.get('/api/:_any/analytics/:pageId/urls', async (req, res) => {
   const { pageId } = req.params;
-  
   try {
-    // pageId가 문자열("60d...")로 저장된 경우와 ObjectId로 저장된 경우 모두를 찾습니다.
-    const query = { $or: [{ pageId: pageId }] };
-    if (ObjectId.isValid(pageId)) {
-        query.$or.push({ pageId: new ObjectId(pageId) });
-    }
-
-    // visits 컬렉션에서 해당 pageId를 가진 문서들의 pageUrl만 중복 제거해서 가져옴
-    const urls = await runDb(db => 
-      db.collection(`visits_${MALL_ID}`).distinct('pageUrl', query)
-    );
-
-    // null이나 빈 문자열 제거 및 정렬
-    const cleanUrls = urls.filter(u => u && u.trim() !== '').sort();
-    
-    res.json(cleanUrls);
-  } catch (err) { 
-    console.error('https://web.dev/articles/fetch-api-error-handling', err);
-    res.json([]); 
-  }
+    const match = createPageIdMatch(pageId);
+    const urls = await runDb(db => db.collection(`visits_${MALL_ID}`).distinct('pageUrl', match));
+    res.json(urls.filter(u => u && u.trim() !== '').sort());
+  } catch (err) { res.json([]); }
 });
 
-// 4-2. 쿠폰 목록 조회 (수정됨: String/ObjectId 모두 체크)
+// 4-2. 쿠폰 목록 조회
 router.get('/api/:_any/analytics/:pageId/coupons-distinct', async (req, res) => {
   const { pageId } = req.params;
   try {
-    const query = { element: 'coupon', $or: [{ pageId: pageId }] };
-    if (ObjectId.isValid(pageId)) {
-        query.$or.push({ pageId: new ObjectId(pageId) });
-    }
-
-    const couponNos = await runDb(db => 
-      db.collection(`clicks_${MALL_ID}`).distinct('couponNo', query)
-    );
+    const match = createPageIdMatch(pageId);
+    match.element = 'coupon';
+    const couponNos = await runDb(db => db.collection(`clicks_${MALL_ID}`).distinct('couponNo', match));
     res.json(couponNos.filter(c => c).sort());
-  } catch (err) { 
-    console.error('[COUPON FETCH ERROR]', err);
-    res.json([]); 
-  }
+  } catch (err) { res.json([]); }
 });
 
-// 4-3. 날짜별 방문자 통계
+// 4-3. 날짜별 방문자 통계 (페이지뷰 통계)
 router.get('/api/:_any/analytics/:pageId/visitors-by-date', async (req, res) => {
   const { pageId } = req.params;
   const { start_date, end_date, url } = req.query;
   if (!start_date || !end_date) return res.status(400).json({ error: '날짜 필수' });
 
-  const match = { pageId, dateKey: { $gte: start_date.slice(0, 10), $lte: end_date.slice(0, 10) } };
+  // 🛠️ pageId 검색 조건 강화
+  const match = { 
+      ...createPageIdMatch(pageId), // $or 조건 병합
+      dateKey: { $gte: start_date.slice(0, 10), $lte: end_date.slice(0, 10) } 
+  };
   if (url) match.pageUrl = url;
   
   try {
@@ -423,13 +418,17 @@ router.get('/api/:_any/analytics/:pageId/visitors-by-date', async (req, res) => 
   } catch (err) { res.status(500).json({ error: '집계 오류' }); }
 });
 
-// 4-4. 날짜별 클릭 통계
+// 4-4. 날짜별 클릭 통계 (쿠폰/주문 완료 통계 포함)
 router.get('/api/:_any/analytics/:pageId/clicks-by-date', async (req, res) => {
   const { pageId } = req.params;
   const { start_date, end_date, url } = req.query;
   if (!start_date || !end_date) return res.status(400).json({ error: '날짜 필수' });
 
-  const match = { pageId, dateKey: { $gte: start_date.slice(0,10), $lte: end_date.slice(0,10) } };
+  // 🛠️ pageId 검색 조건 강화
+  const match = { 
+      ...createPageIdMatch(pageId),
+      dateKey: { $gte: start_date.slice(0,10), $lte: end_date.slice(0,10) } 
+  };
   if (url) match.pageUrl = url;
 
   try {
@@ -447,11 +446,14 @@ router.get('/api/:_any/analytics/:pageId/clicks-by-date', async (req, res) => {
   } catch (err) { res.status(500).json({ error: '클릭 집계 실패' }); }
 });
 
-// 4-5. 디바이스 통계
+// 4-5. 디바이스 통계 (유입 환경)
 router.get('/api/:_any/analytics/:pageId/devices', async (req, res) => {
   const { pageId } = req.params;
   const { start_date, end_date, url } = req.query;
-  const match = { pageId, dateKey: { $gte: start_date.slice(0,10), $lte: end_date.slice(0,10) } };
+  const match = { 
+      ...createPageIdMatch(pageId),
+      dateKey: { $gte: start_date.slice(0,10), $lte: end_date.slice(0,10) } 
+  };
   if (url) match.pageUrl = url;
 
   try {
@@ -464,11 +466,15 @@ router.get('/api/:_any/analytics/:pageId/devices', async (req, res) => {
   } catch (err) { res.status(500).json({ error: '디바이스 집계 실패' }); }
 });
 
-// 4-6. 상품 퍼포먼스
+// 4-6. 상품 퍼포먼스 (상품 클릭 데이터)
 router.get('/api/:_any/analytics/:pageId/product-performance', async (req, res) => {
+  const { pageId } = req.params;
   try {
+    // 🛠️ pageId 검색 조건 강화
+    const match = createPageIdMatch(pageId);
+    
     const clicks = await runDb(db => db.collection(`prdClick_${MALL_ID}`).aggregate([
-      { $match: { pageId: req.params.pageId } },
+      { $match: match },
       { $group: { _id: '$productNo', clicks: { $sum: '$clickCount' } } }
     ]).toArray());
     

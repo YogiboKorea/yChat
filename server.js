@@ -348,16 +348,30 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // (3) 비즈 안내
-  if (normalized.includes("비즈") || normalized.includes("충전재")) {
+  // (4) 비즈 안내 (로직 강화)
+  if (normalized.includes("비즈") || normalized.includes("충전재") || normalized.includes("알갱이")) {
     let key = null;
+
     if (normalized.includes("프리미엄 플러스")) key = "프리미엄 플러스 비즈 에 대해 알고 싶어";
     else if (normalized.includes("프리미엄")) key = "프리미엄 비즈 에 대해 알고 싶어";
     else if (normalized.includes("스탠다드")) key = "스탠다드 비즈 에 대해 알고 싶어";
     
-    if (key && companyData.biz?.[key]) return { text: companyData.biz[key].description };
+    // 특정 비즈 설명이 있으면 출력
+    if (key && companyData.biz?.[key]) {
+        return { text: companyData.biz[key].description };
+    }
+
+    // ✅ [추가] 그냥 '비즈'만 물어본 경우 -> AI가 지어내지 않게 "요기보 정품 비즈 3종"을 강제로 답변
+    return {
+      text: `요기보의 정품 비즈(충전재)는 3가지 종류가 있습니다. 😊<br><br>
+      1️⃣ <strong>스탠다드 비즈</strong>: 가장 기본적이고 대중적인 편안함<br>
+      2️⃣ <strong>프리미엄 비즈</strong>: 스탠다드보다 복원력과 내구성이 우수<br>
+      3️⃣ <strong>프리미엄 플러스</strong>: 열에 강하고 탄탄한 최고급 신소재<br><br>
+      궁금하신 비즈 이름을 말씀해주시면 더 자세히 알려드릴게요! (예: "프리미엄 비즈 알려줘")`
+    };
   }
 
+  
   // (4) 기타 정보
   if (companyData.goodsInfo) {
     let b=null, m=6; for(let k in companyData.goodsInfo){const d=levenshtein.get(normalized,normalizeSentence(k));if(d<m){m=d;b=companyData.goodsInfo[k];}}

@@ -45,8 +45,8 @@ let allSearchableData = [...staticFaqList];
 // 1. 상담사 연결 (팝업)
 const COUNSELOR_LINKS_HTML = `
 <br><br>
-📮 <a href="javascript:void(0)" onclick="window.open('http://pf.kakao.com/_lxmZsxj/chat','kakao','width=500,height=600,scrollbars=yes');" style="color:#3b1e1e; font-weight:bold; text-decoration:underline;cursor:pointer;">카카오플친 연결하기 (팝업)</a><br>
-📮 <a href="javascript:void(0)" onclick="window.open('https://talk.naver.com/ct/wc4u67?frm=psf','naver','width=500,height=600,scrollbars=yes');" style="color:#03c75a; font-weight:bold; text-decoration:underline;cursor:pointer;">네이버톡톡 연결하기 (팝업)</a>
+📮 <a href="javascript:void(0)" onclick="window.open('http://pf.kakao.com/_lxmZsxj/chat','kakao','width=500,height=600,scrollbars=yes');" style="color:#3b1e1e; font-weight:bold; text-decoration:underline; cursor:pointer;">카카오플친 연결하기 (팝업)</a><br>
+📮 <a href="javascript:void(0)" onclick="window.open('https://talk.naver.com/ct/wc4u67?frm=psf','naver','width=500,height=600,scrollbars=yes');" style="color:#03c75a; font-weight:bold; text-decoration:underline; cursor:pointer;">네이버톡톡 연결하기 (팝업)</a>
 `;
 
 // 2. 답변 하단 기본 문구
@@ -74,7 +74,7 @@ const LOGIN_BTN_HTML = `
 </div>
 `;
 
-// ========== [시스템 프롬프트 설정] ==========
+// ========== [시스템 프롬프트 설정 (환각 방지 강화)] ==========
 function convertPromptLinks(promptText) { return promptText; }
 
 const basePrompt = `
@@ -89,13 +89,10 @@ const basePrompt = `
 [참고 정보]에 없는 내용은 솔직하게 모른다고 하고 상담원 연결을 권유하세요.
 없는 정보를 지어내면 해고됩니다.
 
-3. ★ 추천상품
-고객이 추천 상품을 원할경우 요기보의 대표상품 맥스를 추천 해주면되
-또한 나머지 추천 상품에 대해서도 사이즈 정보에 올라가 있는 제품 명을 기준으로
-추천 해서 사용하면 됩니다.
+3. ★ 추천 상품 가이드
+고객이 추천 상품을 원할 경우 요기보의 대표상품 '맥스(Max)'를 우선 추천하세요.
+또한 [참고 정보]에 있는 다른 제품들의 특징(사이즈, 용도)을 바탕으로 추천하세요.
 `;
-
-
 const YOGIBO_SYSTEM_PROMPT = convertPromptLinks(basePrompt);
 
 // ========== [데이터 로딩] ==========
@@ -107,7 +104,7 @@ try {
   }
 } catch (e) { console.error("companyData load fail", e); }
 
-// ========== [MongoDB 토큰 관리] ==========
+// ========== [MongoDB 토큰 관리 함수] ==========
 const tokenCollectionName = "tokens";
 async function getTokensFromDB() {
   const client = new MongoClient(MONGODB_URI);
@@ -195,19 +192,16 @@ async function getOrderShippingInfo(id) {
   });
 }
 
-// ✅ [수정] 배송 상세 + 송장번호 링크 생성
+// ✅ [배송 상세 조회 + 송장 링크]
 async function getShipmentDetail(orderId) {
   const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders/${orderId}/shipments`;
   try {
     const response = await apiRequest("GET", API_URL, {}, { shop_no: 1 });
-    
-    // 디버깅 로그
     console.log(`[배송조회] ${orderId}:`, JSON.stringify(response));
 
     if (response.shipments && response.shipments.length > 0) {
       const shipment = response.shipments[0];
       
-      // 택배사별 URL 매핑 정보
       const carrierMap = {
         "0019": { name: "롯데 택배", url: "https://www.lotteglogis.com/home/reservation/tracking/linkView?InvNo=" },
         "0039": { name: "경동 택배", url: "https://kdexp.com/service/delivery/tracking.do?barcode=" },
@@ -216,10 +210,8 @@ async function getShipmentDetail(orderId) {
 
       const carrierInfo = carrierMap[shipment.shipping_company_code] || { name: shipment.shipping_company_name || "지정 택배사", url: "" };
       
-      // 정보 주입
       shipment.shipping_company_name = carrierInfo.name;
       
-      // ✅ 송장번호가 있고 URL 패턴이 있으면 전체 추적 링크 생성
       if (shipment.tracking_no && carrierInfo.url) {
         shipment.tracking_url = carrierInfo.url + shipment.tracking_no;
       } else {
@@ -265,8 +257,6 @@ async function findAnswer(userInput, memberId) {
         
         if (ship) {
             const status = ship.status || "배송 준비중";
-            
-            // ✅ 송장번호 표시 및 링크 생성 (송장 있으면 링크 걸기)
             let trackingDisplay = "등록 대기중";
             if (ship.tracking_no) {
                 if (ship.tracking_url) {
@@ -299,7 +289,6 @@ async function findAnswer(userInput, memberId) {
           const ship = await getShipmentDetail(t.order_id);
           
           if (ship) {
-             // ✅ 최근 주문 조회 시에도 송장번호 링크 적용
              let trackingDisplay = "등록 대기중";
              if (ship.tracking_no) {
                  if (ship.tracking_url) {
@@ -353,31 +342,39 @@ async function findAnswer(userInput, memberId) {
     }
   }
 
-  // (4) 비즈 안내 (로직 강화)
+  // (3) 비즈 안내 (로직 강화: 환각 차단)
   if (normalized.includes("비즈") || normalized.includes("충전재") || normalized.includes("알갱이")) {
     let key = null;
-
     if (normalized.includes("프리미엄 플러스")) key = "프리미엄 플러스 비즈 에 대해 알고 싶어";
     else if (normalized.includes("프리미엄")) key = "프리미엄 비즈 에 대해 알고 싶어";
     else if (normalized.includes("스탠다드")) key = "스탠다드 비즈 에 대해 알고 싶어";
     
-    // 특정 비즈 설명이 있으면 출력
-    if (key && companyData.biz?.[key]) {
-        return { text: companyData.biz[key].description };
-    }
+    if (key && companyData.biz?.[key]) { return { text: companyData.biz[key].description }; }
 
-    // ✅ [추가] 그냥 '비즈'만 물어본 경우 -> AI가 지어내지 않게 "요기보 정품 비즈 3종"을 강제로 답변
+    // ✅ 강제 정답 반환 (AI 생성 차단)
     return {
       text: `요기보의 정품 비즈(충전재)는 3가지 종류가 있습니다. 😊<br><br>
-      1️⃣ <strong>스탠다드 비즈</strong>: 전세계 빈백소파에 가장 많이 사용 되는 충전재입니다. 편안함과 부드러운 사용감에 초점이 맞춰져 있어요. Yogibo의 트랜스포밍 기능을 사용하는데 최적화 되어있는 비즈입니다.<br>
-      2️⃣ <strong>프리미엄 비즈</strong>: Yogibo에서 개발하여, 국내 독점으로 사용하고 있는 신소재(HRF)에요. 스탠다드 비즈의 부드러움과 편안함을 유지하고, 복원력과 내구성은 월등히 업그레이드 한 비즈입니다.<br>
-      3️⃣ <strong>프리미엄 플러스</strong>:스탠다드 비즈 대비 복원력과 내구성이 10배 이상 업그레이드 된 차세대 비즈에요. 집 뿐만 아니라 많은 사람들이 이용하는 공용 공간에 최적화된 비즈입니다.<br><br>
-      궁금하신 비즈 이름을 말씀해주시면 더 자세히 알려드릴게요! (예: "프리미엄 비즈 알려줘")`
+      1️⃣ <strong>스탠다드 비즈</strong>: 가장 기본적이고 대중적인 편안함<br>
+      2️⃣ <strong>프리미엄 비즈</strong>: 복원력과 내구성이 우수한 비즈<br>
+      3️⃣ <strong>프리미엄 플러스</strong>: 열에 강하고 탄탄한 최고급 신소재<br><br>
+      궁금하신 비즈 이름을 말씀해주시면 더 자세히 알려드릴게요!`
     };
   }
 
-  
-  // (4) 기타 정보
+  // (4) 추천 상품 (규칙 추가)
+  if (normalized.includes("추천") || normalized.includes("인기")) {
+      const maxInfo = companyData.sizeInfo?.["맥스 사이즈 또는 크기."];
+      if (maxInfo) {
+          return {
+              text: `요기보의 베스트셀러, **맥스(Max)**를 추천드려요! 👍<br>
+              가장 인기 있는 사이즈로, 침대/소파/의자 등 다양하게 활용 가능합니다.<br><br>
+              ${maxInfo.description}`,
+              imageUrl: maxInfo.imageUrl
+          };
+      }
+  }
+
+  // (5) 기타 정보
   if (companyData.goodsInfo) {
     let b=null, m=6; for(let k in companyData.goodsInfo){const d=levenshtein.get(normalized,normalizeSentence(k));if(d<m){m=d;b=companyData.goodsInfo[k];}}
     if(b) return { text: Array.isArray(b.description)?b.description.join("\n"):b.description, imageUrl: b.imageUrl };

@@ -42,27 +42,8 @@ const upload = multer({
 });
 if (!fs.existsSync(path.join(__dirname, 'uploads'))) fs.mkdirSync(path.join(__dirname, 'uploads'));
 
-// ✅ 상품 데이터 (추천 시스템용 하드코딩 데이터)
-const yogiboProducts = [
-    { id: "max", name: "요기보 맥스", category: "소파", price: 389000, features: ["2인용", "침대대용", "눕기"], 
-      useCase: ["TV", "낮잠", "게임"], productUrl: "/product/요기보-맥스/39/category/427/display/1/" },
-    { id: "midi", name: "요기보 미디", category: "소파", price: 329000, features: ["1인용", "원룸", "가성비"], 
-      useCase: ["독서", "휴식", "게임"], productUrl: "https://yogibo.kr/product/%EC%9A%94%EA%B8%B0%EB%B3%B4-%EB%AF%B8%EB%8B%88/54/category/507/display/1/" },
-    { id: "mini", name: "요기보 미니", category: "소파", price: 229000, features: ["1인용", "소형", "아이들"],
-       useCase: ["보조의자", "아이방"], productUrl: "https://yogibo.kr/product/%EC%9A%94%EA%B8%B0%EB%B3%B4-%EC%84%9C%ED%8F%AC%ED%8A%B8/83/category/427/display/1/" },
-    { id: "support", name: "요기보 서포트", category: "악세서리", price: 179000, features: ["등받이", "팔걸이", "수유쿠션"], 
-      useCase: ["소파보조", "독서", "수유"], productUrl: "https://yogibo.kr/product/%EC%9A%94%EA%B8%B0%EB%B3%B4-%EB%A1%A4-%EB%A7%A5%EC%8A%A4/89/category/507/display/1/" },
-    { id: "roll", name: "요기보 롤 맥스", category: "악세서리", price: 199000, features: ["바디필로우", "긴베개"], 
-      useCase: ["수면", "등받이"], productUrl: "https://yogibo.kr/product/detail.html?product_no=127" },
-    { id: "lounger", name: "요기보 라운저", category: "소파", price: 269000, features: ["1인용", "등받이형", "게임"],
-       useCase: ["게임", "영화"], productUrl: "https://yogibo.kr/product/%EC%9A%94%EA%B8%B0%EB%B3%B4-%EB%9D%BC%EC%9A%B4%EC%A0%80/464/category/427/display/1/" },
-    { id: "shorty", name: "요기보 슬림", category: "소파", price: 319000, features: ["1인용", "슬림", "공간절약"], 
-      useCase: ["원룸", "휴식"], productUrl: "https://yogibo.kr/product/%EC%9A%94%EA%B8%B0%EB%B3%B4-%EC%8A%AC%EB%A6%BC/450/category/427/display/1/" },
-    { id: "pod", name: "요기보 팟", category: "소파", price: 329000, features: ["1인용", "물방울", "감싸는"], 
-      useCase: ["독서", "명상"], productUrl: "https://yogibo.kr/product/%EC%9A%94%EA%B8%B0%EB%B3%B4-%ED%8C%9F/67/category/427/display/1/ "},
-      { id: "pyramid", name: "요기보 피라미드", category: "소파", price: 169000, features: ["1인용", "어린이", "아이들"], 
-        useCase: ["독서", "명상"], productUrl: "https://yogibo.kr/product/%EC%9A%94%EA%B8%B0%EB%B3%B4-%ED%94%BC%EB%9D%BC%EB%AF%B8%EB%93%9C/70/category/427/display/1/ "},      
-];
+// ★ [수정됨] 하드코딩 제거: Cafe24 API에서 받아와 채워넣을 빈 배열 선언
+let yogiboProducts = [];
 
 // ✅ 전역 변수
 let pendingCoveringContext = false;
@@ -138,6 +119,59 @@ async function saveTokensToDB(at, rt) {
   } finally { await client.close(); }
 }
 async function refreshAccessToken() { await getTokensFromDB(); return accessToken; }
+
+// Cafe24 API 공통
+async function apiRequest(method, url, data = {}, params = {}) {
+    try {
+      const res = await axios({ method, url, data, params, headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json', 'X-Cafe24-Api-Version': CAFE24_API_VERSION } });
+      return res.data;
+    } catch (error) {
+      if (error.response?.status === 401) { await refreshAccessToken(); return apiRequest(method, url, data, params); }
+      throw error;
+    }
+}
+
+// ★ [수정됨] Cafe24 API를 호출하여 상품 데이터를 추천 엔진 규격에 맞게 동기화하는 함수
+async function fetchProductsFromCafe24() {
+  try {
+    console.log("🟡 Cafe24에서 추천 상품 데이터를 동기화하는 중...");
+    
+    // 진열(display) 및 판매(selling) 중인 상품 호출
+    const response = await apiRequest("GET", `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/products`, {}, {
+      display: "T",
+      selling: "T",
+      limit: 100 // 필요 시 개수 조정
+    });
+
+    if (response && response.products) {
+      yogiboProducts = response.products.map(prod => {
+        // 상품명 기반으로 카테고리 임시 분류 (추후 필요시 Cafe24 카테고리 API 연동 가능)
+        let category = "소파";
+        if (prod.product_name.includes("서포트") || prod.product_name.includes("롤") || prod.product_name.includes("쿠션")) {
+          category = "악세서리";
+        }
+
+        // Cafe24 상품 요약설명(summary_description)을 콤마로 분리해 특징(features)과 용도(useCase)로 파싱한다고 가정
+        const rawDescription = prod.summary_description || prod.simple_description || "";
+        const keywords = rawDescription.split(",").map(k => k.trim()).filter(k => k);
+
+        return {
+          id: prod.product_code || prod.product_no.toString(),
+          name: prod.product_name,
+          category: category,
+          price: parseInt(prod.price || 0),
+          features: keywords.length > 0 ? keywords : ["편안함", "빈백"], // 데이터 없을 시 기본값
+          useCase: keywords.length > 0 ? keywords : ["휴식", "인테리어"], // 데이터 없을 시 기본값
+          productUrl: `https://yogibo.kr/product/detail.html?product_no=${prod.product_no}`
+        };
+      });
+
+      console.log(`✅ [상품 동기화 완료] Cafe24에서 총 ${yogiboProducts.length}개의 상품을 캐싱했습니다.`);
+    }
+  } catch (error) {
+    console.error("❌ Cafe24 상품 데이터 동기화 실패:", error.message);
+  }
+}
 
 // ★ [핵심] 모든 데이터를 '검색 가능한 형태'로 통합하는 함수 (RAG)
 async function updateSearchableData() {
@@ -265,17 +299,6 @@ function normalizeSentence(s) { return s.replace(/[?!！？]/g, "").replace(/없
 function containsOrderNumber(s) { return /\d{8}-\d{7}/.test(s); }
 function isUserLoggedIn(id) { return id && id !== "null" && id !== "undefined" && String(id).trim() !== ""; }
 
-// Cafe24 API 공통
-async function apiRequest(method, url, data = {}, params = {}) {
-    try {
-      const res = await axios({ method, url, data, params, headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json', 'X-Cafe24-Api-Version': CAFE24_API_VERSION } });
-      return res.data;
-    } catch (error) {
-      if (error.response?.status === 401) { await refreshAccessToken(); return apiRequest(method, url, data, params); }
-      throw error;
-    }
-}
-
 // 배송 조회 API
 async function getOrderShippingInfo(id) {
   const today = new Date(); const start = new Date(); start.setDate(today.getDate() - 14);
@@ -336,7 +359,7 @@ async function recommendProducts(userMsg, memberId) {
     const keywords = userMsg.toLowerCase();
     const purchaseHistory = await getMemberPurchaseHistory(memberId);
     
-    // 점수 계산
+    // 점수 계산 (Cafe24에서 동기화된 yogiboProducts 배열 사용)
     const scored = yogiboProducts.map(p => {
         let score = 0;
         let reasons = [];
@@ -364,13 +387,15 @@ async function recommendProducts(userMsg, memberId) {
             }
         }
 
-        if (p.id === "max" || p.id === "support") score += 10;
+        if (p.name.includes("맥스") || p.name.includes("서포트")) score += 10;
         return { ...p, score, reasons };
     });
 
     // 상위 3개 선정
     const top3 = scored.sort((a, b) => b.score - a.score).slice(0, 3);
     
+    if(top3.length === 0) return "원하시는 조건에 맞는 상품을 찾지 못했어요. 조금 더 구체적으로 말씀해주시겠어요?";
+
     // GPT에게 추천 멘트 작성 요청
     const prompt = `
     당신은 요기보 세일즈 매니저입니다.
@@ -394,7 +419,8 @@ async function recommendProducts(userMsg, memberId) {
       }, { headers: { Authorization: `Bearer ${API_KEY}` } });
       
         let answer = gptRes.data.choices[0].message.content;
-        const buttons = top3.map(p => `<a href="${p.productUrl}" target="_blank" class="consult-btn" style="background:#58b5ca; color:#fff; display:inline-block; margin:5px; text-decoration:none;">🛍️ ${p.name} 보러가기</a>`).join("");
+        const buttons = top3.map(p => `<a href="${p.productUrl}" 
+          target="_blank" class="consult-btn" style="background:#58b5ca; color:#fff; display:inline-block; margin:5px; text-decoration:none;">🛍️ ${p.name} 보러가기</a>`).join("");
         return answer + "<br><br>" + buttons;
     } catch (e) { return "추천 상품을 불러오는 중 오류가 발생했습니다."; }
 }
@@ -571,9 +597,9 @@ function findRelevantContent(msg) {
 
   // ✅ 임계값 상향: 약한 매칭 제거
   return scored
-    .filter(i => i.score >= 12)     // 기존 5 → 12
+    .filter(i => i.score >= 12)    // 기존 5 → 12
     .sort((a, b) => b.score - a.score)
-    .slice(0, 6);                   // top3 → top6
+    .slice(0, 6);                  // top3 → top6
 }
 
 
@@ -693,12 +719,26 @@ app.post("/postIt", async(req,res)=>{ try{const c=new MongoClient(MONGODB_URI);a
 // 7. 엑셀 다운로드
 app.get('/chatConnet', async(req,res)=>{ try{const c=new MongoClient(MONGODB_URI);await c.connect();const d=await c.db(DB_NAME).collection("conversationLogs").find({}).toArray();await c.close(); const wb=new ExcelJS.Workbook();const ws=wb.addWorksheet('Log');ws.columns=[{header:'ID',key:'m'},{header:'Date',key:'d'},{header:'Log',key:'c'}]; d.forEach(r=>ws.addRow({m:r.memberId||'Guest',d:r.date,c:JSON.stringify(r.conversation)})); res.setHeader("Content-Type","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");res.setHeader("Content-Disposition","attachment; filename=log.xlsx"); await wb.xlsx.write(res);res.end();}catch(e){res.status(500).send("Err")} });
 
-// 서버 실행
+// ★ [수정됨] 서버 실행 (초기화)
 (async function initialize() {
   try { 
       console.log("🟡 서버 시작..."); 
+      
+      // 1. DB에서 토큰 로드
       await getTokensFromDB(); 
+      
+      // 2. Cafe24에서 상품 데이터 동기화 (토큰 로드 이후에 실행해야 함)
+      await fetchProductsFromCafe24();
+      
+      // 3. RAG 통합 검색 데이터 준비
       await updateSearchableData(); 
+
+      // (선택) 1시간마다 최신 상품 정보로 자동 갱신
+      setInterval(fetchProductsFromCafe24, 1000 * 60 * 60);
+
       app.listen(PORT, () => console.log(`🚀 실행 완료: ${PORT}`)); 
-  } catch (err) { console.error("❌ 초기화 오류:", err.message); process.exit(1); }
+  } catch (err) { 
+      console.error("❌ 초기화 오류:", err.message); 
+      process.exit(1); 
+  }
 })();

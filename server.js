@@ -42,7 +42,7 @@ const upload = multer({
 });
 if (!fs.existsSync(path.join(__dirname, 'uploads'))) fs.mkdirSync(path.join(__dirname, 'uploads'));
 
-// ★ [수정됨] 하드코딩 제거: Cafe24 API에서 받아와 채워넣을 빈 배열 선언
+// ✅ 상품 데이터 (Cafe24 API로 동기화됨)
 let yogiboProducts = [];
 
 // ✅ 전역 변수
@@ -131,27 +131,20 @@ async function apiRequest(method, url, data = {}, params = {}) {
     }
 }
 
-// ★ [수정됨] Cafe24 API를 호출하여 상품 데이터를 추천 엔진 규격에 맞게 동기화하는 함수
+// ★ Cafe24 추천 상품 동기화 함수
 async function fetchProductsFromCafe24() {
   try {
     console.log("🟡 Cafe24에서 추천 상품 데이터를 동기화하는 중...");
-    
-    // 진열(display) 및 판매(selling) 중인 상품 호출
     const response = await apiRequest("GET", `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/products`, {}, {
-      display: "T",
-      selling: "T",
-      limit: 100 // 필요 시 개수 조정
+      display: "T", selling: "T", limit: 100 
     });
 
     if (response && response.products) {
       yogiboProducts = response.products.map(prod => {
-        // 상품명 기반으로 카테고리 임시 분류 (추후 필요시 Cafe24 카테고리 API 연동 가능)
         let category = "소파";
         if (prod.product_name.includes("서포트") || prod.product_name.includes("롤") || prod.product_name.includes("쿠션")) {
           category = "악세서리";
         }
-
-        // Cafe24 상품 요약설명(summary_description)을 콤마로 분리해 특징(features)과 용도(useCase)로 파싱한다고 가정
         const rawDescription = prod.summary_description || prod.simple_description || "";
         const keywords = rawDescription.split(",").map(k => k.trim()).filter(k => k);
 
@@ -160,44 +153,95 @@ async function fetchProductsFromCafe24() {
           name: prod.product_name,
           category: category,
           price: parseInt(prod.price || 0),
-          features: keywords.length > 0 ? keywords : ["편안함", "빈백"], // 데이터 없을 시 기본값
-          useCase: keywords.length > 0 ? keywords : ["휴식", "인테리어"], // 데이터 없을 시 기본값
+          features: keywords.length > 0 ? keywords : ["편안함", "빈백"],
+          useCase: keywords.length > 0 ? keywords : ["휴식", "인테리어"],
           productUrl: `https://yogibo.kr/product/detail.html?product_no=${prod.product_no}`
         };
       });
-
-      console.log(`✅ [상품 동기화 완료] Cafe24에서 총 ${yogiboProducts.length}개의 상품을 캐싱했습니다.`);
+      console.log(`✅ [상품 동기화 완료] Cafe24에서 총 ${yogiboProducts.length}개의 상품 캐싱 완료.`);
     }
   } catch (error) {
     console.error("❌ Cafe24 상품 데이터 동기화 실패:", error.message);
   }
 }
 
-// ★ [핵심] 모든 데이터를 '검색 가능한 형태'로 통합하는 함수 (RAG)
+// ★ [신규/수정] 422 에러 방지를 위한 3개월 단위 분할 매출 스케줄러
+async function syncCafe24Orders() {
+  console.log("🔄 [매출 스케줄러] Cafe24 온라인 매출 집계를 시작합니다...");
+  const client = new MongoClient(MONGODB_URI);
+
+  try {
+    await client.connect();
+    const db = client.db(DB_NAME);
+
+    // 로그에 남겨주신 2025-11-01 부터 오늘까지 조회합니다.
+    let currentStart = dayjs('2025-11-01');
+    const finalEnd = dayjs(); 
+    let totalFetched = 0;
+
+    // 현재 시작일이 최종 종료일보다 이전이거나 같을 때까지 반복
+    while (currentStart.isBefore(finalEnd) || currentStart.isSame(finalEnd, 'day')) {
+      
+      // 시작일로부터 2개월 뒤 말일까지만 끊어서 조회 (안전하게 90일 제한 회피)
+      let currentEnd = currentStart.add(2, 'month').endOf('month'); 
+      if (currentEnd.isAfter(finalEnd)) {
+        currentEnd = finalEnd;
+      }
+
+      const params = {
+        shop_no: 1,
+        order_status: 'N40', 
+        start_date: currentStart.format('YYYY-MM-DD'),
+        end_date: currentEnd.format('YYYY-MM-DD'),
+        limit: 100,
+        offset: 0
+      };
+
+      console.log(`📡 [매출 스케줄러] 데이터 요청 구간: ${params.start_date} ~ ${params.end_date}`);
+
+      const response = await apiRequest("GET", `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`, {}, params);
+      
+      if (response && response.orders && response.orders.length > 0) {
+        totalFetched += response.orders.length;
+        
+        // MongoDB에 업데이트 (upsert로 중복 주문 덮어쓰기)
+        for (const order of response.orders) {
+            await db.collection("cafe24Orders").updateOne(
+                { order_id: order.order_id },
+                { $set: { ...order, updatedAt: new Date() } },
+                { upsert: true }
+            );
+        }
+      }
+      // 다음 턴의 시작일은 현재 종료일의 다음 날
+      currentStart = currentEnd.add(1, 'day');
+    }
+    
+    console.log(`✅ [매출 스케줄러] 총 ${totalFetched}건의 주문 데이터를 성공적으로 동기화했습니다.`);
+  } catch (error) {
+    // 422 등 상세 에러 메시지 출력
+    console.error("❌ [매출 스케줄러] 오류 발생:", error.response ? JSON.stringify(error.response.data, null, 2) : error.message);
+  } finally {
+    await client.close();
+  }
+}
+
+// ★ 모든 데이터를 '검색 가능한 형태'로 통합하는 함수 (RAG)
 async function updateSearchableData() {
   const client = new MongoClient(MONGODB_URI);
   try {
     await client.connect();
     const db = client.db(DB_NAME);
     
-    // 1. DB에서 PostIt(일반문의, PDF) 데이터 가져오기
     const notes = await db.collection("postItNotes").find({}).toArray();
     const dbData = notes.map(n => ({ 
-        source: "DB", 
-        category: n.category || "general", 
-        q: n.question, 
-        a: n.answer 
+        source: "DB", category: n.category || "general", q: n.question, a: n.answer 
     }));
 
-    // 2. FAQ 파일 데이터 가져오기
     const faqData = staticFaqList.map(f => ({
-        source: "FAQ",
-        category: "faq",
-        q: f.q,
-        a: f.a
+        source: "FAQ", category: "faq", q: f.q, a: f.a
     }));
 
-    // 3. companyData.json 데이터도 검색 가능하게 변환
     let jsonData = [];
     if (companyData.covering) {
         Object.keys(companyData.covering).forEach(key => {
@@ -210,21 +254,17 @@ async function updateSearchableData() {
         });
     }
 
-    // 4. 모든 데이터 합치기
     allSearchableData = [...faqData, ...dbData, ...jsonData];
     
-    // 시스템 프롬프트 업데이트
     const prompts = await db.collection("systemPrompts").find({}).sort({createdAt: -1}).limit(1).toArray();
     if (prompts.length > 0) currentSystemPrompt = prompts[0].content; 
     
     console.log(`✅ [데이터 로드 완료] 총 ${allSearchableData.length}개의 지식 데이터가 준비되었습니다.`);
-
   } catch (err) { console.error("데이터 갱신 실패:", err); } finally { await client.close(); }
 }
 
-// ★ 통합 검색 로직 (5점 이상이면 후보군으로 선정)
 function findAllRelevantContent(msg) {
-  const kws = msg.split(/\s+/).filter(w => w.length > 1); // 2글자 이상 키워드
+  const kws = msg.split(/\s+/).filter(w => w.length > 1);
   if (!kws.length && msg.length < 2) return [];
 
   const scored = allSearchableData.map(item => {
@@ -233,12 +273,9 @@ function findAllRelevantContent(msg) {
     const a = (item.a || "").toLowerCase();
     const cleanMsg = msg.toLowerCase().replace(/\s+/g, "");
     
-    // 1. 질문 완전 일치 (100점)
     if (q === cleanMsg) score += 100;
-    // 2. 포함 관계 (50점)
     else if (q.includes(cleanMsg) || cleanMsg.includes(q)) score += 50;
     
-    // 3. 키워드 매칭 (질문: 20점, 답변: 5점)
     kws.forEach(w => {
       const cleanW = w.toLowerCase();
       if (item.q.toLowerCase().includes(cleanW)) score += 20;
@@ -248,15 +285,11 @@ function findAllRelevantContent(msg) {
     return { ...item, score };
   });
 
-   return scored
-   .filter(i => i.score >= 12)
-   .sort((a, b) => b.score - a.score)
-   .slice(0, 6);
+   return scored.filter(i => i.score >= 12).sort((a, b) => b.score - a.score).slice(0, 6);
 }
 
 async function getLLMResponse(input, context = []) {
   const txt = context.map(i => `Q: ${i.q}\nA: ${i.a}`).join("\n\n");
-
   const system = `${currentSystemPrompt}
 
 [운영 규칙 - 매우 중요]
@@ -271,27 +304,21 @@ ${txt || "정보 없음."}`;
     const res = await axios.post(
       OPEN_URL,
       {
-        model: FINETUNED_MODEL, // gpt-4o-mini 권장
-        temperature: 0.2,       // 추측/창작 억제
+        model: FINETUNED_MODEL,
+        temperature: 0.2,
         top_p: 0.9,
         messages: [
           { role: "system", content: system },
           { role: "user", content: input }
         ]
       },
-      {
-        headers: {
-          Authorization: `Bearer ${API_KEY}`,
-          "Content-Type": "application/json"
-        }
-      }
+      { headers: { Authorization: `Bearer ${API_KEY}`, "Content-Type": "application/json" } }
     );
     return res.data.choices?.[0]?.message?.content || "답변을 생성하지 못했습니다.";
   } catch (e) {
     return "답변 생성 중 문제가 발생했습니다.";
   }
 }
-
 
 // 유틸 함수들
 function formatResponseText(text) { return text || ""; }
@@ -320,7 +347,7 @@ async function getShipmentDetail(orderId) {
   } catch (error) { throw error; }
 }
 
-// ★ [신규] 회원 구매 이력 조회 (최근 2개월)
+// 회원 구매 이력 조회 (최근 2개월)
 async function getMemberPurchaseHistory(memberId) {
     if (!memberId || memberId === "null") return null;
     try {
@@ -329,11 +356,7 @@ async function getMemberPurchaseHistory(memberId) {
         twoMonthsAgo.setMonth(today.getMonth() - 2); 
 
         const response = await apiRequest("GET", `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`, {}, {
-            member_id: memberId,
-            start_date: twoMonthsAgo.toISOString().split('T')[0],
-            end_date: today.toISOString().split('T')[0],
-            limit: 20,
-            embed: "items" 
+            member_id: memberId, start_date: twoMonthsAgo.toISOString().split('T')[0], end_date: today.toISOString().split('T')[0], limit: 20, embed: "items" 
         });
 
         if (!response.orders) return null;
@@ -349,41 +372,33 @@ async function getMemberPurchaseHistory(memberId) {
         });
         return history;
     } catch (e) {
-        console.error("구매이력 조회 실패:", e.message);
-        return null;
+        console.error("구매이력 조회 실패:", e.message); return null;
     }
 }
 
-// ★ [신규] AI 상품 추천 엔진
+// AI 상품 추천 엔진
 async function recommendProducts(userMsg, memberId) {
     const keywords = userMsg.toLowerCase();
     const purchaseHistory = await getMemberPurchaseHistory(memberId);
     
-    // 점수 계산 (Cafe24에서 동기화된 yogiboProducts 배열 사용)
     const scored = yogiboProducts.map(p => {
         let score = 0;
         let reasons = [];
 
-        // (1) 키워드 매칭
         if (keywords.includes("게임") && p.useCase.includes("게임")) { score += 30; reasons.push("🎮 게임할 때 편해요"); }
         if (keywords.includes("잠") && p.useCase.includes("수면")) { score += 30; reasons.push("😴 꿀잠 보장"); }
         if (keywords.includes("원룸") && p.features.includes("원룸")) { score += 30; reasons.push("🏠 좁은 공간 활용 굿"); }
         if (keywords.includes("가족") && p.features.includes("2인용")) { score += 30; reasons.push("👨‍👩‍👧 가족과 함께"); }
 
-        // (2) 구매 이력 기반 추천 (Cross-Selling)
         if (purchaseHistory) {
             const boughtSofa = purchaseHistory.categories.includes("sofa");
             const boughtAccessory = purchaseHistory.categories.includes("accessory");
 
-            // 소파는 샀는데 악세서리가 없다면? -> 서포트 강력 추천
             if (boughtSofa && !boughtAccessory && p.category === "악세서리") {
-                score += 50; 
-                reasons.push("✨ 구매하신 빈백과 함께 쓰면 편안함이 2배!");
+                score += 50; reasons.push("✨ 구매하신 빈백과 함께 쓰면 편안함이 2배!");
             }
-            // 악세서리만 샀다면? -> 소파 추천
             if (!boughtSofa && boughtAccessory && p.category === "소파") {
-                score += 40;
-                reasons.push("✨ 가지고 계신 쿠션과 잘 어울리는 소파예요");
+                score += 40; reasons.push("✨ 가지고 계신 쿠션과 잘 어울리는 소파예요");
             }
         }
 
@@ -391,12 +406,10 @@ async function recommendProducts(userMsg, memberId) {
         return { ...p, score, reasons };
     });
 
-    // 상위 3개 선정
     const top3 = scored.sort((a, b) => b.score - a.score).slice(0, 3);
     
     if(top3.length === 0) return "원하시는 조건에 맞는 상품을 찾지 못했어요. 조금 더 구체적으로 말씀해주시겠어요?";
 
-    // GPT에게 추천 멘트 작성 요청
     const prompt = `
     당신은 요기보 세일즈 매니저입니다.
     고객 질문: "${userMsg}"
@@ -425,10 +438,6 @@ async function recommendProducts(userMsg, memberId) {
     } catch (e) { return "추천 상품을 불러오는 중 오류가 발생했습니다."; }
 }
 
-
-// ================= 상담사 연결 (전역 상수) =================
-
-// 상담사 버튼만 표시하는 HTML
 const COUNSELOR_BUTTONS_ONLY_HTML = `
 <div class="consult-container">
     <p style="font-weight:bold; margin-bottom:8px; font-size:14px; color:#e74c3c;">
@@ -443,80 +452,45 @@ const COUNSELOR_BUTTONS_ONLY_HTML = `
 </div>
 `;
 
-// 상담사 연결 트리거 문구
-const counselorTriggers = [
-  "상담사", "상담원",
-  "상담사 연결", "상담원 연결",
-  "사람 상담", "직원 연결",
-  "카톡 상담", "카카오 상담",
-  "네이버 상담", "톡톡 상담"
-];
+const counselorTriggers = ["상담사", "상담원", "상담사 연결", "상담원 연결", "사람 상담", "직원 연결", "카톡 상담", "카카오 상담", "네이버 상담", "톡톡 상담"];
 
-
-
-// ========== [규칙 기반 답변 & 추천 라우팅] ==========
 async function findAnswer(userInput, memberId) {
   const normalized = normalizeSentence(userInput);
 
-  // 1️⃣ 상담사 연결 요청 → 버튼만 반환
-  if (counselorTriggers.some(t => normalized.includes(t))) {
-    return { text: COUNSELOR_BUTTONS_ONLY_HTML };
-  }
+  if (counselorTriggers.some(t => normalized.includes(t))) return { text: COUNSELOR_BUTTONS_ONLY_HTML };
 
-  // 2️⃣ ★ 추천 질문 감지
   const recommendKeywords = ["추천", "뭐가 좋", "어떤게 좋", "골라", "선택", "뭐 사"];
   if (recommendKeywords.some(k => normalized.includes(k))) {
     const recommendResult = await recommendProducts(userInput, memberId);
     return { text: recommendResult };
   }
 
-  // 3️⃣ 주문번호 직접 입력 배송 조회
   if (containsOrderNumber(normalized)) {
     if (isUserLoggedIn(memberId)) {
       try {
         const orderId = normalized.match(/\d{8}-\d{7}/)[0];
         const ship = await getShipmentDetail(orderId);
-        if (ship) {
-          return {
-            text: `주문번호 <strong>${orderId}</strong>의 배송 상태는 <strong>${ship.status || "배송 준비중"}</strong>입니다.`
-          };
-        }
+        if (ship) return { text: `주문번호 <strong>${orderId}</strong>의 배송 상태는 <strong>${ship.status || "배송 준비중"}</strong>입니다.` };
         return { text: "해당 주문번호의 정보를 찾을 수 없습니다." };
-      } catch (e) {
-        return { text: "조회 중 오류가 발생했습니다." };
-      }
+      } catch (e) { return { text: "조회 중 오류가 발생했습니다." }; }
     }
     return { text: `조회를 위해 로그인이 필요합니다.${LOGIN_BTN_HTML}` };
   }
 
-  // 4️⃣ 일반 배송 조회 문장
-  const isTracking =
-    (normalized.includes("배송") || normalized.includes("주문")) &&
-    (normalized.includes("조회") || normalized.includes("확인") || normalized.includes("언제") || normalized.includes("어디"));
-
+  const isTracking = (normalized.includes("배송") || normalized.includes("주문")) && (normalized.includes("조회") || normalized.includes("확인") || normalized.includes("언제") || normalized.includes("어디"));
   if (isTracking) {
     if (isUserLoggedIn(memberId)) {
       try {
         const data = await getOrderShippingInfo(memberId);
-        if (data.orders?.[0]) {
-          return {
-            text: `최근 주문(<strong>${data.orders[0].order_id}</strong>)을 확인했습니다.`
-          };
-        }
+        if (data.orders?.[0]) return { text: `최근 주문(<strong>${data.orders[0].order_id}</strong>)을 확인했습니다.` };
         return { text: "최근 주문 내역이 없습니다." };
-      } catch (e) {
-        return { text: "조회 실패." };
-      }
+      } catch (e) { return { text: "조회 실패." }; }
     }
     return { text: `배송정보 확인을 위해 로그인이 필요합니다.${LOGIN_BTN_HTML}` };
   }
-
   return null;
 }
 
-
-
-// 대화 로그 저장
 async function saveConversationLog(mid, uMsg, bRes) {
     const client = new MongoClient(MONGODB_URI);
     try { 
@@ -528,36 +502,30 @@ async function saveConversationLog(mid, uMsg, bRes) {
         ); 
     } catch(e) { console.error(e); } finally { await client.close(); }
 }
-// ========== [메인 Chat] ==========
+
 app.post("/chat", async (req, res) => {
   const { message, memberId } = req.body;
   if (!message) return res.status(400).json({ error: "No message" });
 
   try {
-    // 1) 규칙 및 추천 확인
     const ruleAnswer = await findAnswer(message, memberId);
     if (ruleAnswer) {
       await saveConversationLog(memberId, message, ruleAnswer.text);
       return res.json(ruleAnswer);
     }
 
-    // 2) 통합 데이터 검색
     const docs = findAllRelevantContent(message);
-
     const bestScore = docs.length > 0 ? docs[0].score : 0;
 
-    // ✅ 3) 근거(문서) 없으면 LLM 호출 금지: 바로 핸드오프
     if (!docs || docs.length === 0 || bestScore < 12) {
       const fallback = `정확한 정보 확인이 필요합니다.${FALLBACK_MESSAGE_HTML}`;
       await saveConversationLog(memberId, message, fallback);
       return res.json({ text: fallback });
     }
 
-    // ✅ 4) LLM 답변 생성 (4o-mini 권장 + temperature 낮춤)
-    let gptAnswer = await getLLMResponse(message, docs); // <- 함수명 교체
+    let gptAnswer = await getLLMResponse(message, docs); 
     gptAnswer = formatResponseText(gptAnswer);
 
-    // ✅ 5) 혹시 모를 안전장치(모델이 NO_CONTEXT 등 반환 시)
     if (gptAnswer.includes("NO_CONTEXT")) {
       const fallback = `정확한 정보 확인이 필요합니다.${FALLBACK_MESSAGE_HTML}`;
       await saveConversationLog(memberId, message, fallback);
@@ -573,40 +541,7 @@ app.post("/chat", async (req, res) => {
   }
 });
 
-
-function findRelevantContent(msg) {
-  const kws = msg.split(/\s+/).filter(w => w.length > 1);
-  if (!kws.length) return [];
-
-  const cleanMsg = msg.toLowerCase().replace(/\s+/g, "");
-  const scored = allSearchableData.map(item => {
-    let score = 0;
-    const q = (item.q || "").toLowerCase().replace(/\s+/g, "");
-    const a = (item.a || "").toLowerCase();
-
-    if (q.includes(cleanMsg) || cleanMsg.includes(q)) score += 30;
-
-    kws.forEach(w => {
-      const cw = w.toLowerCase();
-      if ((item.q || "").toLowerCase().includes(cw)) score += 8;
-      if (a.includes(cw)) score += 1;
-    });
-
-    return { ...item, score };
-  });
-
-  // ✅ 임계값 상향: 약한 매칭 제거
-  return scored
-    .filter(i => i.score >= 12)    // 기존 5 → 12
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 6);                  // top3 → top6
-}
-
-
-
-// ========== [파일 및 데이터 관리 API] ==========
-
-// 1. PDF/텍스트 파일 업로드
+// 파일 및 데이터 관리 API들
 app.post("/chat_send", upload.single('file'), async (req, res) => {
     const { role, content } = req.body;
     const client = new MongoClient(MONGODB_URI);
@@ -637,7 +572,6 @@ app.post("/chat_send", upload.single('file'), async (req, res) => {
     } catch (e) { if (req.file) fs.unlink(req.file.path, () => {}); res.status(500).json({ error: e.message }); } finally { await client.close(); }
 });
 
-// 2. 이미지 지식 업로드
 app.post("/upload_knowledge_image", upload.single('image'), async (req, res) => {
     const { keyword } = req.body;
     const client = new MongoClient(MONGODB_URI);
@@ -659,7 +593,6 @@ app.post("/upload_knowledge_image", upload.single('image'), async (req, res) => 
     } catch (e) { if (req.file) fs.unlink(req.file.path, () => {}); ftpClient.close(); res.status(500).json({ error: e.message }); } finally { await client.close(); }
 });
 
-// 3. 게시글 수정
 app.put("/postIt/:id", upload.single('image'), async (req, res) => {
     const { id } = req.params; const { question, answer } = req.body; const file = req.file;
     const client = new MongoClient(MONGODB_URI); const ftpClient = new ftp.Client();
@@ -682,7 +615,6 @@ app.put("/postIt/:id", upload.single('image'), async (req, res) => {
     } catch (e) { if (file) fs.unlink(file.path, () => {}); ftpClient.close(); res.status(500).json({ error: e.message }); } finally { await client.close(); }
 });
 
-// 4. 게시글 삭제
 app.delete("/postIt/:id", async(req, res) => { 
     const { id } = req.params; const client = new MongoClient(MONGODB_URI); const ftpClient = new ftp.Client();
     try {
@@ -707,36 +639,35 @@ app.delete("/postIt/:id", async(req, res) => {
     } catch(e) { res.status(500).json({ error: e.message }); } finally { await client.close(); }
 });
 
-// 5. 게시글 조회
 app.get("/postIt", async (req, res) => {
     const p = parseInt(req.query.page)||1; const l=300;
     try { const c=new MongoClient(MONGODB_URI); await c.connect(); const f = req.query.category?{category:req.query.category}:{}; const n = await c.db(DB_NAME).collection("postItNotes").find(f).sort({_id:-1}).skip((p-1)*l).limit(l).toArray(); await c.close(); res.json({notes:n, currentPage:p}); } catch(e){res.status(500).json({error:e.message})}
 });
 
-// 6. 게시글 등록
 app.post("/postIt", async(req,res)=>{ try{const c=new MongoClient(MONGODB_URI);await c.connect(); await c.db(DB_NAME).collection("postItNotes").insertOne({...req.body,createdAt:new Date()}); await c.close(); await updateSearchableData(); res.json({message:"OK"})}catch(e){res.status(500).json({error:e.message})} });
 
-// 7. 엑셀 다운로드
 app.get('/chatConnet', async(req,res)=>{ try{const c=new MongoClient(MONGODB_URI);await c.connect();const d=await c.db(DB_NAME).collection("conversationLogs").find({}).toArray();await c.close(); const wb=new ExcelJS.Workbook();const ws=wb.addWorksheet('Log');ws.columns=[{header:'ID',key:'m'},{header:'Date',key:'d'},{header:'Log',key:'c'}]; d.forEach(r=>ws.addRow({m:r.memberId||'Guest',d:r.date,c:JSON.stringify(r.conversation)})); res.setHeader("Content-Type","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");res.setHeader("Content-Disposition","attachment; filename=log.xlsx"); await wb.xlsx.write(res);res.end();}catch(e){res.status(500).send("Err")} });
 
-// ★ [수정됨] 서버 실행 (초기화)
+// ★ 서버 실행 로직
 (async function initialize() {
   try { 
       console.log("🟡 서버 시작..."); 
       
-      // 1. DB에서 토큰 로드
+      // 1. DB에서 토큰부터 불러옵니다.
       await getTokensFromDB(); 
       
-      // 2. Cafe24에서 상품 데이터 동기화 (토큰 로드 이후에 실행해야 함)
+      // 2. 검색에 사용할 데이터와 추천 상품을 미리 로드합니다.
       await fetchProductsFromCafe24();
-      
-      // 3. RAG 통합 검색 데이터 준비
       await updateSearchableData(); 
 
-      // (선택) 1시간마다 최신 상품 정보로 자동 갱신
-      setInterval(fetchProductsFromCafe24, 1000 * 60 * 60);
-
+      // 3. 앱 실행
       app.listen(PORT, () => console.log(`🚀 실행 완료: ${PORT}`)); 
+
+      // ★ [신규 추가] 10분마다 분할 조회 스케줄러 실행
+      // 바로 한 번 실행하고 싶다면 syncCafe24Orders(); 주석을 풀어주세요.
+      syncCafe24Orders(); 
+      setInterval(syncCafe24Orders, 10 * 60 * 1000); 
+
   } catch (err) { 
       console.error("❌ 초기화 오류:", err.message); 
       process.exit(1); 

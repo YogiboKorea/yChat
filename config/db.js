@@ -2,7 +2,6 @@ const { MongoClient } = require("mongodb");
 const path = require("path");
 require("dotenv").config({ path: path.join(__dirname, "../.env") });
 
-const { MONGODB_URI, DB_NAME } = process.env;
 
 let client;
 let db;
@@ -12,6 +11,7 @@ async function connectDB() {
         return db;
     }
     try {
+        const { MONGODB_URI, DB_NAME } = process.env;
         client = new MongoClient(MONGODB_URI);
         await client.connect();
         db = client.db(DB_NAME);

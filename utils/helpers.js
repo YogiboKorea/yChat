@@ -46,8 +46,8 @@ const COUNSELOR_BUTTONS_ONLY_HTML = `
 </div>
 `;
 
-const FALLBACK_MESSAGE_HTML = \`<div style="margin-top: 10px;">\${COUNSELOR_LINKS_HTML}</div>\`;
-const LOGIN_BTN_HTML = \`<div style="margin-top:15px;"><a href="/member/login.html" class="consult-btn" style="background:#58b5ca; color:#fff; justify-content:center;">로그인 하러 가기 →</a></div>\`;
+const FALLBACK_MESSAGE_HTML = `<div style="margin-top: 10px;">${COUNSELOR_LINKS_HTML}</div>`;
+const LOGIN_BTN_HTML = `<div style="margin-top:15px;"><a href="/member/login.html" class="consult-btn" style="background:#58b5ca; color:#fff; justify-content:center;">로그인 하러 가기 →</a></div>`;
 
 module.exports = {
     formatResponseText,

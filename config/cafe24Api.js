@@ -1,6 +1,4 @@
 const axios = require("axios");
-const path = require("path");
-require("dotenv").config({ path: path.join(__dirname, "../.env") });
 const { getDB } = require("./db");
 
 const { ACCESS_TOKEN, REFRESH_TOKEN, CAFE24_MALLID, CAFE24_API_VERSION = "2025-12-01" } = process.env;

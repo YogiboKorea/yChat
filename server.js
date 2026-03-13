@@ -1,10 +1,11 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const path = require("path");
-const cors = require("cors");
-const compression = require("compression");
+// 모든 커스텀 모듈을 불러오기 전에 .env가 가장 먼저 메모리에 올라가야 함
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 
+const cors = require("cors");
+const compression = require("compression");
 const { connectDB } = require("./config/db");
 const { getTokensFromDB } = require("./config/cafe24Api");
 const { fetchProductsFromCafe24, syncCafe24Orders } = require("./services/cafe24Service");

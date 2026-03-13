@@ -1,6 +1,4 @@
 const axios = require("axios");
-const path = require("path");
-require("dotenv").config({ path: path.join(__dirname, "../.env") });
 
 const { OPEN_URL, API_KEY, FINETUNED_MODEL = "gpt-4o-mini" } = process.env;
 

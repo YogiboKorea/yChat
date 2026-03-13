@@ -88,30 +88,43 @@ async function syncCafe24Orders(memberId = null) {
 
   try {
     const today = dayjs();
-    const start = dayjs().subtract(6, 'month'); // 최근 6개월 치만 동기화
+    const sixMonthsAgo = dayjs().subtract(6, 'month');
 
-    const params = {
-      shop_no: 1,
-      member_id: memberId,
-      start_date: start.format('YYYY-MM-DD'),
-      end_date: today.format('YYYY-MM-DD'),
-      limit: 100,
-      embed: "items" // 상품 상세 정보도 같이 가져옴
-    };
-
-    const response = await apiRequest("GET", `https://${process.env.CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`, {}, params);
+    // Cafe24는 한 번 조회 시 너무 긴 기간을 허용하지 않거나(보통 90일),
+    // 특정 기준일로부터 6개월 이내만 조회 가능합니다.
+    // 안전하게 3개월씩 끊어서(총 2번) 조회
+    let currentEnd = today;
     
-    if (response && response.orders && response.orders.length > 0) {
-      for (const order of response.orders) {
-          await db.collection("cafe24Orders").updateOne(
-              { order_id: order.order_id },
-              { $set: { ...order, updatedAt: new Date() } },
-              { upsert: true }
-          );
-      }
-      console.log(`✅ [데이터 동기화] 회원(${memberId})의 주문 ${response.orders.length}건 갱신 완료.`);
-    } else {
-      console.log(`ℹ️ [데이터 동기화] 회원(${memberId})의 최근 주문 내역이 없습니다.`);
+    while (currentEnd.isAfter(sixMonthsAgo)) {
+        let currentStart = currentEnd.subtract(3, 'month');
+        if (currentStart.isBefore(sixMonthsAgo)) {
+            currentStart = sixMonthsAgo;
+        }
+
+        const params = {
+          shop_no: 1,
+          member_id: memberId,
+          start_date: currentStart.format('YYYY-MM-DD'),
+          end_date: currentEnd.format('YYYY-MM-DD'),
+          limit: 100,
+          embed: "items" 
+        };
+
+        const response = await apiRequest("GET", `https://${process.env.CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`, {}, params);
+        
+        if (response && response.orders && response.orders.length > 0) {
+          for (const order of response.orders) {
+              await db.collection("cafe24Orders").updateOne(
+                  { order_id: order.order_id },
+                  { $set: { ...order, updatedAt: new Date() } },
+                  { upsert: true }
+              );
+          }
+          console.log(`✅ [데이터 동기화] 회원(${memberId})의 ${currentStart.format('MM-DD')}~${currentEnd.format('MM-DD')} 기간 주문 갱신 완료.`);
+        }
+        
+        // 다음 루프를 위해 종료일을 갱신 (currentStart의 하루 전)
+        currentEnd = currentStart.subtract(1, 'day');
     }
   } catch (error) {
     if (error.response && typeof error.response.data === 'string' && error.response.data.includes("<html")) {
@@ -156,12 +169,14 @@ async function getMemberPurchaseHistory(memberId) {
     try {
         const history = { categories: [], products: [], colors: [] };
         let currentEnd = dayjs();
-        const oneYearAgo = dayjs().subtract(1, 'year');
+        // Cafe24 검색 가능 최대 기간인 6개월 전까지만 조회
+        const limitDate = dayjs().subtract(6, 'month');
 
-        while (currentEnd.isAfter(oneYearAgo)) {
+        while (currentEnd.isAfter(limitDate)) {
+            // 한 번에 최대 90일(3개월) 이내로 끊어서 조회
             let currentStart = currentEnd.subtract(3, 'month');
-            if (currentStart.isBefore(oneYearAgo)) {
-                currentStart = oneYearAgo;
+            if (currentStart.isBefore(limitDate)) {
+                currentStart = limitDate;
             }
 
             const response = await apiRequest("GET", `https://${process.env.CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`, {}, {
@@ -175,7 +190,9 @@ async function getMemberPurchaseHistory(memberId) {
             if (response && response.orders) {
                 response.orders.forEach(order => {
                     order.items.forEach(item => {
-                        history.products.push(item.product_name);
+                        // 중복 방지를 위해 확인 후 push (선택적)
+                        if (!history.products.includes(item.product_name)) history.products.push(item.product_name);
+                        
                         if (item.product_name.includes("맥스") || item.product_name.includes("미디") || item.product_name.includes("빈백")) history.categories.push("sofa");
                         if (item.product_name.includes("서포트") || item.product_name.includes("롤")) history.categories.push("accessory");
                         if (item.option_value) history.colors.push(item.option_value); 

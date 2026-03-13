@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>요기챗(YogiChat) 사용 가이드</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" />
+
+    <style>
+        :root {
+            --primary-color: #58b5ca;
+            --primary-dark: #4699ab;
+            --secondary-bg: #f8f9fa;
+            --card-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
+        }
+
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
+        }
+
+        /* 메인 컨테이너 */
+        .main-wrapper {
+            max-width: 900px;
+            margin: 40px auto;
+            background: #fff;
+            border-radius: 20px;
+            box-shadow: var(--card-shadow);
+            padding: 40px;
+            overflow: hidden;
+        }
+
+        /* 헤더 영역 */
+        .header-area {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #eee;
+        }
+
+        .header-area h3 {
+            font-weight: 700;
+            color: #2c3e50;
+            margin: 0;
+        }
+
+        .btn-custom {
+            border-radius: 50px;
+            padding: 10px 25px;
+            font-weight: 600;
+            transition: 0.3s;
+            border: none;
+            background-color: var(--primary-color);
+            color: white;
+            text-decoration: none;
+        }
+
+        .btn-custom:hover {
+            background-color: var(--primary-dark);
+            color: white;
+            text-decoration: none;
+        }
+
+        /* 안내 카드 리스트 */
+        .guide-item {
+            display: flex;
+            flex-direction: column;
+            background: #fff;
+            border: 1px solid #eee;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .guide-item:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+            border-color: #e1e4e8;
+        }
+
+        .guide-content h5 {
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 15px;
+            border-bottom: 2px solid var(--primary-color);
+            padding-bottom: 10px;
+            display: inline-block;
+        }
+
+        .guide-content p {
+            color: #555;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        .highlight-text {
+            color: #e74c3c;
+            font-weight: 600;
+        }
+
+        /* 목업 컨테이너 (스크린샷 느낌) */
+        .mockup-container {
+            background-color: #f4f7f6;
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid #e1e4e8;
+            margin-top: 15px;
+        }
+
+        /* 채팅 목업 스타일 */
+        .chat-mockup {
+            max-width: 400px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 20px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            border: 1px solid #eaeaea;
+        }
+
+        .chat-mockup-header {
+            background: var(--primary-color);
+            color: white;
+            padding: 15px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .chat-mockup-body {
+            padding: 20px;
+            background: #f9f9f9;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .bubble {
+            padding: 12px 16px;
+            border-radius: 15px;
+            font-size: 0.9rem;
+            max-width: 80%;
+            line-height: 1.4;
+        }
+
+        .bubble-user {
+            background: var(--primary-color);
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 5px;
+        }
+
+        .bubble-bot {
+            background: white;
+            color: #333;
+            align-self: flex-start;
+            border-bottom-left-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+            border: 1px solid #eee;
+        }
+
+        .chat-mockup-btn {
+            background: var(--primary-color);
+            color: white;
+            text-align: center;
+            padding: 8px;
+            border-radius: 8px;
+            margin-top: 10px;
+            display: block;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 0.85rem;
+        }
+
+        /* 관리자 목업 스타일 */
+        .admin-mockup {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .admin-box {
+            border: 1px dashed #ccc;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            background: #fafafa;
+            margin-top: 10px;
+            color: #666;
+        }
+
+        .admin-link-box {
+            background-color: #fcf8e3;
+            border-left: 4px solid #f1c40f;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-top: 40px;
+            font-size: 0.95rem;
+            color: #8a6d3b;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <div class="main-wrapper">
+
+            <div class="header-area">
+                <h3><i class="fa-solid fa-book" style="color:var(--primary-color);"></i> 요기챗(YogiChat) 사용 가이드</h3>
+                <a href="chat_send.html" class="btn btn-custom">
+                    <i class="fa-solid fa-gear mr-2"></i>관리자 페이지로 이동
+                </a>
+            </div>
+
+            <p class="text-muted mb-4 pb-2" style="font-size: 1.05rem;">
+                요기챗은 쇼핑몰 방문 고객에게 마치 실제 상담원과 대화하는 듯한 경험을 제공하는 <b>고도화된 AI 챗봇 솔루션</b>입니다.<br>아래 주요 기능들의 실제 작동 예시를 확인해 보세요.
+            </p>
+
+            <!-- 기능 1 -->
+            <div class="guide-item">
+                <div class="guide-content">
+                    <h5><i class="fa-solid fa-basket-shopping text-primary mr-2"></i>1. 스마트 상품 추천 기능</h5>
+                    <p>
+                        고객의 모호한 질문("허리 아픈데 어떤 게 좋아?")이나 요구사항을 AI가 분석하여 가장 적합한 상품을 찾습니다.
+                        고객의 이전 구매 이력과 <b>Cafe24 쇼핑몰에 등록된 카테고리 정보 및 상세 상품 데이터</b>를 종합적으로 바탕으로 분석해, 맞춤형 쇼핑 링크를 제안합니다.
+                    </p>
+
+                    <div class="mockup-container">
+                        <div class="chat-mockup">
+                            <div class="chat-mockup-header"><i class="fa-solid fa-robot"></i> 요기보 챗봇</div>
+                            <div class="chat-mockup-body">
+                                <div class="bubble bubble-user">허리 아플 때 쓰기 좋은 빈백 추천해줘</div>
+                                <div class="bubble bubble-bot">
+                                    고객님, 허리를 편안하게 지지할 수 있는 상품 세 가지를 찾아왔어요!<br>
+                                    <span class="chat-mockup-btn"><i class="fa-solid fa-bag-shopping"></i> 요기보 맥스
+                                        보러가기</span>
+                                    <span class="chat-mockup-btn"><i class="fa-solid fa-bag-shopping"></i> 요기보 미디
+                                        보러가기</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 기능 2 -->
+            <div class="guide-item">
+                <div class="guide-content">
+                    <h5><i class="fa-solid fa-truck-fast text-primary mr-2"></i>2. 실시간 배송 및 주문 조회</h5>
+                    <p>
+                        "배송조회" 요청 시, 챗봇이 로그인된 고객의 최근 주문을 조회해 송장 번호와 실시간 택배사 트래킹 링크를 즉석에서 제공합니다. (CS 업무 대폭 축소)
+                    </p>
+                    <div class="mockup-container">
+                        <div class="chat-mockup">
+                            <div class="chat-mockup-header"><i class="fa-solid fa-robot"></i> 요기보 챗봇</div>
+                            <div class="chat-mockup-body">
+                                <div class="bubble bubble-user">내 껀 배송 언제 오나요?</div>
+                                <div class="bubble bubble-bot">
+                                    최근 주문(<strong>20260312-0000079</strong>)의 배송 상태는 <strong>배송중</strong>입니다.<br>
+                                    택배사: 롯데택배<br>운송장 번호: 123456789012
+                                    <span class="chat-mockup-btn" style="background: #34495e;"><i
+                                            class="fa-solid fa-truck"></i> 실시간 배송조회 (클릭)</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 기능 3 -->
+            <div class="guide-item" style="border-left: 4px solid var(--primary-color);">
+                <div class="guide-content">
+                    <h5><i class="fa-solid fa-brain text-primary mr-2"></i>3. AI 지식 교육 (RAG 기반 커스텀 학습)</h5>
+                    <p>
+                        요기보만의 특수한 정책이나 오프라인 이벤트 등을 학습시켜 AI 답변의 퀄리티를 극대화할 수 있습니다. AI를 더욱 디벨롭하기 위해서는 <b>관리자분들께서 각 카테고리별로
+                            일목요연하게 새로운 정보나 정확한 정보를 지속적으로 추가(교육)해 주시는 방식</b>으로 운영하셔야 가장 완벽한 챗봇이 완성됩니다.
+                    </p>
+                    <ul class="text-muted small mb-4" style="line-height:1.7;">
+                        <li><b class="text-danger">PDF 파일 자동 조각화:</b> PDF 업로드 시, AI가 내용을 이해하기 쉽도록 <b>약 500자 단위로 텍스트를
+                                나누어(Chunking)</b> 저장합니다.</li>
+                        <li><b>지식의 시각화 (이미지 RAG):</b> 텍스트로 설명하기 어려운 내용(사이즈 표 등)은 이미지 링크와 함께 학습시키면, 해당 키워드 질문 시 즉각 이미지를
+                            답변으로 띄워줍니다.</li>
+                        <li><b class="text-primary">학습 데이터 관리:</b> PDF에서 자동 추출되거나 이미지로 등록된 모든 학습 데이터는 관리자 페이지의 <b>'일반문의'
+                                탭에 모여 자동 저장</b>되므로, 원할 때 언제든 검수하여 수정/삭제할 수 있습니다.</li>
+                    </ul>
+
+                    <div class="mockup-container">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <!-- PDF 챗 목업 -->
+                                <div class="chat-mockup h-100">
+                                    <div class="chat-mockup-header bg-danger"><i class="fa-solid fa-file-pdf"></i> PDF
+                                        지식 답변 예시</div>
+                                    <div class="chat-mockup-body" style="padding: 15px;">
+                                        <div class="bubble bubble-user">어썸피플 어떤 캠페인이야?</div>
+                                        <div class="bubble bubble-bot">
+                                            <span style="font-size: 11px; color:#e74c3c; font-weight:bold;">[학습된 지식 기반
+                                                답변]</span><br>
+                                            어썸피플(Awesome People) 캠페인은 요기보가 매년 진행하는 사회적 인식 개선 프로젝트입니다. 이 캠페인은 우리 지역 사회 내
+                                            소외된 계층을 직접 찾아가고, 그들의 환경을 개선하는 일을 목표로 하고 있습니다.
+
+                                            캠페인은 다음과 같은 다양한 주제로 진행되었습니다:
+                                            - 2017: 경력단절여성 인식개선 캠페인
+                                            - 2018: 학교도서관 환경개선 캠페인
+                                            - 2019: 소아마비환자 환경개선 캠페인
+                                            - 2020: COVID-19 의료진 휴게공간 개선 캠페인
+                                            - 2021: 발달장애인 휴게공간 개선 캠페인
+                                            - 2022: 임산부 환경 개선 캠페인
+                                            - 2023: 발달장애 아동을 위한 인식·환경 개선 캠페인
+                                            - 2024: 모두를 위한 배리어프리 클래식 캠페인
+
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <!-- 이미지 챗 목업 -->
+                                <div class="chat-mockup h-100 mt-3 mt-md-0">
+                                    <div class="chat-mockup-header" style="background:#8e44ad;"><i
+                                            class="fa-solid fa-image"></i> 이미지 지식 답변 예시</div>
+                                    <div class="chat-mockup-body" style="padding: 15px;">
+                                        <div class="bubble bubble-user">플랜트 스퀴지보 사이즈표 보여줘</div>
+                                        <div class="bubble bubble-bot">
+                                            <span style="font-size: 11px; color:#8e44ad; font-weight:bold;">[이미지로 교육된
+                                                답변]</span><br>
+                                            해당 상품의 사이즈 안내 이미지입니다.<br>
+                                            <img src="https://yogibo.openhost.cafe24.com/web/chat/1767150336714_plant_squeezibo_07.jpg"
+                                                class="img-fluid mt-2"
+                                                style="border-radius:5px; border:1px solid #eee;">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 기능 4 -->
+            <div class="guide-item">
+                <div class="guide-content">
+                    <h5><i class="fa-solid fa-file-excel text-success mr-2"></i>4. 대화 로그 엑셀 다운로드 (오류 개선 및 고도화)</h5>
+                    <p>
+                        고객들이 챗봇과 무슨 대화를 나누었는지 파악하려면 <strong>대화 로그 다운로드</strong>를 활용하세요.
+                        최대 최근 3개월 치의 고객 대화 이력을 엑셀 파일로 뽑아내어, <b>AI가 제대로 답변하지 못한 오류 지점을 파악하고 향후 지식 주입(교육) 방향성을 결정</b>하는
+                        테스트/분석 용도로 쓰입니다.
+                    </p>
+                    <div class="mockup-container text-center py-4" style="background: white;">
+                        <span class="btn btn-custom" style="background-color: #217346; pointer-events:none;">
+                            <i class="fa-solid fa-file-excel mr-2"></i> (관리자 페이지) 대화 로그 다운로드 버튼
+                        </span>
+                        <div class="text-muted small mt-3">
+                            <i class="fa-solid fa-arrow-down mr-1"></i> yogichat_logs_20260312.xlsx 파일 자동 생성
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="admin-link-box">
+                <i class="fa-solid fa-triangle-exclamation mr-1"></i> 위 기능들에 대한 모든 테스트 및 데이터 등록은 <b>[통합 관리자(Knowledge
+                    Admin)]</b> 메뉴에서 직접 다루실 수 있습니다.
+            </div>
+
+        </div>
+    </div>
+
+</body>
+
+</html>

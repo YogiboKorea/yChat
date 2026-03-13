@@ -239,7 +239,7 @@ async function findRuleBasedAnswer(userInput, memberId) {
                             text += `<br><br><a href="${ship.tracking_url}" target="_blank" class="consult-btn" style="background:#58b5ca; color:#fff; display:inline-block; text-decoration:none;"><i class="fa-solid fa-truck"></i> 실시간 배송조회</a>`;
                         } else {
                             // 롯데택배 기본 페이지로 강제 안내 (알려주신 링크 기반)
-                            text += `<br><br><a href="https://www.lotteglogis.com/home/reservation/tracking/index" target="_blank" class="consult-btn" style="background:#58b5ca; color:#fff; display:inline-block; text-decoration:none;"><i class="fa-solid fa-truck"></i> 배송조회 (롯데택배 홈페이지)</a>`;
+                            text += `<br><br><a href="https://www.lotteglogis.com/" target="_blank" class="consult-btn" style="background:#58b5ca; color:#fff; display:inline-block; text-decoration:none;"><i class="fa-solid fa-truck"></i> 배송조회 (롯데택배 홈페이지)</a>`;
                         }
                     }
                     return { text };

@@ -12,6 +12,11 @@ async function fetchProductsFromCafe24() {
       display: "T", selling: "T", limit: 100 
     });
 
+    if (typeof response === 'string' && response.includes("<html")) {
+        console.error("❌ Cafe24 상품 데이터 동기화 실패: Cafe24 서버 접속 지연 (HTML 응답 수신)");
+        return;
+    }
+
     if (response && response.products) {
       yogiboProducts = response.products
         .filter(prod => {

@@ -45,9 +45,11 @@ app.use("/", knowledgeRoutes);
       // 4. HTTP 서버 실행
       app.listen(PORT, () => console.log(`🚀 앱 실행 완료 (포트: ${PORT})`)); 
 
-      // 5. 스케줄러 실행 (10분 간격 분할 조회)
+      // 5. 스케줄러 실행
       syncCafe24Orders(); 
-      setInterval(syncCafe24Orders, 10 * 60 * 1000); 
+      setInterval(syncCafe24Orders, 10 * 60 * 1000); // 온라인 매출 집계 (10분 간격)
+      
+      setInterval(fetchProductsFromCafe24, 60 * 60 * 1000); // 추천 상품 데이터 풀 동기화 (1시간 간격 - CDN 장애시 자동 복구 및 신규 상품 업데이트 목적)
 
   } catch (err) { 
       console.error("❌ 초기화 오류:", err.message); 

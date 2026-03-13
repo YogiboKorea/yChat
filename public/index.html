@@ -518,12 +518,41 @@
   async function typeWriterEffect(elementId, fullHtml) {
     const element = document.getElementById(elementId);
     if (!element) return;
+    element.innerHTML = "";
     
-    // 복잡한 HTML(버튼, 이미지, 특수문자)이 포함되어 있으면 한 글자씩 타이핑하는 로직이 
-    // DOM 을 깨거나 undefined를 출력하게 만드는 경우가 발생합니다.
-    // 이를 방지하기 위해 전체 HTML을 안전하게 통째로 삽입합니다.
-    element.innerHTML = fullHtml;
-    scrollToBottom();
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = fullHtml;
+    
+    async function typeNode(node, targetParent) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const text = node.nodeValue;
+        for (let i = 0; i < text.length; i++) {
+          targetParent.appendChild(document.createTextNode(text[i]));
+          scrollToBottom();
+          await new Promise(r => setTimeout(r, 15));
+        }
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        // 단일 태그이거나, 상담/추천 버튼 같은 특수 UI 블록은 한 번에 렌더링
+        if (['BR', 'IMG', 'IFRAME'].includes(node.tagName) || node.classList.contains('consult-btn') || node.classList.contains('consult-container')) {
+          targetParent.appendChild(node.cloneNode(true));
+          scrollToBottom();
+          await new Promise(r => setTimeout(r, 30));
+        } else {
+          // 그 외의 일반 태그(p, strong, em, 덮개 div 등)는 껍데기만 만들고 안의 텍스트를 재귀적으로 타이핑
+          const newEl = document.createElement(node.tagName);
+          Array.from(node.attributes).forEach(attr => newEl.setAttribute(attr.name, attr.value));
+          targetParent.appendChild(newEl);
+          
+          for (const child of Array.from(node.childNodes)) {
+            await typeNode(child, newEl);
+          }
+        }
+      }
+    }
+
+    for (const child of Array.from(tempDiv.childNodes)) {
+      await typeNode(child, element);
+    }
   }
 
   async function sendMessage() {

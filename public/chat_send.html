@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>챗봇 통합 관리자 (Knowledge Admin)</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" />
+
+    <style>
+        :root {
+            --primary-color: #58b5ca;
+            /* 요기보 메인 컬러 */
+            --primary-dark: #4699ab;
+            --secondary-bg: #f8f9fa;
+            --card-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
+        }
+
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
+        }
+
+        /* 메인 컨테이너 */
+        .main-wrapper {
+            max-width: 1000px;
+            margin: 40px auto;
+            background: #fff;
+            border-radius: 20px;
+            box-shadow: var(--card-shadow);
+            padding: 40px;
+            overflow: hidden;
+        }
+
+        /* 헤더 영역 */
+        .header-area {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #eee;
+        }
+
+        .header-area h3 {
+            font-weight: 700;
+            color: #2c3e50;
+            margin: 0;
+        }
+
+        /* 탭 네비게이션 */
+        .nav-tabs {
+            border-bottom: none;
+            margin-bottom: 20px;
+            gap: 5px;
+        }
+
+        .nav-tabs .nav-link {
+            border: 1px solid transparent;
+            border-radius: 30px;
+            color: #666;
+            font-weight: 500;
+            padding: 10px 20px;
+            transition: all 0.3s;
+        }
+
+        .nav-tabs .nav-link:hover {
+            background-color: #e9ecef;
+        }
+
+        .nav-tabs .nav-link.active {
+            background-color: var(--primary-color);
+            color: #fff !important;
+            box-shadow: 0 4px 6px rgba(88, 181, 202, 0.3);
+        }
+
+        /* AI 탭 강조 */
+        #tab-llm {
+            color: var(--primary-dark);
+            border: 1px solid var(--primary-color);
+        }
+
+        #tab-llm.active {
+            background-color: #2c3e50;
+            border-color: #2c3e50;
+        }
+
+        /* 입력 카드 스타일 */
+        .input-card {
+            background-color: var(--secondary-bg);
+            border: 1px solid #e1e4e8;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+        }
+
+        .input-label {
+            font-weight: 600;
+            color: #444;
+            margin-bottom: 8px;
+        }
+
+        .form-control {
+            border-radius: 10px;
+            border: 1px solid #ddd;
+            padding: 12px;
+            font-size: 14px;
+        }
+
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(88, 181, 202, 0.15);
+        }
+
+        /* 버튼 스타일 */
+        .btn-custom {
+            border-radius: 50px;
+            padding: 10px 25px;
+            font-weight: 600;
+            transition: 0.3s;
+            border: none;
+        }
+
+        .btn-primary-custom {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary-custom:hover {
+            background-color: var(--primary-dark);
+            color: white;
+        }
+
+        .btn-excel {
+            background-color: #217346;
+            color: white;
+            font-size: 13px;
+        }
+
+        .btn-excel:hover {
+            background-color: #1e6b41;
+            color: white;
+        }
+
+        /* AI 관리 카드 */
+        .ai-card {
+            height: 100%;
+            border: 1px solid #eee;
+            border-radius: 15px;
+            padding: 30px;
+            background: #fff;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.02);
+        }
+
+        .ai-card-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            font-weight: 700;
+            font-size: 1.2rem;
+        }
+
+        .ai-card-header i {
+            margin-right: 10px;
+        }
+
+        /* 리스트 아이템 (QA 카드) */
+        .qa-card {
+            background: #fff;
+            border: 1px solid #eee;
+            border-radius: 12px;
+            margin-bottom: 10px;
+            transition: transform 0.2s;
+        }
+
+        .qa-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+        }
+
+        .qa-header {
+            padding: 15px 20px;
+            cursor: pointer;
+            font-weight: 500;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .qa-body {
+            padding: 20px;
+            background-color: #fafafa;
+            border-top: 1px solid #eee;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        /* 파일 인풋 커스텀 */
+        .custom-file-label::after {
+            content: "찾아보기";
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <div class="main-wrapper">
+
+            <div class="header-area">
+                <h3><i class="fa-solid fa-robot" style="color:var(--primary-color);"></i> 챗봇 관리자</h3>
+                <button onclick="downloadExcel()" class="btn btn-custom btn-excel">
+                    <i class="fa-solid fa-file-excel mr-2"></i>대화 로그 다운로드
+                </button>
+            </div>
+
+            <ul class="nav nav-tabs" id="categoryTabs" role="tablist">
+                <li class="nav-item"><a class="nav-link active" id="tab-homepage" data-toggle="tab" href="#homepage"
+                        onclick="showNormalForm('homepage')">홈페이지</a></li>
+                <li class="nav-item"><a class="nav-link" id="tab-product" data-toggle="tab" href="#product"
+                        onclick="showNormalForm('product')">제품정보</a></li>
+                <li class="nav-item"><a class="nav-link" id="tab-delivery" data-toggle="tab" href="#delivery"
+                        onclick="showNormalForm('delivery')">배송안내</a></li>
+                <li class="nav-item"><a class="nav-link" id="tab-laundry" data-toggle="tab" href="#laundry"
+                        onclick="showNormalForm('laundry')">세탁방법</a></li>
+                <li class="nav-item"><a class="nav-link" id="tab-service" data-toggle="tab" href="#service"
+                        onclick="showNormalForm('service')">A/S문의</a></li>
+                <li class="nav-item"><a class="nav-link" id="tab-refund" data-toggle="tab" href="#refund"
+                        onclick="showNormalForm('refund')">교환/환불</a></li>
+                <li class="nav-item"><a class="nav-link" id="tab-normal" data-toggle="tab" href="#normal"
+                        onclick="showNormalForm('normal')">일반문의</a></li>
+                <li class="nav-item ml-auto">
+                    <a class="nav-link" id="tab-llm" data-toggle="tab" href="#llm" onclick="showLLMForm()">
+                        <i class="fa-solid fa-brain mr-1"></i> AI 지식 관리
+                    </a>
+                </li>
+            </ul>
+
+            <div id="normalInputArea" class="input-card">
+                <h5 class="mb-3" style="color:var(--primary-color); font-weight:700;"><i
+                        class="fa-solid fa-pen-to-square"></i> FAQ 등록</h5>
+                <form id="noteForm">
+                    <div class="form-group" style="display:none;">
+                        <select id="categorySelect" class="form-control">
+                            <option value="homepage">홈페이지</option>
+                            <option value="product">제품정보</option>
+                            <option value="delivery">배송안내</option>
+                            <option value="laundry">세탁방법</option>
+                            <option value="service">A/S문의</option>
+                            <option value="refund">교환/환불</option>
+                            <option value="normal">일반문의</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="input-label">질문 (Question)</label>
+                        <input type="text" class="form-control" id="questionText" placeholder="고객이 자주 묻는 질문을 입력하세요.">
+                    </div>
+                    <div class="form-group">
+                        <label class="input-label">답변 (Answer)</label>
+                        <textarea class="form-control" id="answerText" rows="3"
+                            placeholder="챗봇이 답변할 내용을 입력하세요."></textarea>
+                    </div>
+                    <div class="text-right">
+                        <button type="submit" class="btn btn-custom btn-primary-custom">
+                            <i class="fa-solid fa-plus mr-1"></i> 등록하기
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="tab-content" id="categoryTabsContent">
+
+                <div class="tab-pane fade show active" id="homepage">
+                    <div id="homepageContainer"></div>
+                </div>
+                <div class="tab-pane fade" id="product">
+                    <div id="productContainer"></div>
+                </div>
+                <div class="tab-pane fade" id="delivery">
+                    <div id="deliveryContainer"></div>
+                </div>
+                <div class="tab-pane fade" id="laundry">
+                    <div id="laundryContainer"></div>
+                </div>
+                <div class="tab-pane fade" id="service">
+                    <div id="serviceContainer"></div>
+                </div>
+                <div class="tab-pane fade" id="refund">
+                    <div id="refundContainer"></div>
+                </div>
+                <div class="tab-pane fade" id="normal">
+                    <div id="normalContainer"></div>
+                </div>
+
+                <div class="tab-pane fade" id="llm">
+                    <div class="row">
+
+                        <div class="col-md-6 mb-3">
+                            <div class="ai-card" style="border-top: 4px solid #e74c3c;">
+                                <div class="ai-card-header" style="color:#e74c3c;">
+                                    <i class="fa-solid fa-file-pdf"></i> PDF 문서 학습 (RAG)
+                                </div>
+                                <p class="text-muted small mb-4">
+                                    매뉴얼, 규정집 등의 PDF 문서를 업로드하면<br>AI가 내용을 자동으로 학습하여 답변에 활용합니다.
+                                </p>
+
+                                <form id="pdfUploadForm">
+                                    <div class="custom-file mb-4">
+                                        <input type="file" class="custom-file-input" id="pdfInput" accept=".pdf">
+                                        <label class="custom-file-label" for="pdfInput">PDF 파일 선택...</label>
+                                    </div>
+                                    <button type="submit" class="btn btn-custom btn-block"
+                                        style="background:#e74c3c; color:white;">
+                                        <i class="fa-solid fa-cloud-arrow-up mr-2"></i> 문서 업로드 및 학습
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <div class="ai-card" style="border-top: 4px solid #9b59b6;">
+                                <div class="ai-card-header" style="color:#9b59b6;">
+                                    <i class="fa-solid fa-image"></i> 이미지 지식 등록 (FTP)
+                                </div>
+                                <p class="text-muted small mb-4">
+                                    "맥스 사이즈" 같은 특정 키워드를 물어보면<br>등록된 이미지를 답변으로 보여줍니다.
+                                </p>
+
+                                <form id="imgKnowledgeForm">
+                                    <div class="form-group mb-2">
+                                        <label class="small font-weight-bold">검색 키워드</label>
+                                        <input type="text" class="form-control form-control-sm" id="imgKeyword"
+                                            placeholder="예: 맥스 사이즈 스펙">
+                                    </div>
+                                    <div class="custom-file mb-4">
+                                        <input type="file" class="custom-file-input" id="imgInput" accept="image/*">
+                                        <label class="custom-file-label" for="imgInput">이미지 선택...</label>
+                                    </div>
+                                    <button type="submit" class="btn btn-custom btn-block"
+                                        style="background:#9b59b6; color:white;">
+                                        <i class="fa-solid fa-upload mr-2"></i> 이미지 및 키워드 저장
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+
+                    </div>
+                    <div class="mt-4 alert alert-light text-center small text-muted">
+                        <i class="fa-solid fa-circle-info"></i> 학습된 데이터와 이미지 지식은 <b>'일반문의'</b> 탭 등에서 확인 및 삭제가 가능합니다.
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script>
+        // ✅ 서버 주소
+        const BASE_URL = 'https://port-0-chat-lzgmwhc4d9883c97.sel4.cloudtype.app';
+
+        // [중요] 데이터를 저장해둘 전역 변수 (HTML 깨짐 방지용)
+        let currentPostsData = [];
+
+        // 요소 선택
+        const normalInputArea = document.getElementById('normalInputArea');
+        const categorySelect = document.getElementById('categorySelect');
+
+        // 파일명 표시
+        $(".custom-file-input").on("change", function () {
+            var fileName = $(this).val().split("\\").pop();
+            $(this).siblings(".custom-file-label").addClass("selected").html(fileName);
+        });
+
+        // 탭 UI 제어
+        function showNormalForm(category) {
+            normalInputArea.style.display = 'block';
+            categorySelect.value = category;
+        }
+        function showLLMForm() {
+            normalInputArea.style.display = 'none';
+        }
+
+        // 엑셀 다운로드
+        function downloadExcel() {
+            window.location.href = `${BASE_URL}/chatConnet`;
+        }
+
+        // [1] 일반 등록
+        document.getElementById('noteForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+            const category = categorySelect.value;
+            const question = document.getElementById('questionText').value.trim();
+            const answer = document.getElementById('answerText').value.trim();
+
+            if (!question || !answer) { alert("질문과 답변을 모두 입력해주세요."); return; }
+
+            try {
+                await axios.post(`${BASE_URL}/postIt`, { question, answer, category }, { headers: { 'Content-Type': 'application/json' } });
+                document.getElementById('questionText').value = '';
+                document.getElementById('answerText').value = '';
+                loadPosts();
+                alert("등록되었습니다!");
+            } catch (error) { console.error(error); alert("오류 발생"); }
+        });
+
+        // [2] PDF 업로드
+        document.getElementById('pdfUploadForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+            const fileInput = document.getElementById('pdfInput');
+            const file = fileInput.files[0];
+            if (!file) { alert("PDF 파일을 선택해주세요."); return; }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const btn = this.querySelector('button');
+                const originTxt = btn.innerHTML;
+                btn.innerHTML = '분석 중...'; btn.disabled = true;
+
+                const res = await axios.post(`${BASE_URL}/chat_send`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+                alert(res.data.message || "완료!");
+                fileInput.value = ''; loadPosts();
+                btn.innerHTML = originTxt; btn.disabled = false;
+            } catch (error) { alert("실패: " + error.message); }
+        });
+
+        // [3] 이미지 등록
+        document.getElementById('imgKnowledgeForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+            const keyword = document.getElementById('imgKeyword').value.trim();
+            const fileInput = document.getElementById('imgInput');
+            const file = fileInput.files[0];
+
+            if (!keyword || !file) { alert("키워드와 이미지를 모두 입력해주세요."); return; }
+
+            const formData = new FormData();
+            formData.append('keyword', keyword);
+            formData.append('image', file);
+
+            try {
+                const btn = this.querySelector('button');
+                const originTxt = btn.innerHTML;
+                btn.innerHTML = '업로드 중...'; btn.disabled = true;
+
+                await axios.post(`${BASE_URL}/upload_knowledge_image`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+                alert("이미지 지식 등록 완료!");
+                document.getElementById('imgKeyword').value = ''; fileInput.value = ''; loadPosts();
+                btn.innerHTML = originTxt; btn.disabled = false;
+            } catch (error) { alert("실패: " + error.message); }
+        });
+
+        // [데이터 로드]
+        async function loadPosts() {
+            try {
+                const res = await axios.get(`${BASE_URL}/postIt`, { params: { page: 1 } });
+                // ★ 데이터를 전역 변수에 저장 (수정 버튼 클릭 시 사용)
+                currentPostsData = res.data.notes;
+                renderPosts(currentPostsData);
+            } catch (error) { console.error("Load Error:", error); }
+        }
+
+        function renderPosts(posts) {
+            ['homepage', 'product', 'delivery', 'laundry', 'service', 'refund', 'normal'].forEach(cat => {
+                const el = document.getElementById(cat + 'Container');
+                if (el) el.innerHTML = '<p class="text-center text-muted py-3 small">데이터가 없습니다.</p>';
+            });
+
+            if (posts.length > 0) {
+                posts.forEach(post => {
+                    const container = document.getElementById(post.category + 'Container');
+                    const targetContainer = container || document.getElementById('normalContainer');
+
+                    if (targetContainer.innerHTML.includes('데이터가 없습니다')) targetContainer.innerHTML = '';
+
+                    const card = document.createElement('div');
+                    card.className = 'qa-card';
+                    // HTML id를 부여하여 나중에 찾기 쉽게 함
+                    card.id = `card-${post._id}`;
+
+                    card.innerHTML = `
+                <div class="qa-header" data-toggle="collapse" data-target="#col-${post._id}">
+                    <span style="font-weight:600;"><i class="fa-regular fa-circle-question mr-2 text-primary"></i> ${post.question}</span>
+                    <i class="fa-solid fa-chevron-down text-muted"></i>
+                </div>
+                <div id="col-${post._id}" class="collapse qa-body">
+                    <div class="mb-3" style="white-space:pre-wrap;">${post.answer}</div>
+                    <div class="text-right">
+                        <button class="btn btn-sm btn-outline-primary mr-1" onclick="startEditMode('${post._id}')">수정</button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deletePost('${post._id}')">삭제</button>
+                    </div>
+                </div>
+             `;
+                    targetContainer.appendChild(card);
+                });
+            }
+        }
+
+        async function deletePost(id) {
+            if (!confirm("삭제하시겠습니까?")) return;
+            try {
+                await axios.delete(`${BASE_URL}/postIt/${id}`);
+                loadPosts();
+            } catch (e) { alert("삭제 실패"); }
+        }
+
+        // [핵심] 수정 모드 시작 (전역 변수에서 데이터를 안전하게 가져옴)
+        window.startEditMode = function (id) {
+            // 1. 저장된 데이터에서 해당 게시글 찾기
+            const post = currentPostsData.find(p => p._id === id);
+            if (!post) return;
+
+            const card = document.getElementById(`card-${id}`);
+            const bodyDiv = card.querySelector('.qa-body');
+            const headerDiv = card.querySelector('.qa-header');
+
+            // 원상복구를 위해 내용 백업
+            const originalContent = bodyDiv.innerHTML;
+
+            // UI 변경
+            headerDiv.style.display = 'none';
+            bodyDiv.classList.add('show');
+
+            const hasImage = post.answer.includes('<img');
+
+            let fileInputHtml = '';
+            if (hasImage) {
+                fileInputHtml = `
+                <div class="alert alert-secondary p-2 mt-2 mb-2">
+                    <label class="small font-weight-bold mb-1"><i class="fa-solid fa-image"></i> 이미지 교체 (선택사항)</label>
+                    <input type="file" class="form-control-file small" id="edit-file-${id}" accept="image/*">
+                </div>
+            `;
+            }
+
+            // 인풋창에 값 넣을 때 따옴표 깨짐 방지를 위해 value 속성 사용
+            bodyDiv.innerHTML = `
+            <div class="p-3" style="background:#fff; border:1px solid #ddd; border-radius:8px;">
+                <label class="small text-muted font-weight-bold">질문 수정</label>
+                <input type="text" class="form-control mb-3" id="edit-q-${id}">
+                
+                <label class="small text-muted font-weight-bold">답변 수정</label>
+                <textarea class="form-control mb-3" id="edit-a-${id}" rows="4"></textarea>
+                
+                ${fileInputHtml}
+
+                <div class="text-right mt-3">
+                    <button class="btn btn-sm btn-success mr-1" onclick="submitUpdate('${id}')">저장 완료</button>
+                    <button class="btn btn-sm btn-secondary" onclick="cancelEdit('${id}', '${encodeURIComponent(headerDiv.outerHTML)}')">취소</button>
+                </div>
+            </div>
+        `;
+
+            // 값 주입 (안전한 방식)
+            document.getElementById(`edit-q-${id}`).value = post.question;
+            document.getElementById(`edit-a-${id}`).value = post.answer;
+
+            // 취소 함수 정의
+            window.cancelEdit = function (postId, headerHtmlEnc) {
+                const c = document.getElementById(`card-${postId}`);
+                c.querySelector('.qa-header').style.display = 'flex';
+                c.querySelector('.qa-body').innerHTML = originalContent;
+            }
+        };
+
+        // [핵심] 수정 내용 전송
+        window.submitUpdate = async function (id) {
+            const q = document.getElementById(`edit-q-${id}`).value;
+            const a = document.getElementById(`edit-a-${id}`).value;
+            const fileInput = document.getElementById(`edit-file-${id}`);
+            const newFile = fileInput ? fileInput.files[0] : null;
+
+            try {
+                const btn = document.querySelector(`button[onclick^="submitUpdate('${id}')"]`);
+                if (btn) { btn.disabled = true; btn.innerHTML = '저장 중...'; }
+
+                const formData = new FormData();
+                formData.append('question', q);
+                formData.append('answer', a);
+                if (newFile) formData.append('image', newFile);
+
+                await axios.put(`${BASE_URL}/postIt/${id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+
+                alert("수정되었습니다.");
+                loadPosts();
+            } catch (e) {
+                console.error(e);
+                alert("수정 실패: " + (e.response?.data?.error || e.message));
+            }
+        }
+
+        // 초기 실행
+        loadPosts();
+    </script>
+</body>
+
+</html>

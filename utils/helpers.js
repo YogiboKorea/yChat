@@ -15,19 +15,15 @@ function isUserLoggedIn(id) {
 }
 
 const COUNSELOR_LINKS_HTML = `
-<div class="consult-container">
-  <p style="font-weight:bold; margin-bottom:8px; font-size:14px; color:#e74c3c;">
-    <i class="fa-solid fa-triangle-exclamation"></i> 정확한 정보 확인이 필요합니다.
+<div class="consult-container" style="background:#fff; border:1px solid #eaeaea; border-radius:12px; padding:15px; margin-top:10px; box-shadow:0 2px 8px rgba(0,0,0,0.05);">
+  <p style="font-size:14px; color:#333; margin-bottom:12px; line-height:1.5; font-weight:500;">
+    <i class="fa-solid fa-circle-info" style="color:#58b5ca;"></i> 해당 내용에 대한 정확한 정보는 상담사를 통해 확인이 필요합니다.
   </p>
-  <p style="font-size:13px; color:#555; margin-bottom:15px; line-height:1.4;">
-    죄송합니다. 현재 데이터베이스에서 정확한 답변을 찾지 못했습니다.<br>
-    사람의 확인이 필요한 내용일 수 있으니, 아래 버튼을 눌러 <b>상담사</b>에게 문의해주세요.
-  </p>
-  <a href="javascript:void(0)" onclick="window.open('http://pf.kakao.com/_lxmZsxj/chat','kakao','width=500,height=600,scrollbars=yes');" class="consult-btn kakao">
-     <i class="fa-solid fa-comment"></i> 카카오톡 상담원으로 연결
+  <a href="javascript:void(0)" onclick="window.open('http://pf.kakao.com/_lxmZsxj/chat','kakao','width=500,height=600,scrollbars=yes');" class="consult-btn kakao" style="display:flex; align-items:center; justify-content:center; padding:10px; margin-bottom:8px; border-radius:8px; background:#FEE500; color:#000; text-decoration:none; font-weight:bold; font-size:14px;">
+     <i class="fa-solid fa-comment" style="margin-right:6px;"></i> 카카오톡 상담원 연결
   </a>
-  <a href="javascript:void(0)" onclick="window.open('https://talk.naver.com/ct/wc4u67?frm=psf','naver','width=500,height=600,scrollbars=yes');" class="consult-btn naver">
-     <i class="fa-solid fa-comments"></i> 네이버 톡톡 상담원으로 연결
+  <a href="javascript:void(0)" onclick="window.open('https://talk.naver.com/ct/wc4u67?frm=psf','naver','width=500,height=600,scrollbars=yes');" class="consult-btn naver" style="display:flex; align-items:center; justify-content:center; padding:10px; border-radius:8px; background:#03C75A; color:#fff; text-decoration:none; font-weight:bold; font-size:14px;">
+     <i class="fa-solid fa-comments" style="margin-right:6px;"></i> 네이버 톡톡 상담원 연결
   </a>
 </div>
 `;

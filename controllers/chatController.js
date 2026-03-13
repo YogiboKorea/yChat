@@ -21,7 +21,7 @@ async function handleChat(req, res) {
     const isPersonalQuery = /(내 정보|아이디|구매이력|장바구니|안녕|반가|결제|최근|뭐야|누구|이름)/.test(message);
 
     if ((!docs || docs.length === 0 || bestScore < 12) && !isPersonalQuery) {
-      const fallback = `정확한 정보 확인이 필요합니다.${FALLBACK_MESSAGE_HTML}`;
+      const fallback = `${FALLBACK_MESSAGE_HTML}`;
       await saveConversationLog(memberId, message, fallback);
       return res.json({ text: fallback });
     }
@@ -47,7 +47,7 @@ async function handleChat(req, res) {
     gptAnswer = formatResponseText(gptAnswer);
 
     if (gptAnswer.includes("NO_CONTEXT")) {
-      const fallback = `정확한 정보 확인이 필요합니다.${FALLBACK_MESSAGE_HTML}`;
+      const fallback = `${FALLBACK_MESSAGE_HTML}`;
       await saveConversationLog(memberId, message, fallback);
       return res.json({ text: fallback });
     }

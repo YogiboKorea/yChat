@@ -2,12 +2,11 @@ const dayjs = require('dayjs');
 const { getDB } = require("../config/db");
 const { apiRequest } = require("../config/cafe24Api");
 
-const { CAFE24_MALLID } = process.env;
-
 let yogiboProducts = [];
 
 async function fetchProductsFromCafe24() {
   try {
+    const CAFE24_MALLID = process.env.CAFE24_MALLID;
     console.log("🟡 Cafe24에서 추천 상품 데이터를 동기화하는 중...");
     const response = await apiRequest("GET", `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/products`, {}, {
       display: "T", selling: "T", limit: 100 
@@ -96,7 +95,7 @@ async function syncCafe24Orders() {
 
       console.log(`📡 [매출 스케줄러] 데이터 요청 구간: ${params.start_date} ~ ${params.end_date}`);
 
-      const response = await apiRequest("GET", `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`, {}, params);
+      const response = await apiRequest("GET", `https://${process.env.CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`, {}, params);
       
       if (response && response.orders && response.orders.length > 0) {
         totalFetched += response.orders.length;
@@ -122,7 +121,7 @@ async function getOrderShippingInfo(memberId) {
   const today = new Date(); 
   const start = new Date(); 
   start.setDate(today.getDate() - 14);
-  return apiRequest("GET", `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`, {}, {
+  return apiRequest("GET", `https://${process.env.CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`, {}, {
     member_id: memberId, 
     start_date: start.toISOString().split('T')[0], 
     end_date: today.toISOString().split('T')[0], 
@@ -131,7 +130,7 @@ async function getOrderShippingInfo(memberId) {
 }
 
 async function getShipmentDetail(orderId) {
-  const API_URL = `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders/${orderId}/shipments`;
+  const API_URL = `https://${process.env.CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders/${orderId}/shipments`;
   try {
     const response = await apiRequest("GET", API_URL, {}, { shop_no: 1 });
     if (response.shipments && response.shipments.length > 0) {
@@ -160,7 +159,7 @@ async function getMemberPurchaseHistory(memberId) {
                 currentStart = oneYearAgo;
             }
 
-            const response = await apiRequest("GET", `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`, {}, {
+            const response = await apiRequest("GET", `https://${process.env.CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`, {}, {
                 member_id: memberId, 
                 start_date: currentStart.format('YYYY-MM-DD'), 
                 end_date: currentEnd.format('YYYY-MM-DD'), 

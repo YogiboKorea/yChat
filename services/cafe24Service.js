@@ -23,9 +23,9 @@ async function fetchProductsFromCafe24() {
             const name = prod.product_name;
             // 제외 조건: 
             // 1. 이름이 '[' 로 시작하는 모든 상품 (예: [LAST CHANCE], [리퍼], [협력사] 등)
-            // 2. 이름 어딘가에 메이트, 한정수량, 공동구매 등이 포함된 상품
+            // 2. 이름 어딘가에 메이트, 한정수량, 공동구매, 사은품 등이 포함된 상품
             // (혹시 모를 공백 문제를 위해 LAST CHANCE 등도 명시적 차단)
-            const excludeRegex = /(메이트|한정수량|공동구매|리퍼|협력사|LAST CHANCE)/i;
+            const excludeRegex = /(메이트|한정수량|공동구매|리퍼|협력사|LAST CHANCE|사은품)/i;
             return !name.trim().startsWith('[') && !excludeRegex.test(name);
         })
         .map(prod => {

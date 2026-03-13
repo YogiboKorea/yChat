@@ -30,7 +30,7 @@ async function fetchProductsFromCafe24() {
         })
         .map(prod => {
         // 카테고리 매핑 (소파 858, 바디필로우 876, 메이트/캐릭터 901)
-        let category = "소파";
+        let category = "기타";
         if (prod.category) {
             const catArr = Array.isArray(prod.category) ? prod.category : [prod.category];
             const catStr = JSON.stringify(catArr);
@@ -40,14 +40,16 @@ async function fetchProductsFromCafe24() {
                 category = "바디필로우";
             } else if (catStr.includes("858")) {
                 category = "소파";
-            } else if (prod.product_name.includes("서포트") || prod.product_name.includes("롤") || prod.product_name.includes("쿠션")) {
-                category = "악세서리";
-            }
-        } else {
-            // category 필드가 없을 때의 기존 fallback
-            if (prod.product_name.includes("서포트") || prod.product_name.includes("롤") || prod.product_name.includes("쿠션")) {
-              category = "악세서리";
-            }
+            } 
+        } 
+        
+        // 카테고리 태그 누락이나 오류를 교정하는 이름 기반 강제 할당
+        if (prod.product_name.includes("스퀴지보") || prod.product_name.includes("메이트")) {
+            category = "메이트/캐릭터";
+        } else if (prod.product_name.includes("필로우") || prod.product_name.includes("바디필로우")) {
+            category = "바디필로우";
+        } else if (prod.product_name.includes("서포트") || prod.product_name.includes("롤") || prod.product_name.includes("쿠션") || prod.product_name.includes("커버")) {
+            category = "악세서리";
         }
         
         const rawDescription = prod.summary_description || prod.simple_description || "";

@@ -20,14 +20,32 @@ async function fetchProductsFromCafe24() {
             // 제외 조건: 
             // 1. 이름이 '[' 로 시작하는 모든 상품 (예: [LAST CHANCE], [리퍼], [협력사] 등)
             // 2. 이름 어딘가에 메이트, 한정수량, 공동구매 등이 포함된 상품
-            const excludeRegex = /(메이트|한정수량|공동구매|리퍼|협력사)/;
+            // (혹시 모를 공백 문제를 위해 LAST CHANCE 등도 명시적 차단)
+            const excludeRegex = /(메이트|한정수량|공동구매|리퍼|협력사|LAST CHANCE)/i;
             return !name.trim().startsWith('[') && !excludeRegex.test(name);
         })
         .map(prod => {
+        // 카테고리 매핑 (소파 858, 바디필로우 876, 메이트/캐릭터 901)
         let category = "소파";
-        if (prod.product_name.includes("서포트") || prod.product_name.includes("롤") || prod.product_name.includes("쿠션")) {
-          category = "악세서리";
+        if (prod.category) {
+            const catArr = Array.isArray(prod.category) ? prod.category : [prod.category];
+            const catStr = JSON.stringify(catArr);
+            if (catStr.includes("901")) {
+                category = "메이트/캐릭터";
+            } else if (catStr.includes("876")) {
+                category = "바디필로우";
+            } else if (catStr.includes("858")) {
+                category = "소파";
+            } else if (prod.product_name.includes("서포트") || prod.product_name.includes("롤") || prod.product_name.includes("쿠션")) {
+                category = "악세서리";
+            }
+        } else {
+            // category 필드가 없을 때의 기존 fallback
+            if (prod.product_name.includes("서포트") || prod.product_name.includes("롤") || prod.product_name.includes("쿠션")) {
+              category = "악세서리";
+            }
         }
+        
         const rawDescription = prod.summary_description || prod.simple_description || "";
         const keywords = rawDescription.split(",").map(k => k.trim()).filter(k => k);
 

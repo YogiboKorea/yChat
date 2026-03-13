@@ -36,30 +36,49 @@ ${txt || "정보 없음."}`;
   }
 }
 
-async function recommendProductsWithGPT(userMsg, purchaseHistory, top3Products) {
+async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts) {
+    const productsJson = JSON.stringify(allProducts.map(p => ({
+        id: p.id,
+        name: p.name,
+        price: p.price,
+        category: p.category,
+        features: p.features,
+        useCase: p.useCase
+    })));
+
     const prompt = `
     당신은 요기보 세일즈 매니저입니다.
     고객 질문: "${userMsg}"
     구매 이력: ${purchaseHistory ? JSON.stringify(purchaseHistory.products) : "없음"}
-    추천 상품 목록:
-    ${top3Products.map(p => `- ${p.name} (${p.price}원): ${p.reasons.join(", ")}`).join("\n")}
     
-    위 정보를 바탕으로 고객에게 자연스럽게 상품을 추천하는 멘트를 작성해주세요.
-    구매 이력이 있다면 "지난번 구매하신 OO과 함께 쓰시면 좋아요" 같은 멘트를 꼭 넣어주세요.
+    현재 판매중인 요기보 전체 상품 목록:
+    ${productsJson}
+    
+    위 전체 상품 목록에서 고객의 질문(예: "1인 가구", "원룸", "가족", "게임" 등)과 구매 이력에 가장 잘 맞는 상품 딱 3개를 골라주세요.
+    그리고 이 3개의 상품을 왜 추천하는지에 대한 고객용 안내 멘트를 작성해주세요. (구매 이력이 있다면 "지난번 구매하신 OO과 함께 쓰시면 좋아요" 같은 멘트를 꼭 넣어주세요.)
+    
+    반드시 아래 JSON 형식으로만 응답해야 합니다. 다른 말은 절대 추가하지 마세요.
+    {
+       "recommendedIds": ["상품ID1", "상품ID2", "상품ID3"],
+       "message": "고객에게 전달할 매우 친절하고 구체적인 추천 멘트 (HTML <br>태그 사용 가능, 상품 이름과 가격, 추천 이유 포함)"
+    }
     `;
 
     try {
       const gptRes = await axios.post(OPEN_URL, {
         model: FINETUNED_MODEL,
-        temperature: 0.5,
+        temperature: 0.1, // 창의성보다는 정확한 JSON 출력을 위해 낮춤
+        response_format: { type: "json_object" }, // JSON 형태 강제
         messages: [
-          { role: "system", content: "당신은 요기보 상담원입니다. 근거 없는 단정/과장 표현은 피하고, 제공된 정보 범위에서만 추천 멘트를 작성하세요." },
+          { role: "system", content: "당신은 요기보 상담원입니다. 제공된 상품 카탈로그 안에서만 상품을 선택하고, 반드시 명시된 JSON 포맷으로만 응답하세요." },
           { role: "user", content: prompt }
         ]
       }, { headers: { Authorization: `Bearer ${API_KEY}` } });
       
-      return gptRes.data.choices[0].message.content;
+      const parsed = JSON.parse(gptRes.data.choices[0].message.content);
+      return parsed;
     } catch (e) { 
+        console.error("OpenAI Recommendation Error:", e);
         throw new Error("추천 멘트 생성 중 예외 발생"); 
     }
 }

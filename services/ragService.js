@@ -108,44 +108,29 @@ function getCurrentSystemPrompt() {
 }
 
 async function recommendProducts(userMsg, memberId) {
-    const keywords = userMsg.toLowerCase();
     const purchaseHistory = await getMemberPurchaseHistory(memberId);
     const yogiboProducts = getCachedProducts();
     
-    const scored = yogiboProducts.map(p => {
-        let score = 0;
-        let reasons = [];
-
-        if (keywords.includes("게임") && p.useCase.includes("게임")) { score += 30; reasons.push("🎮 게임할 때 편해요"); }
-        if (keywords.includes("잠") && p.useCase.includes("수면")) { score += 30; reasons.push("😴 꿀잠 보장"); }
-        if (keywords.includes("원룸") && p.features.includes("원룸")) { score += 30; reasons.push("🏠 좁은 공간 활용 굿"); }
-        if (keywords.includes("가족") && p.features.includes("2인용")) { score += 30; reasons.push("👨‍👩‍👧 가족과 함께"); }
-
-        if (purchaseHistory) {
-            const boughtSofa = purchaseHistory.categories.includes("sofa");
-            const boughtAccessory = purchaseHistory.categories.includes("accessory");
-
-            if (boughtSofa && !boughtAccessory && p.category === "악세서리") {
-                score += 50; reasons.push("✨ 구매하신 빈백과 함께 쓰면 편안함이 2배!");
-            }
-            if (!boughtSofa && boughtAccessory && p.category === "소파") {
-                score += 40; reasons.push("✨ 가지고 계신 쿠션과 잘 어울리는 소파예요");
-            }
-        }
-
-        if (p.name.includes("맥스") || p.name.includes("서포트")) score += 10;
-        return { ...p, score, reasons };
-    });
-
-    const top3 = scored.sort((a, b) => b.score - a.score).slice(0, 3);
-    
-    if(top3.length === 0) return "원하시는 조건에 맞는 상품을 찾지 못했어요. 조금 더 구체적으로 말씀해주시겠어요?";
+    if(!yogiboProducts || yogiboProducts.length === 0) {
+        return "현재 상품 데이터를 불러올 수 없습니다. 잠시 후 다시 시도해주세요.";
+    }
 
     try {
-        let answer = await recommendProductsWithGPT(userMsg, purchaseHistory, top3);
-        const buttons = top3.map(p => `<a href="${p.productUrl}" target="_blank" class="consult-btn" style="background:#58b5ca; color:#fff; display:inline-block; margin:5px; text-decoration:none;">🛍️ ${p.name} 보러가기</a>`).join("");
+        const aiResult = await recommendProductsWithGPT(userMsg, purchaseHistory, yogiboProducts);
+        
+        let answer = aiResult.message || "고객님께 딱 맞는 상품을 찾았습니다!";
+        const recommendedProducts = aiResult.recommendedIds
+            .map(id => yogiboProducts.find(p => p.id === id))
+            .filter(p => p !== undefined); // 혹시 모를 매치 실패 방지
+            
+        if (recommendedProducts.length === 0) {
+             return "원하시는 조건에 맞는 상품을 찾지 못했어요. 조금 더 구체적으로 말씀해주시겠어요?";
+        }
+
+        const buttons = recommendedProducts.map(p => `<a href="${p.productUrl}" target="_blank" class="consult-btn" style="background:#58b5ca; color:#fff; display:inline-block; margin:5px; text-decoration:none;">🛍️ ${p.name} 보러가기</a>`).join("");
         return answer + "<br><br>" + buttons;
     } catch (e) { 
+        console.error("추천 처리 실패:", e);
         return "추천 상품을 불러오는 중 오류가 발생했습니다."; 
     }
 }

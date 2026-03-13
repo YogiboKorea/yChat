@@ -113,7 +113,11 @@ async function syncCafe24Orders() {
     
     console.log(`✅ [매출 스케줄러] 총 ${totalFetched}건의 주문 데이터를 성공적으로 동기화했습니다.`);
   } catch (error) {
-    console.error("❌ [매출 스케줄러] 오류 발생:", error.response ? JSON.stringify(error.response.data, null, 2) : error.message);
+    if (error.response && typeof error.response.data === 'string' && error.response.data.includes("<html")) {
+        console.error(`❌ [매출 스케줄러] Cafe24 서버 접속 지연 (503 Service Unavailable)`);
+    } else {
+        console.error("❌ [매출 스케줄러] 오류 발생:", error.response ? JSON.stringify(error.response.data, null, 2) : error.message);
+    }
   }
 }
 

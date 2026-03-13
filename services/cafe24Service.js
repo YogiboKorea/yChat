@@ -155,8 +155,8 @@ async function getShipmentDetail(orderId) {
       const shipment = response.shipments[0];
       const carrierMap = { 
           "0019": { name: "롯데 택배", url: "https://www.lotteglogis.com/" }, 
-          "0039": { name: "경동 택배", url: "https://kdexp.com/service/delivery/search_detail.do?barcode=" }, 
-          "0023": { name: "경동 택배", url: "https://kdexp.com/service/delivery/search_detail.do?barcode=" } 
+          "0039": { name: "경동 택배", url: "https://kdexp.com/index.do" }, 
+          "0023": { name: "경동 택배", url: "https://kdexp.com/index.do" } 
       };
       
       const carrierInfo = carrierMap[shipment.shipping_company_code] || { name: shipment.shipping_company_name || "지정 택배사", url: "" };

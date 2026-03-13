@@ -216,7 +216,7 @@ async function getShipmentDetail(orderId) {
     s.shipping_company_name = map[s.shipping_company_code] || s.shipping_company_code || "지정 택배사";
     if (s.tracking_no) {
         if (s.shipping_company_code === "0019") s.tracking_url = "https://www.lotteglogis.com/";
-        else if (["0039", "0023"].includes(s.shipping_company_code)) s.tracking_url = "https://kdexp.com/service/delivery/tracking.do?barcode=" + s.tracking_no;
+        else if (["0039", "0023"].includes(s.shipping_company_code)) s.tracking_url = "https://kdexp.com/index.do";
     }
     return s;
   }

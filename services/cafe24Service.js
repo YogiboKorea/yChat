@@ -17,11 +17,9 @@ async function fetchProductsFromCafe24() {
       yogiboProducts = response.products
         .filter(prod => {
             const name = prod.product_name;
-            return !name.includes("메이트") && 
-                   !name.includes("[협력사]") &&
-                   !name.includes("[한정수량]") &&
-                   !name.includes("[공동구매]") &&
-                   !name.includes("[리퍼]");
+            // 제외 키워드: 메이트, 협력사, 한정수량, 공동구매, 리퍼 (띄어쓰기, 괄호 유무 상관없이 모두 검출)
+            const excludeRegex = /(메이트|협력사|한정수량|공동구매|리퍼)/;
+            return !excludeRegex.test(name);
         })
         .map(prod => {
         let category = "소파";

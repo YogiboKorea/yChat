@@ -46,8 +46,9 @@ app.use("/", knowledgeRoutes);
       app.listen(PORT, () => console.log(`🚀 앱 실행 완료 (포트: ${PORT})`)); 
 
       // 5. 스케줄러 실행
-      syncCafe24Orders(); 
-      setInterval(syncCafe24Orders, 10 * 60 * 1000); // 온라인 매출 집계 (10분 간격)
+      // 기존 전체 매출 집계 스케줄러 비활성화 (Cafe24 503 우회 목적 - on-demand로 전환)
+      // syncCafe24Orders(); 
+      // setInterval(syncCafe24Orders, 10 * 60 * 1000); 
       
       setInterval(fetchProductsFromCafe24, 60 * 60 * 1000); // 추천 상품 데이터 풀 동기화 (1시간 간격 - CDN 장애시 자동 복구 및 신규 상품 업데이트 목적)
 

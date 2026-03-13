@@ -2,6 +2,7 @@ const { findRuleBasedAnswer, findAllRelevantContent } = require("../services/rag
 const { getLLMResponse } = require("../services/openaiService");
 const { getMemberPurchaseHistory } = require("../services/cafe24Service");
 const { saveConversationLog } = require("../services/knowledgeService");
+const { syncCafe24Orders } = require("../services/cafe24Service");
 const { formatResponseText, FALLBACK_MESSAGE_HTML } = require("../utils/helpers");
 
 async function handleChat(req, res) {
@@ -32,6 +33,9 @@ async function handleChat(req, res) {
     
     let historyText = "없음";
     if (memberId && memberId !== "null" && memberId !== "undefined") {
+       // 사용자가 대화를 시작할 때 해당 회원의 최신 주문 내역을 실시간 동기화
+       await syncCafe24Orders(memberId);
+       
        const history = await getMemberPurchaseHistory(memberId);
        if (history && history.products && history.products.length > 0) {
            historyText = history.products.join(", ");

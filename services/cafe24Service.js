@@ -76,49 +76,43 @@ function getCachedProducts() {
     return yogiboProducts;
 }
 
-async function syncCafe24Orders() {
-  console.log("🔄 [매출 스케줄러] Cafe24 온라인 매출 집계를 시작합니다...");
+// 회원별 주문 데이터를 실시간 또는 필요한 시점에만 동기화하도록 수정 (서버 부하 방지)
+async function syncCafe24Orders(memberId = null) {
+  if (!memberId) {
+      console.log("⚠️ [매출 동기화] memberId가 없어서 동기화를 생략합니다.");
+      return;
+  }
+  
+  console.log(`🔄 [데이터 동기화] 회원(${memberId})의 최근 주문 내역을 동기화합니다...`);
   const db = getDB();
 
   try {
-    let currentStart = dayjs('2025-11-01');
-    const finalEnd = dayjs(); 
-    let totalFetched = 0;
+    const today = dayjs();
+    const start = dayjs().subtract(6, 'month'); // 최근 6개월 치만 동기화
 
-    while (currentStart.isBefore(finalEnd) || currentStart.isSame(finalEnd, 'day')) {
-      let currentEnd = currentStart.add(2, 'month').endOf('month'); 
-      if (currentEnd.isAfter(finalEnd)) {
-        currentEnd = finalEnd;
-      }
+    const params = {
+      shop_no: 1,
+      member_id: memberId,
+      start_date: start.format('YYYY-MM-DD'),
+      end_date: today.format('YYYY-MM-DD'),
+      limit: 100,
+      embed: "items" // 상품 상세 정보도 같이 가져옴
+    };
 
-      const params = {
-        shop_no: 1,
-        order_status: 'N40', 
-        start_date: currentStart.format('YYYY-MM-DD'),
-        end_date: currentEnd.format('YYYY-MM-DD'),
-        limit: 100,
-        offset: 0
-      };
-
-      console.log(`📡 [매출 스케줄러] 데이터 요청 구간: ${params.start_date} ~ ${params.end_date}`);
-
-      const response = await apiRequest("GET", `https://${process.env.CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`, {}, params);
-      
-      if (response && response.orders && response.orders.length > 0) {
-        totalFetched += response.orders.length;
-        
-        for (const order of response.orders) {
-            await db.collection("cafe24Orders").updateOne(
-                { order_id: order.order_id },
-                { $set: { ...order, updatedAt: new Date() } },
-                { upsert: true }
-            );
-        }
-      }
-      currentStart = currentEnd.add(1, 'day');
-    }
+    const response = await apiRequest("GET", `https://${process.env.CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`, {}, params);
     
-    console.log(`✅ [매출 스케줄러] 총 ${totalFetched}건의 주문 데이터를 성공적으로 동기화했습니다.`);
+    if (response && response.orders && response.orders.length > 0) {
+      for (const order of response.orders) {
+          await db.collection("cafe24Orders").updateOne(
+              { order_id: order.order_id },
+              { $set: { ...order, updatedAt: new Date() } },
+              { upsert: true }
+          );
+      }
+      console.log(`✅ [데이터 동기화] 회원(${memberId})의 주문 ${response.orders.length}건 갱신 완료.`);
+    } else {
+      console.log(`ℹ️ [데이터 동기화] 회원(${memberId})의 최근 주문 내역이 없습니다.`);
+    }
   } catch (error) {
     if (error.response && typeof error.response.data === 'string' && error.response.data.includes("<html")) {
         console.error(`❌ [매출 스케줄러] Cafe24 서버 접속 지연 (503 Service Unavailable)`);

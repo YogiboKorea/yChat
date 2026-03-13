@@ -15,12 +15,13 @@ async function handleChat(req, res) {
       return res.json(ruleAnswer);
     }
 
-    const docs = findAllRelevantContent(message);
+    const docs = await findAllRelevantContent(message);
     const bestScore = docs.length > 0 ? docs[0].score : 0;
 
     const isPersonalQuery = /(내 정보|아이디|구매이력|장바구니|안녕|반가|결제|최근|뭐야|누구|이름)/.test(message);
 
-    if ((!docs || docs.length === 0 || bestScore < 12) && !isPersonalQuery) {
+    // 이전에는 12점 커트라인이었으나, 유사도(Cosine Similarity) 체계인 40점 기준으로 변경 (findAllRelevantContent 내부에서 이미 40점 이상만 반환)
+    if ((!docs || docs.length === 0) && !isPersonalQuery) {
       const fallback = `${FALLBACK_MESSAGE_HTML}`;
       await saveConversationLog(memberId, message, fallback);
       return res.json({ text: fallback });

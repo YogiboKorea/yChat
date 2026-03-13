@@ -97,7 +97,36 @@ async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts, c
     }
 }
 
+async function getEmbedding(textOrArray) {
+  if (!textOrArray || (Array.isArray(textOrArray) && textOrArray.length === 0)) return null;
+  try {
+    const embeddingUrl = OPEN_URL.includes("/chat/completions") 
+      ? OPEN_URL.replace("/chat/completions", "/embeddings")
+      : "https://api.openai.com/v1/embeddings";
+
+    const res = await axios.post(
+      embeddingUrl,
+      {
+        model: "text-embedding-3-small", // 요기보 기본 최적화
+        input: textOrArray
+      },
+      { headers: { Authorization: `Bearer ${API_KEY}`, "Content-Type": "application/json" } }
+    );
+    
+    // 배열이면 배열 전체 반환, 단일 문자열이면 첫 번째 벡터 반환
+    if (Array.isArray(textOrArray)) {
+        // 원래 입력 순서대로 정렬 (res.data.data가 순서를 보장하지만 혹시 몰라 sort 추가)
+        return res.data.data.sort((a,b) => a.index - b.index).map(d => d.embedding);
+    }
+    return res.data.data[0].embedding;
+  } catch (e) {
+    console.error("Embedding API error:", e?.response?.data || e.message);
+    return null;
+  }
+}
+
 module.exports = {
     getLLMResponse,
-    recommendProductsWithGPT
+    recommendProductsWithGPT,
+    getEmbedding
 };

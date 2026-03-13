@@ -11,6 +11,7 @@ const {
 
 const path = require("path");
 const fs = require("fs");
+const { getEmbedding } = require("./openaiService");
 
 let staticFaqList = [];
 try { staticFaqList = require("../faq"); } catch (e) { console.warn("faq.js load skip"); }
@@ -67,48 +68,100 @@ async function updateSearchableData() {
         });
     }
 
+    // 1) DB에서 누락된 임베딩(Vector) 일괄 생성 (Backfill)
+    const missingEmbeddings = notes.filter(n => !n.embedding);
+    if (missingEmbeddings.length > 0) {
+        console.log(`[RAG] DB 내 ${missingEmbeddings.length}개의 데이터에 대한 임베딩(Vector) 생성을 시작합니다...`);
+        const batchSize = 500;
+        for (let i = 0; i < missingEmbeddings.length; i += batchSize) {
+            const batch = missingEmbeddings.slice(i, i + batchSize);
+            const textsToEmbed = batch.map(b => `Q: ${b.question || ''}\nA: ${(b.answer || '').replace(/<[^>]*>?/gm, '')}`);
+            const embeddings = await getEmbedding(textsToEmbed);
+            if (embeddings && embeddings.length === batch.length) {
+                await Promise.all(batch.map((b, idx) => {
+                    b.embedding = embeddings[idx]; 
+                    return db.collection("postItNotes").updateOne({ _id: b._id }, { $set: { embedding: embeddings[idx] } });
+                }));
+            }
+        }
+    }
+
+    // 2) 메모리 로드 
     allSearchableData = [...faqData, ...dbData, ...jsonData];
     
+    // 3) 메모리에만 존재하는 정적 데이터(FAQ/JSON) 임베딩 생성 (서버 시작 또는 갱신 시점 1회)
+    const memoryMissing = allSearchableData.filter(i => !i.embedding);
+    if (memoryMissing.length > 0) {
+        console.log(`[RAG] 정적 데이터 ${memoryMissing.length}개의 임베딩(Vector) 생성을 시작합니다...`);
+        const batchSize = 500;
+        for (let i = 0; i < memoryMissing.length; i += batchSize) {
+            const batch = memoryMissing.slice(i, i + batchSize);
+            const textsToEmbed = batch.map(b => `Q: ${b.q || ''}\nA: ${(b.a || '').replace(/<[^>]*>?/gm, '')}`);
+            const embeddings = await getEmbedding(textsToEmbed);
+            if (embeddings && embeddings.length === batch.length) {
+                batch.forEach((b, idx) => { b.embedding = embeddings[idx]; });
+            }
+        }
+    }
+
+    // 4) systemPrompts 테이블 최신값 가져오기
     const prompts = await db.collection("systemPrompts").find({}).sort({createdAt: -1}).limit(1).toArray();
     if (prompts.length > 0) currentSystemPrompt = prompts[0].content; 
     
-    console.log(`✅ [데이터 로드 완료] 총 ${allSearchableData.length}개의 지식 데이터가 준비되었습니다.`);
+    console.log(`✅ [데이터 로드 완료] 총 ${allSearchableData.length}개의 지식 데이터가 벡터 기반 RAG로 준비되었습니다.`);
   } catch (err) { 
       console.error("데이터 갱신 실패:", err); 
   }
 }
 
-function findAllRelevantContent(msg) {
-  const kws = msg.split(/\s+/).filter(w => w.length > 1);
-  if (!kws.length && msg.length < 2) return [];
-
-  const scored = allSearchableData.map(item => {
-    let score = 0;
-    const q = (item.q || "").toLowerCase().replace(/\s+/g, "");
-    const a = (item.a || "").toLowerCase();
-    const cleanMsg = msg.toLowerCase().replace(/\s+/g, "");
-    
-    if (q === cleanMsg) score += 100;
-    else if (q.includes(cleanMsg) || cleanMsg.includes(q)) score += 50;
-    
-    const stopwords = ["알려줘", "알려주세요", "뭐야", "뭐지", "어떤", "어떻게", "무엇", "대해", "대해서", "가장", "추천", "부탁", "요기보", "yogibo"];
-    kws.forEach(w => {
-      const cleanW = w.toLowerCase();
-      // 짧거나 무의미한 불용어는 스코어 계산에서 제외
-      if (stopwords.some(s => cleanW.includes(s))) return;
-      
-      if (item.q.toLowerCase().includes(cleanW)) score += 30; // 제목 매칭
-      if (item.a.toLowerCase().includes(cleanW)) score += 30; // 내용(PDF 본문 등) 매칭 대폭 상향
-    });
-
-    if (score > 0 && item.category === "pdf-knowledge") {
-        score += 10; // PDF 문서에서 키워드가 하나라도 걸리면 보너스 가중치 부여
+function cosineSimilarity(vecA, vecB) {
+    if (!vecA || !vecB || vecA.length !== vecB.length) return 0;
+    let dotProduct = 0, normA = 0, normB = 0;
+    for (let i = 0; i < vecA.length; i++) {
+        dotProduct += vecA[i] * vecB[i];
+        normA += vecA[i] * vecA[i];
+        normB += vecB[i] * vecB[i];
     }
+    if (normA === 0 || normB === 0) return 0;
+    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+}
 
-    return { ...item, score };
+async function findAllRelevantContent(msg) {
+  const queryEmbedding = await getEmbedding(msg);
+  
+  if (!queryEmbedding) {
+      console.warn("[RAG] 임베딩 API 장애: 키워드 기반 검색으로 폴백합니다.");
+      const kws = msg.split(/\s+/).filter(w => w.length > 1);
+      if (!kws.length && msg.length < 2) return [];
+
+      const scored = allSearchableData.map(item => {
+        let score = 0;
+        const q = (item.q || "").toLowerCase().replace(/\s+/g, "");
+        const cleanMsg = msg.toLowerCase().replace(/\s+/g, "");
+        if (q === cleanMsg) score += 100;
+        else if (q.includes(cleanMsg) || cleanMsg.includes(q)) score += 50;
+        
+        kws.forEach(w => {
+          if ((item.q || "").toLowerCase().includes(w)) score += 30;
+          if ((item.a || "").toLowerCase().includes(w)) score += 30;
+        });
+        return { ...item, score };
+      });
+      return scored.filter(i => i.score >= 12).sort((a, b) => b.score - a.score).slice(0, 6);
+  }
+
+  // 코사인 유사도 계산
+  const scored = allSearchableData.map(item => {
+      let score = 0;
+      if (item.embedding) {
+          const sim = cosineSimilarity(queryEmbedding, item.embedding);
+          score = Math.floor(sim * 100); // 0~100 스케일
+      }
+      return { ...item, score };
   });
 
-   return scored.filter(i => i.score >= 12).sort((a, b) => b.score - a.score).slice(0, 6);
+  // 유사도 40점 이상만 추출 (OpenAI 임베딩에서 0.4 정도면 꽤 관련성이 있음)
+  return scored.filter(i => i.score >= 40).sort((a, b) => b.score - a.score).slice(0, 6);
 }
 
 function getCurrentSystemPrompt() {
@@ -118,7 +171,7 @@ function getCurrentSystemPrompt() {
 async function recommendProducts(userMsg, memberId) {
     const purchaseHistory = await getMemberPurchaseHistory(memberId);
     const yogiboProducts = getCachedProducts();
-    const relevantContext = findAllRelevantContent(userMsg);
+    const relevantContext = await findAllRelevantContent(userMsg);
     
     if(!yogiboProducts || yogiboProducts.length === 0) {
         return "현재 상품 데이터를 불러올 수 없습니다. 잠시 후 다시 시도해주세요.";

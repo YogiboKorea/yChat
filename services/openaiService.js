@@ -44,10 +44,15 @@ async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts, c
         useCase: p.useCase
     })));
 
+    const hasPurchaseHistory = purchaseHistory && purchaseHistory.products && purchaseHistory.products.length > 0;
+    const coverExclusionRule = !hasPurchaseHistory 
+        ? `- [매우 중요] 고객의 구매 이력이 없으므로, 이름에 "커버"가 들어간 상품은 추천에서 절대로 제외하세요.` 
+        : `- [리뷰 유도] 고객이 소유한 상품 목록(${purchaseHistory.products.join(", ")}) 중, 고객이 대화 중 언급하지 않았거나 리뷰를 작성하지 않았을 가능성이 있는 상품이 있다면 친절하게 리뷰 작성을 권유하는 멘트를 자연스럽게 한 줄 추가하세요. (예: "혹시 예전에 구매하신 OO은 잘 사용하고 계신가요? 아직 리뷰를 남기지 않으셨다면 리뷰 이벤트에 참여해 보세요!")`;
+
     const prompt = `
     당신은 요기보 세일즈 매니저입니다.
     고객 질문: "${userMsg}"
-    구매 이력: ${purchaseHistory ? JSON.stringify(purchaseHistory.products) : "없음"}
+    최근 1년 구매 이력: ${hasPurchaseHistory ? JSON.stringify(purchaseHistory.products) : "없음"}
     
     [교육된 지식 데이터(우선 순위가 가장 높음)]
     ${context.length > 0 ? context.map(c => `Q: ${c.q}\nA: ${c.a}`).join("\n\n") : "없음"}
@@ -59,6 +64,8 @@ async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts, c
     - 고객이 "소파"나 "가구"를 추천해달라고 하면 반드시 category가 "소파"인 상품 중에서만 추천하세요. (예: 스퀴지보, 메이트 등은 제외)
     - 고객이 "바디필로우"나 "베개", "껴안고 자는" 것을 원하면 반드시 category가 "바디필로우"인 상품 중에서만 추천하세요.
     - 고객이 "인형", "캐릭터", "아기 선물" 등을 원하면 반드시 category가 "메이트/캐릭터"인 상품 중에서만 추천하세요.
+    - [추천 가중치] 요기보의 대표 상품은 "맥스(Max)" 입니다. 고객의 요청 조건에 맥스가 부합한다면 가급적 맥스 위주로 추천 목록에 포함시켜 주세요.
+    ${coverExclusionRule}
     
     위 전체 상품 목록에서 고객의 질문(예: "1인 가구", "원룸", "가족", "게임" 등)에 대해, [카테고리 매칭 필수 규칙]과 [교육된 지식 데이터]를 가장 우선적으로 참고하여 적합한 상품 딱 3개를 골라주세요. 지식 데이터에 특징/추천안이 언급된 상품이 있다면 무조건 우선 추천하세요.
     그리고 이 3개의 상품을 왜 추천하는지에 대한 고객용 안내 멘트를 작성해주세요. (구매 이력이 있다면 "지난번 구매하신 OO과 함께 쓰시면 좋아요" 같은 멘트를 꼭 넣어주세요.)

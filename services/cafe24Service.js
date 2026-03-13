@@ -150,26 +150,39 @@ async function getShipmentDetail(orderId) {
 async function getMemberPurchaseHistory(memberId) {
     if (!memberId || memberId === "null") return null;
     try {
-        const today = new Date();
-        const twoMonthsAgo = new Date();
-        twoMonthsAgo.setMonth(today.getMonth() - 2); 
-
-        const response = await apiRequest("GET", `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`, {}, {
-            member_id: memberId, start_date: twoMonthsAgo.toISOString().split('T')[0], end_date: today.toISOString().split('T')[0], limit: 20, embed: "items" 
-        });
-
-        if (!response.orders) return null;
-
         const history = { categories: [], products: [], colors: [] };
-        response.orders.forEach(order => {
-            order.items.forEach(item => {
-                history.products.push(item.product_name);
-                if (item.product_name.includes("맥스") || item.product_name.includes("미디") || item.product_name.includes("빈백")) history.categories.push("sofa");
-                if (item.product_name.includes("서포트") || item.product_name.includes("롤")) history.categories.push("accessory");
-                if (item.option_value) history.colors.push(item.option_value); 
+        let currentEnd = dayjs();
+        const oneYearAgo = dayjs().subtract(1, 'year');
+
+        while (currentEnd.isAfter(oneYearAgo)) {
+            let currentStart = currentEnd.subtract(3, 'month');
+            if (currentStart.isBefore(oneYearAgo)) {
+                currentStart = oneYearAgo;
+            }
+
+            const response = await apiRequest("GET", `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/orders`, {}, {
+                member_id: memberId, 
+                start_date: currentStart.format('YYYY-MM-DD'), 
+                end_date: currentEnd.format('YYYY-MM-DD'), 
+                limit: 50, 
+                embed: "items" 
             });
-        });
-        return history;
+
+            if (response && response.orders) {
+                response.orders.forEach(order => {
+                    order.items.forEach(item => {
+                        history.products.push(item.product_name);
+                        if (item.product_name.includes("맥스") || item.product_name.includes("미디") || item.product_name.includes("빈백")) history.categories.push("sofa");
+                        if (item.product_name.includes("서포트") || item.product_name.includes("롤")) history.categories.push("accessory");
+                        if (item.option_value) history.colors.push(item.option_value); 
+                    });
+                });
+            }
+
+            currentEnd = currentStart.subtract(1, 'day');
+        }
+
+        return history.products.length > 0 ? history : null;
     } catch (e) {
         console.error("구매이력 조회 실패:", e.message); return null;
     }

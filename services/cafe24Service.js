@@ -90,13 +90,13 @@ async function syncCafe24Orders(memberId = null) {
     const today = dayjs();
     const sixMonthsAgo = dayjs().subtract(6, 'month');
 
-    // Cafe24는 한 번 조회 시 너무 긴 기간을 허용하지 않거나(보통 90일),
+    // Cafe24는 한 번 조회 시 너무 긴 기간을 허용하지 않거나(최대 90일),
     // 특정 기준일로부터 6개월 이내만 조회 가능합니다.
-    // 안전하게 3개월씩 끊어서(총 2번) 조회
+    // 안전하게 60일(대략 2달) 단위로 끊어서 조회합니다.
     let currentEnd = today;
     
     while (currentEnd.isAfter(sixMonthsAgo)) {
-        let currentStart = currentEnd.subtract(3, 'month');
+        let currentStart = currentEnd.subtract(60, 'day');
         if (currentStart.isBefore(sixMonthsAgo)) {
             currentStart = sixMonthsAgo;
         }
@@ -190,8 +190,8 @@ async function getMemberPurchaseHistory(memberId) {
         const limitDate = dayjs().subtract(6, 'month');
 
         while (currentEnd.isAfter(limitDate)) {
-            // 한 번에 최대 90일(3개월) 이내로 끊어서 조회
-            let currentStart = currentEnd.subtract(3, 'month');
+            // 한 번에 최대 90일 이내로 끊어서 조회해야 하므로 안전하게 60일씩 차감
+            let currentStart = currentEnd.subtract(60, 'day');
             if (currentStart.isBefore(limitDate)) {
                 currentStart = limitDate;
             }

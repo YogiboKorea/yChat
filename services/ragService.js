@@ -110,13 +110,14 @@ function getCurrentSystemPrompt() {
 async function recommendProducts(userMsg, memberId) {
     const purchaseHistory = await getMemberPurchaseHistory(memberId);
     const yogiboProducts = getCachedProducts();
+    const relevantContext = findAllRelevantContent(userMsg);
     
     if(!yogiboProducts || yogiboProducts.length === 0) {
         return "현재 상품 데이터를 불러올 수 없습니다. 잠시 후 다시 시도해주세요.";
     }
 
     try {
-        const aiResult = await recommendProductsWithGPT(userMsg, purchaseHistory, yogiboProducts);
+        const aiResult = await recommendProductsWithGPT(userMsg, purchaseHistory, yogiboProducts, relevantContext);
         
         let answer = aiResult.message || "고객님께 딱 맞는 상품을 찾았습니다!";
         const recommendedProducts = aiResult.recommendedIds

@@ -14,7 +14,9 @@ async function fetchProductsFromCafe24() {
     });
 
     if (response && response.products) {
-      yogiboProducts = response.products.map(prod => {
+      yogiboProducts = response.products
+        .filter(prod => !prod.product_name.includes("메이트") && !prod.product_name.includes("[협력사]"))
+        .map(prod => {
         let category = "소파";
         if (prod.product_name.includes("서포트") || prod.product_name.includes("롤") || prod.product_name.includes("쿠션")) {
           category = "악세서리";

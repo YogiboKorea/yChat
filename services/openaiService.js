@@ -34,7 +34,7 @@ ${txt || "정보 없음."}`;
   }
 }
 
-async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts) {
+async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts, context = []) {
     const productsJson = JSON.stringify(allProducts.map(p => ({
         id: p.id,
         name: p.name,
@@ -49,10 +49,13 @@ async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts) {
     고객 질문: "${userMsg}"
     구매 이력: ${purchaseHistory ? JSON.stringify(purchaseHistory.products) : "없음"}
     
+    [교육된 지식 데이터(우선 순위가 가장 높음)]
+    ${context.length > 0 ? context.map(c => `Q: ${c.q}\nA: ${c.a}`).join("\n\n") : "없음"}
+    
     현재 판매중인 요기보 전체 상품 목록:
     ${productsJson}
     
-    위 전체 상품 목록에서 고객의 질문(예: "1인 가구", "원룸", "가족", "게임" 등)과 구매 이력에 가장 잘 맞는 상품 딱 3개를 골라주세요.
+    위 전체 상품 목록에서 고객의 질문(예: "1인 가구", "원룸", "가족", "게임" 등)에 대해, [교육된 지식 데이터]를 가장 우선적으로 참고하여 적합한 상품 딱 3개를 골라주세요. 지식 데이터에 특징/추천안이 언급된 상품이 있다면 무조건 우선 추천하세요.
     그리고 이 3개의 상품을 왜 추천하는지에 대한 고객용 안내 멘트를 작성해주세요. (구매 이력이 있다면 "지난번 구매하신 OO과 함께 쓰시면 좋아요" 같은 멘트를 꼭 넣어주세요.)
     
     반드시 아래 JSON 형식으로만 응답해야 합니다. 다른 말은 절대 추가하지 마세요.

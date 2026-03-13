@@ -15,7 +15,14 @@ async function fetchProductsFromCafe24() {
 
     if (response && response.products) {
       yogiboProducts = response.products
-        .filter(prod => !prod.product_name.includes("메이트") && !prod.product_name.includes("[협력사]"))
+        .filter(prod => {
+            const name = prod.product_name;
+            return !name.includes("메이트") && 
+                   !name.includes("[협력사]") &&
+                   !name.includes("[한정수량]") &&
+                   !name.includes("[공동구매]") &&
+                   !name.includes("[리퍼]");
+        })
         .map(prod => {
         let category = "소파";
         if (prod.product_name.includes("서포트") || prod.product_name.includes("롤") || prod.product_name.includes("쿠션")) {

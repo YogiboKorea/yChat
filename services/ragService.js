@@ -235,7 +235,12 @@ async function findRuleBasedAnswer(userInput, memberId) {
                     let text = `최근 주문(<strong>${orderId}</strong>)의 배송 상태는 <strong>${ship.status || "배송 준비중"}</strong>입니다.`;
                     if (ship.tracking_no) {
                         text += `<br>택배사: ${ship.shipping_company_name}<br>운송장 번호: ${ship.tracking_no}`;
-                        text += `<br><br><a href="${ship.tracking_url}" target="_blank" class="consult-btn" style="background:#58b5ca; color:#fff; display:inline-block; text-decoration:none;"><i class="fa-solid fa-truck"></i> 실시간 배송조회</a>`;
+                        if (ship.tracking_url && ship.tracking_url !== "#") {
+                            text += `<br><br><a href="${ship.tracking_url}" target="_blank" class="consult-btn" style="background:#58b5ca; color:#fff; display:inline-block; text-decoration:none;"><i class="fa-solid fa-truck"></i> 실시간 배송조회</a>`;
+                        } else {
+                            // 롯데택배 기본 페이지로 강제 안내 (알려주신 링크 기반)
+                            text += `<br><br><a href="https://www.lotteglogis.com/home/reservation/tracking/index" target="_blank" class="consult-btn" style="background:#58b5ca; color:#fff; display:inline-block; text-decoration:none;"><i class="fa-solid fa-truck"></i> 배송조회 (롯데택배 홈페이지)</a>`;
+                        }
                     }
                     return { text };
                 }

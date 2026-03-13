@@ -153,9 +153,26 @@ async function getShipmentDetail(orderId) {
     const response = await apiRequest("GET", API_URL, {}, { shop_no: 1 });
     if (response.shipments && response.shipments.length > 0) {
       const shipment = response.shipments[0];
-      const carrierMap = { "0019": { name: "롯데 택배" }, "0039": { name: "경동 택배" }, "0023": { name: "경동 택배" } };
-      const carrierInfo = carrierMap[shipment.shipping_company_code] || { name: shipment.shipping_company_name || "지정 택배사" };
+      const carrierMap = { 
+          "0019": { name: "롯데 택배", url: "https://www.lotteglogis.com/home/wrapper/tg/etc/trackReturn?InvNo=" }, 
+          "0039": { name: "경동 택배", url: "https://kdexp.com/service/delivery/search_detail.do?barcode=" }, 
+          "0023": { name: "경동 택배", url: "https://kdexp.com/service/delivery/search_detail.do?barcode=" } 
+      };
+      
+      const carrierInfo = carrierMap[shipment.shipping_company_code] || { name: shipment.shipping_company_name || "지정 택배사", url: "" };
       shipment.shipping_company_name = carrierInfo.name;
+      
+      // Cafe24에서 tracking_url을 제대로 안 내려주거나 undefined인 경우 직접 조립
+      if (!shipment.tracking_url || shipment.tracking_url === "undefined") {
+          if (carrierInfo.url && shipment.tracking_no) {
+              shipment.tracking_url = carrierInfo.url + shipment.tracking_no;
+          } else if (shipment.tracking_no) {
+              // 매핑되지 않은 택배사는 네이버 검색 연동으로 폴백 처리
+              shipment.tracking_url = `https://search.naver.com/search.naver?query=${encodeURIComponent(shipment.shipping_company_name + ' 배송조회 ' + shipment.tracking_no)}`;
+          } else {
+              shipment.tracking_url = "#";
+          }
+      }
       return shipment;
     } 
     return null;

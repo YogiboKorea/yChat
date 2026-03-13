@@ -91,10 +91,14 @@ function findAllRelevantContent(msg) {
     if (q === cleanMsg) score += 100;
     else if (q.includes(cleanMsg) || cleanMsg.includes(q)) score += 50;
     
+    const stopwords = ["알려줘", "알려주세요", "뭐야", "뭐지", "어떤", "어떻게", "무엇", "대해", "대해서", "가장", "추천", "부탁"];
     kws.forEach(w => {
       const cleanW = w.toLowerCase();
+      // 짧거나 무의미한 불용어는 스코어 계산에서 제외
+      if (stopwords.some(s => cleanW.includes(s))) return;
+      
       if (item.q.toLowerCase().includes(cleanW)) score += 20;
-      if (item.a.toLowerCase().includes(cleanW)) score += 5;
+      if (item.a.toLowerCase().includes(cleanW)) score += 15; // 본문 매칭 점수를 5 -> 15로 대폭 상향
     });
 
     return { ...item, score };

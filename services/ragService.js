@@ -227,8 +227,25 @@ async function findRuleBasedAnswer(userInput, memberId) {
     if (isUserLoggedIn(memberId)) {
       try {
         const data = await getOrderShippingInfo(memberId);
-        if (data.orders?.[0]) return { text: `최근 주문(<strong>${data.orders[0].order_id}</strong>)을 확인했습니다.` };
-        return { text: "최근 주문 내역이 없습니다." };
+        if (data.orders?.[0]) {
+            const orderId = data.orders[0].order_id;
+            try {
+                const ship = await getShipmentDetail(orderId);
+                if (ship) {
+                    let text = `최근 주문(<strong>${orderId}</strong>)의 배송 상태는 <strong>${ship.status || "배송 준비중"}</strong>입니다.`;
+                    if (ship.tracking_no) {
+                        text += `<br>택배사: ${ship.shipping_company_name}<br>운송장 번호: ${ship.tracking_no}`;
+                        text += `<br><br><a href="${ship.tracking_url}" target="_blank" class="consult-btn" style="background:#58b5ca; color:#fff; display:inline-block; text-decoration:none;"><i class="fa-solid fa-truck"></i> 실시간 배송조회</a>`;
+                    }
+                    return { text };
+                }
+            } catch (e) {
+                // 배송 정보 조회를 못했지만 주문번호는 아는 경우
+                return { text: `최근 주문(<strong>${orderId}</strong>) 내역을 확인했습니다.<br>배송 준비 중이거나 배송사 연동이 지연되고 있을 수 있습니다.` };
+            }
+            return { text: `최근 주문(<strong>${orderId}</strong>) 내역을 확인했습니다.` };
+        }
+        return { text: "최근 주문(배송) 내역이 없습니다." };
       } catch (e) { return { text: "조회 실패." }; }
     }
     return { text: `배송정보 확인을 위해 로그인이 필요합니다.${LOGIN_BTN_HTML}` };

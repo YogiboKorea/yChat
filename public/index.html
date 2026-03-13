@@ -444,9 +444,17 @@
 
 <script>
   let currentUserMemberId = null;
+  
+  // URL에서 테스트용 아이디(test_id) 파라미터 가져오기
+  const urlParams = new URLSearchParams(window.location.search);
+  const testMemberId = urlParams.get('test_id');
+
   window.addEventListener('load', function () {
     try {
-      if (typeof CAFE24API !== 'undefined') {
+      if (testMemberId) {
+        currentUserMemberId = testMemberId;
+        console.log(`[TEST MODE] 현재 회원 ID를 강제 세팅했습니다: ${currentUserMemberId}`);
+      } else if (typeof CAFE24API !== 'undefined') {
         CAFE24API.getCustomerInfo(function (err, res) {
           if (res && res.customer) currentUserMemberId = res.customer.member_id;
         });

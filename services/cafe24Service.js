@@ -10,23 +10,37 @@ const syncCooldownMap = new Map();
 async function fetchProductsFromCafe24() {
   try {
     const CAFE24_MALLID = process.env.CAFE24_MALLID;
-    console.log("🟡 Cafe24에서 추천 상품 데이터를 동기화하는 중...");
-    const response = await apiRequest("GET", `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/products`, {}, {
-      display: "T", selling: "T", limit: 100 
-    });
+    let allFetchedProducts = [];
+    let offset = 0;
+    const limit = 100;
 
-    if (typeof response === 'string' && response.includes("<html")) {
-        console.error("❌ Cafe24 상품 데이터 동기화 실패: Cafe24 서버 접속 지연 (HTML 응답 수신)");
-        return;
+    console.log("🟡 Cafe24에서 전체 추천 상품 데이터를 동기화하는 중...");
+    while (true) {
+      const response = await apiRequest("GET", `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/products`, {}, {
+        display: "T", selling: "T", limit: limit, offset: offset
+      });
+
+      if (typeof response === 'string' && response.includes("<html")) {
+          console.error("❌ Cafe24 상품 데이터 동기화 실패: Cafe24 서버 접속 지연 (HTML 응답 수신)");
+          break;
+      }
+
+      if (response && response.products && response.products.length > 0) {
+          allFetchedProducts = allFetchedProducts.concat(response.products);
+          if (response.products.length < limit) break;
+          offset += limit;
+      } else {
+          break;
+      }
     }
 
-    if (response && response.products) {
+    if (allFetchedProducts.length > 0) {
       // ★ [항목8 개선] 카테고리 ID를 .env에서 읽기 (하드코딩 제거)
       const CAT_MATE     = process.env.CAFE24_CAT_MATE     || "901";
       const CAT_BODYPILLOW = process.env.CAFE24_CAT_BODYPILLOW || "876";
       const CAT_SOFA     = process.env.CAFE24_CAT_SOFA     || "858";
 
-      yogiboProducts = response.products
+      yogiboProducts = allFetchedProducts
         .filter(prod => {
             const name = prod.product_name;
             // '메이트'는 10만원 미만 추천용이므로 제외 목록에서 삭제. 수기결제 상품 차단 추가.

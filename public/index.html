@@ -563,9 +563,18 @@
     }
   }
 
+  // ★ [항목9 개선] 중복 전송 방지 플래그
+  let isSending = false;
+
   async function sendMessage() {
+    if (isSending) return; // 전송 중이면 무시
     const userMessage = messageInput.value.trim();
     if (!userMessage) return;
+
+    // 전송 시작 - UI 잠금
+    isSending = true;
+    sendBtn.disabled = true;
+    sendBtn.style.opacity = '0.5';
 
     appendUserMessage(userMessage);
     messageInput.value = "";
@@ -599,6 +608,11 @@
       console.error(error);
       const botMsgElement = document.getElementById(botMsgId);
       if (botMsgElement) botMsgElement.innerHTML = "<span style='color:#e74c3c;'>죄송합니다. 일시적인 오류가 발생했습니다.</span>";
+    } finally {
+      // ★ 전송 완료 후 UI 잠금 해제
+      isSending = false;
+      sendBtn.disabled = false;
+      sendBtn.style.opacity = '1';
     }
   }
 

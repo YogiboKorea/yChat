@@ -45,6 +45,20 @@ app.use("/", knowledgeRoutes);
       // 4. HTTP 서버 실행
       app.listen(PORT, () => console.log(`🚀 앱 실행 완료 (포트: ${PORT})`)); 
 
+      // 5. ★ [항목10] conversationLogs TTL 인덱스 설정 (365일 후 자동 삭제 - 개인정보 보호)
+      const { getDB } = require("./config/db");
+      const db = getDB();
+      await db.collection("conversationLogs").createIndex(
+        { createdAt: 1 },
+        { expireAfterSeconds: 365 * 24 * 60 * 60, background: true }
+      );
+      // cafe24Orders도 3개월 후 자동 정리
+      await db.collection("cafe24Orders").createIndex(
+        { updatedAt: 1 },
+        { expireAfterSeconds: 90 * 24 * 60 * 60, background: true }
+      );
+      console.log("✅ TTL 인덱스 설정 완료 (대화로그 365일 / 주문이력 90일 자동 삭제)");
+
       // 5. 스케줄러 실행
       // 기존 전체 매출 집계 스케줄러 비활성화 (Cafe24 503 우회 목적 - on-demand로 전환)
       // syncCafe24Orders(); 

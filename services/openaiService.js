@@ -2,7 +2,8 @@ const axios = require("axios");
 
 const { OPEN_URL, API_KEY, FINETUNED_MODEL = "gpt-4o-mini" } = process.env;
 
-async function getLLMResponse(currentSystemPrompt, input, context = []) {
+// ★ [항목6+7 개선] 멀티턴 대화 컨텍스트 지원 + 에러 로그 추가
+async function getLLMResponse(currentSystemPrompt, input, context = [], conversationHistory = []) {
   const txt = context.map(i => `Q: ${i.q}\nA: ${i.a}`).join("\n\n");
   const system = `${currentSystemPrompt}
 
@@ -14,6 +15,12 @@ async function getLLMResponse(currentSystemPrompt, input, context = []) {
 [참고 정보]
 ${txt || "정보 없음."}`;
 
+  // ★ [멀티턴] 이전 대화 최근 3개를 messages 배열에 삽입
+  const historyMessages = conversationHistory.flatMap(h => [
+    { role: "user", content: h.userMessage },
+    { role: "assistant", content: h.botResponse }
+  ]);
+
   try {
     const res = await axios.post(
       OPEN_URL,
@@ -23,6 +30,7 @@ ${txt || "정보 없음."}`;
         top_p: 0.9,
         messages: [
           { role: "system", content: system },
+          ...historyMessages,
           { role: "user", content: input }
         ]
       },
@@ -30,6 +38,8 @@ ${txt || "정보 없음."}`;
     );
     return res.data.choices?.[0]?.message?.content || "답변을 생성하지 못했습니다.";
   } catch (e) {
+    // ★ [항목7 개선] 에러 로그 추가 (장애 추적용)
+    console.error("[OpenAI getLLMResponse 오류]", e?.response?.data || e.message);
     return "답변 생성 중 문제가 발생했습니다.";
   }
 }
@@ -92,7 +102,7 @@ async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts, c
       const parsed = JSON.parse(gptRes.data.choices[0].message.content);
       return parsed;
     } catch (e) { 
-        console.error("OpenAI Recommendation Error:", e);
+        console.error("[OpenAI recommendProductsWithGPT 오류]:", e?.response?.data || e.message);
         throw new Error("추천 멘트 생성 중 예외 발생"); 
     }
 }

@@ -1,8 +1,14 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<!-- 모바일 환경 최적화 (확대/축소 제한 및 디바이스 너비 맞춤) -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>요기보 AI 챗봇</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/2.4.0/purify.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
 <link rel="stylesheet" as="style" crossorigin
   href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
-
 <style>
   .fa-magnifying-glass:before, .fa-search:before { display: none; }
 
@@ -278,7 +284,8 @@
     box-shadow: 0 8px 22px rgba(44,157,182,0.28);
   }
 </style>
-
+</head>
+<body style="margin:0; background:#f4f7f6; display:flex; justify-content:center; align-items:center; min-height:100vh;">
 <div class="chat-container">
   <div class="chat-header">
     <img src="/web/img/icon/new2/main_logo_off.png"
@@ -492,3 +499,5 @@
   sendBtn.addEventListener("click", sendMessage);
   messageInput.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) sendMessage(); });
 </script>
+</body>
+</html>

@@ -29,7 +29,8 @@ async function fetchProductsFromCafe24() {
       yogiboProducts = response.products
         .filter(prod => {
             const name = prod.product_name;
-            const excludeRegex = /(메이트|한정수량|공동구매|리퍼|협력사|LAST CHANCE|사은품)/i;
+            // '메이트'는 10만원 미만 추천용이므로 제외 목록에서 삭제. 수기결제 상품 차단 추가.
+            const excludeRegex = /(한정수량|공동구매|리퍼|협력사|LAST CHANCE|사은품|고객결제|개인결제|수기결제|배송비)/i;
             return !name.trim().startsWith('[') && !excludeRegex.test(name);
         })
         .map(prod => {

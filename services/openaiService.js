@@ -163,6 +163,33 @@ async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts, c
         }
       }
 
+      // ★ [코드 레벨 강제 2] 임산부/허리통증 관련 키워드 감지 시 서포트를 1번으로 강제 삽입 처리
+      const PREGNANT_KEYWORDS = /임산부|임신|산모|허리|요통/;
+      // (단, "소파" 질문으로 윗 로직에서 이미 맥스가 1번으로 박힌 경우 굳이 덮어쓰지 않거나, 필요 시 서포트도 포함시킬 수 있으나 여기선 서포트를 최우선으로 보정)
+      if (PREGNANT_KEYWORDS.test(userMsg) && !HAS_PRICE_LIMIT.test(userMsg)) {
+        let supportProduct = allProducts.find(p => p.name.includes('서포트') && !p.name.includes('커버'));
+
+        if (supportProduct) {
+          const supportId = supportProduct.id;
+          const originalIds = parsed.recommendedIds || [];
+          
+          if (originalIds[0] !== supportId) {
+             const ids = originalIds.filter(id => id !== supportId);
+             parsed.recommendedIds = [supportId, ...ids].slice(0, 3);
+             console.log(`[서포트 강제 삽입] 임산부/허리 쿼리에서 서포트(${supportId})를 1번으로 교정`);
+             
+             if (!parsed.message.includes('서포트')) {
+                 const formattedPrice = supportProduct.price ? supportProduct.price.toLocaleString() + '원' : '109,000원';
+                 const supportText = `임산부 및 허리를 편안하게 받쳐주는 데 특화된 베스트셀러 <b>${supportProduct.name}</b>(을)를 가장 먼저 강력 추천드립니다! 등받이나 수유 쿠션 등으로도 훌륭하게 활용하실 수 있습니다. (가격: ${formattedPrice})<br><br>`;
+                 
+                 // 기존 엉뚱한 임산부 타겟 멘트 제거 방어 로직
+                 parsed.message = parsed.message.replace(/임산부에게는.*?다!/g, ''); 
+                 parsed.message = supportText + parsed.message;
+             }
+          }
+        }
+      }
+
       return parsed;
     } catch (e) { 
         console.error("[OpenAI recommendProductsWithGPT 오류]:", e?.response?.data || e.message);

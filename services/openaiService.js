@@ -45,7 +45,11 @@ ${txt || "정보 없음."}`;
 }
 
 async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts, context = []) {
-    const productsJson = JSON.stringify(allProducts.map(p => ({
+    // ★ [커버 배제 로직] 고객이 명시적으로 "커버"를 찾지 않으면, 제품명에 '커버'가 들어간 항목은 애초에 AI에게 주지 않음
+    const isCoverRequested = userMsg.includes("커버");
+    const filteredProducts = isCoverRequested ? allProducts : allProducts.filter(p => !p.name.includes("커버"));
+
+    const productsJson = JSON.stringify(filteredProducts.map(p => ({
         id: p.id,
         name: p.name,
         price: p.price,
@@ -56,8 +60,8 @@ async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts, c
 
     const hasPurchaseHistory = purchaseHistory && purchaseHistory.products && purchaseHistory.products.length > 0;
     const coverExclusionRule = !hasPurchaseHistory 
-        ? `- [매우 중요] 고객의 구매 이력이 없으므로, 이름에 "커버"가 들어간 상품은 추천에서 절대로 제외하세요.` 
-        : `- [리뷰 유도] 고객이 소유한 상품 목록(${purchaseHistory.products.join(", ")}) 중, 고객이 대화 중 언급하지 않았거나 리뷰를 작성하지 않았을 가능성이 있는 상품이 있다면 친절하게 리뷰 작성을 권유하는 멘트를 자연스럽게 한 줄 추가하세요. (예: "혹시 예전에 구매하신 OO은 잘 사용하고 계신가요? 아직 리뷰를 남기지 않으셨다면 리뷰 이벤트에 참여해 보세요!")`;
+        ? `- [매우 중요] 이름에 "커버"가 들어간 상품은 추천에서 절대로 제외하세요.` 
+        : `- [리뷰 유도] 고객이 소유한 상품 목록(${purchaseHistory.products.join(", ")}) 중, 고객이 대화 중 언급하지 않았거나 리뷰를 작성하지 않았을 가능성이 있는 상품이 있다면 친절하게 리뷰 작성을 권유하는 멘트를 자연스럽게 한 줄 추가하세요.`;
 
     const prompt = `
     당신은 요기보 세일즈 매니저입니다.
@@ -90,7 +94,11 @@ async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts, c
     
     위 전체 상품 목록에서 고객의 질문에 맞는 상품 딱 3개를 골라주세요.
     선택 우선순위: ① 맥스 최우선 규칙 → ② 카테고리 매칭 규칙 → ③ 보조 지식 데이터 참고
-    (보조 지식 데이터에 특정 상품이 언급되더라도, 맥스 규칙과 카테고리 규칙이 항상 우선합니다.)
+    
+    [다양성 확보 필수 규칙]
+    - 매번 기계적으로 똑같은 상품(예: 메가 문 필로우, 스퀴지보 플랜트 등)만 추천하지 마세요. 
+    - 조건(예산, 카테고리 등)에 부합하는 한도 내에서 최대한 새롭고 다양한 요기보 상품을 탐색하여 번갈아가며 추천하세요.
+
     그리고 이 3개의 상품을 왜 추천하는지에 대한 고객용 안내 멘트를 작성해주세요. (구매 이력이 있다면 "지난번 구매하신 OO과 함께 쓰시면 좋아요" 같은 멘트를 꼭 넣어주세요.)
     
     반드시 아래 JSON 형식으로만 응답해야 합니다. 다른 말은 절대 추가하지 마세요.
@@ -103,8 +111,8 @@ async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts, c
     try {
       const gptRes = await axios.post(OPEN_URL, {
         model: FINETUNED_MODEL,
-        temperature: 0.1, // 창의성보다는 정확한 JSON 출력을 위해 낮춤
-        response_format: { type: "json_object" }, // JSON 형태 강제
+        temperature: 0.4, // 답변 다양성을 위해 기존 0.1에서 0.4로 상향 (JSON 출력 보장 상태이므로 안전)
+        response_format: { type: "json_object" }, 
         messages: [
           { role: "system", content: "당신은 요기보 상담원입니다. 제공된 상품 카탈로그 안에서만 상품을 선택하고, 반드시 명시된 JSON 포맷으로만 응답하세요." },
           { role: "user", content: prompt }

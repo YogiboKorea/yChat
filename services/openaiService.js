@@ -70,20 +70,22 @@ async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts, c
     현재 판매중인 요기보 전체 상품 목록:
     ${productsJson}
     
+    [색상 및 예산 필터링 필수 규칙]
+    - 요기보의 빈백 소파와 바디필로우는 제품당 기본적으로 10~20가지 색상(레드, 블루, 그린, 퍼플, 핑크, 다크/라이트그레이, 네이비 등) 커버를 모두 지원합니다. 따라서 고객이 특정 색상(예: "빨간색")을 요구하더라도 모두 조건을 충족한다고 간주하고 당당히 추천하세요.
+    - 고객 질문에 "20만원 이내", "10만원 이하" 등 특정 예산(가격 상한선)이 포함된 경우, 제공된 상품 데이터의 price 값을 비교하여 반드시 예산 범위 내의 상품만 엄격하게 필터링하여 추천하세요. 예산을 초과하는 상품은 절대 추천 목록에 넣지 마세요.
+    
     [카테고리 매칭 필수 규칙]
     - [매우 중요] 고객이 특정 카테고리(예: 소파)를 원하면, "반드시" 해당 category 값을 가진 상품만 골라야 합니다. category 설정값이 일치하지 않는 상품(예: "기타", "악세서리")은 추천에 섞지 마세요.
     - 고객이 "소파", "가구", "빈백", "쇼파" 를 추천해달라고 하면 반드시 category가 "소파"인 상품 중에서만 추천하세요. (이름에 커버·스퀴지보·메이트·필로우·커버가 들어간 상품은 절대 제외)
     - 고객이 "바디필로우"나 "베개", "껴안고 자는" 것을 원하면 반드시 category가 "바디필로우"인 상품 중에서만 추천하세요.
     - 고객이 "인형", "캐릭터", "아기 선물" 등을 원하면 반드시 category가 "메이트/캐릭터"인 상품 중에서만 추천하세요.
 
-    ★★★ [요기보 맥스 최우선 추천 규칙 - 절대 준수] ★★★
-    - 요기보 최고 대표 상품은 "요기보 맥스(Yogibo Max)"입니다.
-    - 고객이 소파·빈백·편안한 의자·쉬는 공간 등 소파 계열을 요청하는 경우:
-      → 추천 목록 1번째(첫 번째 자리)는 반드시 "맥스" 또는 "맥스" 계열 상품이어야 합니다.
-      → 어떤 상황에서도 맥스를 빠뜨리면 안 됩니다.
-    - 고객이 소파를 명시하지 않더라도 "추천해달라", "뭐가 좋아", "뭐 살까" 같은 일반 추천 요청이면:
-      → 소파 카테고리를 포함하는 경우 맥스를 반드시 첫 번째로 포함하세요.
-    - 맥스 추천 멘트 예시: "요기보 시그니처 대표 상품인 맥스는 소파·침대·놀이매트로 모두 활용 가능하며, 가장 많은 분들이 선택하시는 베스트셀러입니다."
+    ★★★ [요기보 대표상품 '요기보 맥스' 추천 필수 규칙 - 절대 준수] ★★★
+    - 요기보의 최고 대표 상품은 아래 상품 데이터에 있는 "요기보 맥스 (product_no=39)" 입니다.
+    - 고객이 "소파", "빈백", "편안한 의자", 혹은 막연한 "추천해줘" 같은 질문을 하면:
+      → 무조건 1순위 추천 상품(첫 번째 ID)으로 "요기보 맥스(product_no=39)"를 지정하세요.
+    - 요기보 맥스를 추천할 때는 반드시 아래 멘트를 응답 메시지 초반에 넣어주세요:
+      "요기보 시그니처 대표 상품인 <b>요기보 맥스</b>는 소파·침대·놀이매트로 모두 활용 가능하며, 가장 많은 분들이 선택하시는 베스트셀러입니다. 가격은 389,000원입니다."
     ${coverExclusionRule}
     
     위 전체 상품 목록에서 고객의 질문에 맞는 상품 딱 3개를 골라주세요.
@@ -110,6 +112,40 @@ async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts, c
       }, { headers: { Authorization: `Bearer ${API_KEY}` } });
       
       const parsed = JSON.parse(gptRes.data.choices[0].message.content);
+
+      // ★ [코드 레벨 강제] 소파/빈백 키워드 감지 시 맥스(product_no=39)를 반드시 1번으로 삽입 및 멘트 교정
+      // 단, 예산(O만원 이하/이내) 제한이 있을 경우 맥스 강제를 해제하여 GPT의 가격 필터링이 온전히 작동하게 함
+      const SOFA_KEYWORDS = /소파|빈백|쇼파|bean bag|베개소파|공중부양|게임용|거실|추천|베스트|대표설정|대표상품/;
+      const HAS_PRICE_LIMIT = /[0-9]+만원|[0-9]+만 원|이하|이내|저렴한|싼/;
+      if (SOFA_KEYWORDS.test(userMsg) && !HAS_PRICE_LIMIT.test(userMsg)) {
+        // Cafe24 product_no=39 로 정확히 검색 (없으면 이름으로 fallback)
+        let maxProduct = products.find(p => p.productUrl && p.productUrl.includes('product_no=39'));
+        if (!maxProduct) maxProduct = products.find(p => p.name.includes('맥스') && p.category === '소파');
+
+        if (maxProduct) {
+          const maxId = maxProduct.id;
+          const originalIds = parsed.recommendedIds || [];
+          
+          if (originalIds[0] !== maxId) {
+             // 맥스가 결과에 없거나 1번이 아니면 강제로 1번으로 올림
+             const ids = originalIds.filter(id => id !== maxId);
+             parsed.recommendedIds = [maxId, ...ids].slice(0, 3);
+             console.log(`[맥스 강제 삽입] 소파 쿼리에서 맥스(${maxId})를 1번으로 교정`);
+             
+             // 텍스트에도 맥스 멘트가 빠졌을 경우 (GPT 환각 방어)
+             if (!parsed.message.includes('맥스')) {
+                 const formattedPrice = maxProduct.price ? maxProduct.price.toLocaleString() + '원' : '389,000원';
+                 const maxText = `요기보 시그니처 대표 상품인 <b>${maxProduct.name}</b>(은)는 소파·침대·놀이매트로 모두 활용 가능하며, 가장 많은 분들이 선택하시는 베스트셀러입니다. (가격: ${formattedPrice})<br><br>`;
+                 
+                 // 어색한 타 상품 지칭 문구(예: "대표 상품인 메가 문 필로우") 제거/교정 시도
+                 parsed.message = parsed.message.replace(/요기보 시그니처 대표 상품인.*?다\./g, '');
+                 
+                 parsed.message = maxText + parsed.message;
+             }
+          }
+        }
+      }
+
       return parsed;
     } catch (e) { 
         console.error("[OpenAI recommendProductsWithGPT 오류]:", e?.response?.data || e.message);

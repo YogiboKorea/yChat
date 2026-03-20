@@ -225,16 +225,20 @@
             </div>
 
             <p class="text-muted mb-4 pb-2" style="font-size: 1.05rem;">
-                요기챗은 쇼핑몰 방문 고객에게 마치 실제 상담원과 대화하는 듯한 경험을 제공하는 <b>고도화된 AI 챗봇 솔루션</b>입니다.<br>아래 주요 기능들의 실제 작동 예시를 확인해 보세요.
+                요기챗 베타 테스트에 참여해주셔서 감사합니다! 🎉<br>
+                본 챗봇은 일반적인 키워드 응답 봇이 아닌, <b>스스로 문맥을 판단하고 데이터를 조합하는 생성형 AI(LLM)</b>입니다.<br>
+                따라서 우리가 <b>'얼마나 정확한 지식을 주입하느냐'</b>에 따라 똑똑해질 수도, 엉뚱한 대답을 할 수도 있습니다. 아래 가이드를 읽고 직접 챗봇을 테스트 및 학습시켜 보세요!
             </p>
 
             <!-- 기능 1 -->
             <div class="guide-item">
                 <div class="guide-content">
-                    <h5><i class="fa-solid fa-basket-shopping text-primary mr-2"></i>1. 스마트 상품 추천 기능</h5>
+                    <h5><i class="fa-solid fa-basket-shopping text-primary mr-2"></i>1. 스마트 상품 추천 기능 (자동 연동)</h5>
                     <p>
-                        고객의 모호한 질문("허리 아픈데 어떤 게 좋아?")이나 요구사항을 AI가 분석하여 가장 적합한 상품을 찾습니다.
-                        고객의 이전 구매 이력과 <b>Cafe24 쇼핑몰에 등록된 카테고리 정보 및 상세 상품 데이터</b>를 종합적으로 바탕으로 분석해, 맞춤형 쇼핑 링크를 제안합니다.
+                        고객의 모호한 질문("허리 아픈데 어떤 게 좋아?", "1인 가구 소파 추천해줘")을 AI가 분석하여 가장 적합한 상품 3가지를 추천합니다.<br>
+                        👉 <b>이 부분은 직접 학습시킬 필요가 없습니다.</b> 요기보 자사몰(Cafe24)의 카테고리와 상품 정보(이름, 가격, 썸네일)를 스스로 읽어와 분석합니다.<br>
+                        <span class="text-primary"><i class="fa-solid fa-check mr-1"></i><b>직원 테스트 포인트:</b></span><br>
+                        다양한 고객 유형(임산부, 수험생, 반려동물 가정 등)을 가정하고 질문을 던졌을 때, AI가 의도에 맞는 요기보 제품(특히 맥스 등 주력 상품)을 잘 추천하는지 확인해 주세요. 이상한 상품을 추천한다면 해당 내역을 꼭 기록해 주세요.
                     </p>
 
                     <div class="mockup-container">
@@ -244,34 +248,8 @@
                                 <div class="bubble bubble-user">허리 아플 때 쓰기 좋은 빈백 추천해줘</div>
                                 <div class="bubble bubble-bot">
                                     고객님, 허리를 편안하게 지지할 수 있는 상품 세 가지를 찾아왔어요!<br>
-                                    <span class="chat-mockup-btn"><i class="fa-solid fa-bag-shopping"></i> 요기보 맥스
-                                        보러가기</span>
-                                    <span class="chat-mockup-btn"><i class="fa-solid fa-bag-shopping"></i> 요기보 미디
-                                        보러가기</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 기능 2 -->
-            <div class="guide-item">
-                <div class="guide-content">
-                    <h5><i class="fa-solid fa-truck-fast text-primary mr-2"></i>2. 실시간 배송 및 주문 조회</h5>
-                    <p>
-                        "배송조회" 요청 시, 챗봇이 로그인된 고객의 최근 주문을 조회해 송장 번호와 실시간 택배사 트래킹 링크를 즉석에서 제공합니다. (CS 업무 대폭 축소)
-                    </p>
-                    <div class="mockup-container">
-                        <div class="chat-mockup">
-                            <div class="chat-mockup-header"><i class="fa-solid fa-robot"></i> 요기보 챗봇</div>
-                            <div class="chat-mockup-body">
-                                <div class="bubble bubble-user">내 껀 배송 언제 오나요?</div>
-                                <div class="bubble bubble-bot">
-                                    최근 주문(<strong>20260312-0000079</strong>)의 배송 상태는 <strong>배송중</strong>입니다.<br>
-                                    택배사: 롯데택배<br>운송장 번호: 123456789012
-                                    <span class="chat-mockup-btn" style="background: #34495e;"><i
-                                            class="fa-solid fa-truck"></i> 실시간 배송조회 (클릭)</span>
+                                    <span class="chat-mockup-btn"><i class="fa-solid fa-bag-shopping"></i> 요기보 맥스 보러가기</span>
+                                    <span class="chat-mockup-btn"><i class="fa-solid fa-bag-shopping"></i> 줄라 라운저 보러가기</span>
                                 </div>
                             </div>
                         </div>
@@ -282,64 +260,52 @@
             <!-- 기능 3 -->
             <div class="guide-item" style="border-left: 4px solid var(--primary-color);">
                 <div class="guide-content">
-                    <h5><i class="fa-solid fa-brain text-primary mr-2"></i>3. AI 지식 교육 (RAG 기반 커스텀 학습)</h5>
+                    <h5><i class="fa-solid fa-brain text-primary mr-2"></i>2. AI 지식 학습 (직접 입력 / PDF / 이미지)</h5>
                     <p>
-                        요기보만의 특수한 정책이나 오프라인 이벤트 등을 학습시켜 AI 답변의 퀄리티를 극대화할 수 있습니다. AI를 더욱 디벨롭하기 위해서는 <b>관리자분들께서 각 카테고리별로
-                            일목요연하게 새로운 정보나 정확한 정보를 지속적으로 추가(교육)해 주시는 방식</b>으로 운영하셔야 가장 완벽한 챗봇이 완성됩니다.
+                        우리가 직접 AI를 <b>교육</b>시키는 핵심 기능입니다. 고객의 자주 묻는 질문(FAQ)이나 정책 변경 사항을 관리자 페이지를 통해 챗봇의 머릿속에 집어넣습니다.<br>
+                        AI는 여기서 주입된 정보를 <b class="text-danger">0순위로 신뢰</b>하여 답변합니다.
                     </p>
-                    <ul class="text-muted small mb-4" style="line-height:1.7;">
-                        <li><b class="text-danger">PDF 파일 자동 조각화:</b> PDF 업로드 시, AI가 내용을 이해하기 쉽도록 <b>약 500자 단위로 텍스트를
-                                나누어(Chunking)</b> 저장합니다.</li>
-                        <li><b>지식의 시각화 (이미지 RAG):</b> 텍스트로 설명하기 어려운 내용(사이즈 표 등)은 이미지 링크와 함께 학습시키면, 해당 키워드 질문 시 즉각 이미지를
-                            답변으로 띄워줍니다.</li>
-                        <li><b class="text-primary">학습 데이터 관리:</b> PDF에서 자동 추출되거나 이미지로 등록된 모든 학습 데이터는 관리자 페이지의 <b>'일반문의'
-                                탭에 모여 자동 저장</b>되므로, 원할 때 언제든 검수하여 수정/삭제할 수 있습니다.</li>
+                    <ul class="text-muted small mb-4" style="line-height:1.8;">
+                        <li><b><i class="fa-solid fa-keyboard mr-1"></i>일반 지식(텍스트) 등록 [강력 튜닝 도구]:</b> <br>
+                        가장 직관적이고 확실한 교육 방법입니다. 특정 상황에 대한 질문(Q)과 모범 답변(A)을 직접 작성합니다.<br>
+                        <span class="text-info">ex) Q: "비즈 충전은 어떻게 해?" / A: "고객센터를 통한 유상 충전 서비스와 셀프 충전 비즈 구매 두 가지 방법이 있습니다..."</span></li>
+                        
+                        <li><b><i class="fa-solid fa-file-pdf text-danger mr-1"></i>매뉴얼 문서 통째로 학습 (PDF RAG):</b> <br>
+                        규정집, 캠페인 설명서, 세탁 가이드 등 분량이 많은 문서를 PDF 파일로 업로드하면, AI가 이를 <b>약 500자 단위로 자동 조각화(Chunking)</b>하여 기억하고 있다가 고객 질문 시 해당 부분을 꺼내어 설명합니다.</li>
+                        
+                        <li><b><i class="fa-regular fa-image text-purple mr-1"></i>사진으로 보여주기 (이미지 지식):</b> <br>
+                        글로 설명하기 어려운 내용(사이즈 표, 세탁 기호, 매장 약도 등)은 "검색 키워드"와 함께 이미지를 등록하세요. 고객이 해당 키워드와 유사한 질문을 하면 AI가 답변과 함께 이미지를 띄워줍니다.</li>
+                        
+                        <li><b class="text-primary"><i class="fa-solid fa-wrench mr-1"></i>수정 및 관리:</b> <br>
+                        입력한 모든 지식은 관리자 페이지 하단 탭(홈페이지, 제품정보 등)에 카드 형태로 저장됩니다. 정보가 틀렸거나 내용이 바뀌면 즉시 <b>수정/삭제</b> 하세요. 반영까지 약 1~2초면 충분합니다.</li>
                     </ul>
 
                     <div class="mockup-container">
                         <div class="row">
                             <div class="col-md-6">
-                                <!-- PDF 챗 목업 -->
                                 <div class="chat-mockup h-100">
-                                    <div class="chat-mockup-header bg-danger"><i class="fa-solid fa-file-pdf"></i> PDF
-                                        지식 답변 예시</div>
+                                    <div class="chat-mockup-header bg-danger"><i class="fa-solid fa-file-pdf"></i> PDF 지식 활용 예시</div>
                                     <div class="chat-mockup-body" style="padding: 15px;">
-                                        <div class="bubble bubble-user">어썸피플 어떤 캠페인이야?</div>
+                                        <div class="bubble bubble-user">어썸피플 캠페인이 뭐야?</div>
                                         <div class="bubble bubble-bot">
-                                            <span style="font-size: 11px; color:#e74c3c; font-weight:bold;">[학습된 지식 기반
-                                                답변]</span><br>
-                                            어썸피플(Awesome People) 캠페인은 요기보가 매년 진행하는 사회적 인식 개선 프로젝트입니다. 이 캠페인은 우리 지역 사회 내
-                                            소외된 계층을 직접 찾아가고, 그들의 환경을 개선하는 일을 목표로 하고 있습니다.
-
-                                            캠페인은 다음과 같은 다양한 주제로 진행되었습니다:
-                                            - 2017: 경력단절여성 인식개선 캠페인
-                                            - 2018: 학교도서관 환경개선 캠페인
-                                            - 2019: 소아마비환자 환경개선 캠페인
-                                            - 2020: COVID-19 의료진 휴게공간 개선 캠페인
-                                            - 2021: 발달장애인 휴게공간 개선 캠페인
-                                            - 2022: 임산부 환경 개선 캠페인
-                                            - 2023: 발달장애 아동을 위한 인식·환경 개선 캠페인
-                                            - 2024: 모두를 위한 배리어프리 클래식 캠페인
-
+                                            <span style="font-size: 11px; color:#e74c3c; font-weight:bold;">[학습된 지식 기반 답변]</span><br>
+                                            어썸피플 캠페인은 요기보가 매년 진행하는 사회적 인식 개선 프로젝트입니다. 이 캠페인은 지역 사회 내 소외된 계층을 찾아가 환경을 개선합니다.<br>
+                                            - 2023: 발달장애 아동 환경 개선<br>
+                                            - 2024: 배리어프리 클래식 캠페인 등
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <div class="col-md-6">
-                                <!-- 이미지 챗 목업 -->
-                                <div class="chat-mockup h-100 mt-3 mt-md-0">
-                                    <div class="chat-mockup-header" style="background:#8e44ad;"><i
-                                            class="fa-solid fa-image"></i> 이미지 지식 답변 예시</div>
+                            <div class="col-md-6 mt-3 mt-md-0">
+                                <div class="chat-mockup h-100">
+                                    <div class="chat-mockup-header" style="background:#8e44ad;"><i class="fa-solid fa-image"></i> 이미지 및 영상 보충 예시</div>
                                     <div class="chat-mockup-body" style="padding: 15px;">
-                                        <div class="bubble bubble-user">플랜트 스퀴지보 사이즈표 보여줘</div>
+                                        <div class="bubble bubble-user">스퀴지보 사이즈 어떻게 돼?</div>
                                         <div class="bubble bubble-bot">
-                                            <span style="font-size: 11px; color:#8e44ad; font-weight:bold;">[이미지로 교육된
-                                                답변]</span><br>
-                                            해당 상품의 사이즈 안내 이미지입니다.<br>
-                                            <img src="https://yogibo.openhost.cafe24.com/web/chat/1767150336714_plant_squeezibo_07.jpg"
-                                                class="img-fluid mt-2"
-                                                style="border-radius:5px; border:1px solid #eee;">
+                                            <span style="font-size: 11px; color:#8e44ad; font-weight:bold;">[이미지로 교육된 답변]</span><br>
+                                            플랜트 스퀴지보의 사이즈 스펙입니다. 안내 이미지를 참고해 주세요!<br>
+                                            <img src="https://yogibo.openhost.cafe24.com/web/chat/1767150336714_plant_squeezibo_07.jpg" class="img-fluid mt-2" style="border-radius:5px; border:1px solid #eee;">
                                         </div>
                                     </div>
                                 </div>
@@ -349,29 +315,24 @@
                 </div>
             </div>
 
-            <!-- 기능 4 -->
-            <div class="guide-item">
-                <div class="guide-content">
-                    <h5><i class="fa-solid fa-file-excel text-success mr-2"></i>4. 대화 로그 엑셀 다운로드 (오류 개선 및 고도화)</h5>
-                    <p>
-                        고객들이 챗봇과 무슨 대화를 나누었는지 파악하려면 <strong>대화 로그 다운로드</strong>를 활용하세요.
-                        최대 최근 3개월 치의 고객 대화 이력을 엑셀 파일로 뽑아내어, <b>AI가 제대로 답변하지 못한 오류 지점을 파악하고 향후 지식 주입(교육) 방향성을 결정</b>하는
-                        테스트/분석 용도로 쓰입니다.
+            <!-- 베타 테스트 참여 안내 -->
+            <div class="guide-item" style="background-color: #f7fbfd; border-color: #c8e6f0;">
+                <div class="guide-content mb-0">
+                    <h5><i class="fa-solid fa-vial-circle-check text-primary mr-2"></i>3. 사내 베타 테스트 미션</h5>
+                    <p class="mb-0">
+                        직원 여러분, 실제 고객의 입장이 되어 챗봇을 마음껏 괴롭혀(?) 주세요! 여러분의 테스트가 요기챗을 완벽하게 만듭니다.<br><br>
+                        <b>[미션 1] 극한 상황 테스트:</b><br>
+                        AI가 혼란스러워할 만한 질문, 꼬투리 잡는 질문, 복합적인 질문(예: "허리 아프고 좁은 방에 쓸 빈백인데 빨간색이고 20만원 이내인 거 있어?")을 던져보고 어떻게 방어하는지 지켜봐 주세요.<br><br>
+                        <b>[미션 2] 지식 교정 및 주입 시도:</b><br>
+                        AI가 엉뚱한 답변을 하거나 정보를 모른다고 (환각 증세) 할 경우, <b>[통합 관리자]</b> 페이지에 접속해 직접 정답을 'Q&A'로 등록해 보세요. 그리고 다시 똑같은 문항을 물어봤을 때 AI가 교육된 대로 답변하는지 확인합니다.<br><br>
+                        <b>[미션 3] 피드백 수집:</b><br>
+                        테스트 중 발견한 아쉬운 점, 이상한 답변 캡처, 개선 아이디어 등은 모아서 전파해 주시면 시스템에 적극 반영하겠습니다.
                     </p>
-                    <div class="mockup-container text-center py-4" style="background: white;">
-                        <span class="btn btn-custom" style="background-color: #217346; pointer-events:none;">
-                            <i class="fa-solid fa-file-excel mr-2"></i> (관리자 페이지) 대화 로그 다운로드 버튼
-                        </span>
-                        <div class="text-muted small mt-3">
-                            <i class="fa-solid fa-arrow-down mr-1"></i> yogichat_logs_20260312.xlsx 파일 자동 생성
-                        </div>
-                    </div>
                 </div>
             </div>
 
-            <div class="admin-link-box">
-                <i class="fa-solid fa-triangle-exclamation mr-1"></i> 위 기능들에 대한 모든 테스트 및 데이터 등록은 <b>[통합 관리자(Knowledge
-                    Admin)]</b> 메뉴에서 직접 다루실 수 있습니다.
+            <div class="admin-link-box" style="margin-top: 20px;">
+                <i class="fa-solid fa-triangle-exclamation mr-1"></i> 상단 오른쪽의 <b>[관리자 페이지로 이동]</b> 버튼을 누르면 AI 지식을 학습시킬 수 있는 백오피스(chat_send.html)로 이동합니다.
             </div>
 
         </div>

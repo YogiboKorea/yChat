@@ -94,6 +94,7 @@ async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts, c
     - [일반적인 빈백/소파 라인 요청 시 (예산 조건 없을 때)]: "요기보 맥스", "미디", "미니", "라운저" 라인을 우선 탐색.
     - [아기, 유아, 학생 대상 (예산 조건 없을 때)]: "요기보 피라미드" 와 "메이트 인형" 세트 추천.
     - [임산부 / 허리 통증 개선 목적]: 무조건 "요기보 서포트(Support)" 를 1순위로 포함하여 추천.
+    - [온라인 쇼룸 안내]: 고객이 오프라인 매장 분위기를 볼 수 있는 "온라인 쇼룸", "가상 쇼룸" 등을 물어보면 반드시 "https://yogibo.kr/show_room/new/index.html" 링크를 안내하세요. (가상의 URL이나 외부 단축 URL은 절대 만들지 마세요.)
     - (단, 위 추천 상품들의 가격이 고객이 부른 상한선 예산을 초과하면 추천하지 마세요.)
     ${coverExclusionRule}
     

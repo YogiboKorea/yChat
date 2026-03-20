@@ -208,10 +208,23 @@ async function recommendProducts(userMsg, memberId) {
 
 const counselorTriggers = ["상담사", "상담원", "상담사 연결", "상담원 연결", "사람 상담", "직원 연결", "카톡 상담", "카카오 상담", "네이버 상담", "톡톡 상담"];
 
-async function findRuleBasedAnswer(userInput, memberId) {
+async function findRuleBasedAnswer(userInput, memberId, wantsCounselor = false) {
   const normalized = normalizeSentence(userInput);
 
-  if (counselorTriggers.some(t => normalized.includes(t))) return { text: COUNSELOR_BUTTONS_ONLY_HTML };
+  // [상담원 사전 질문 로직] 상담원을 불렀을 때
+  if (counselorTriggers.some(t => normalized.includes(t))) {
+      // 이미 직전 턴에서 문의내용 적어달라고 했는데 돌아서 또 불렀다면, 포기하고 바로 버튼 줌
+      if (wantsCounselor) {
+          return { text: COUNSELOR_BUTTONS_ONLY_HTML };
+      }
+      return { text: "원활한 상담을 위해, <b>상담사에게 전달할 문의 내용</b>을 이 채팅 창에 먼저 자세히 적어주세요.<br>(내용 입력 후 자동으로 상담원 연결 버튼이 나타납니다.)" };
+  }
+
+  // [쇼룸 링크 강제 교정 룰]
+  const showroomKeywords = ["쇼룸", "온라인쇼룸", "온라인 쇼룸", "온라인 매장"];
+  if (showroomKeywords.some(k => normalized.includes(k))) {
+    return { text: `요기보 온라인 쇼룸은 아래 링크에서 확인하실 수 있습니다.<br><br><a href="https://yogibo.kr/show_room/new/index.html" target="_blank" class="consult-btn" style="background:#58b5ca; color:#fff; display:inline-block; padding:10px; border-radius:8px; text-decoration:none;">🛋️ 요기보 온라인 쇼룸 입장하기</a>` };
+  }
 
   const recommendKeywords = ["추천", "뭐가 좋", "어떤게 좋", "골라", "선택", "뭐 사"];
   if (recommendKeywords.some(k => normalized.includes(k))) {

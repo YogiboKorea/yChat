@@ -10,6 +10,19 @@ async function handleChat(req, res) {
   if (!message) return res.status(400).json({ error: "No message" });
 
   try {
+    // ★ [항목6] DB에서 해당 회원의 최근 3개 대화 이력 우선 조회 (문맥 파악 및 상담 사전질문 로직용)
+    const db = getDB();
+    let conversationHistory = [];
+    try {
+      const logs = await db.collection("conversationLogs")
+        .find({ memberId: memberId || null })
+        .sort({ _id: -1 })
+        .limit(2)
+        .toArray();
+      const allTurns = logs.flatMap(l => l.conversation || []);
+      conversationHistory = allTurns.slice(-3); // 최근 3턴
+    } catch (e) { /* 대화이력 조회 실패해도 정상 작동 */ }
+
     const ruleAnswer = await findRuleBasedAnswer(message, memberId);
     if (ruleAnswer) {
       await saveConversationLog(memberId, message, ruleAnswer.text);
@@ -40,19 +53,6 @@ async function handleChat(req, res) {
 - 고객 ID: ${memberId && memberId !== "null" ? memberId : "비로그인 상태"}
 - 최근 1개월 구매 이력(상품명): ${historyText}
 (고객이 자신의 정보나 취향을 물어보면 이 정보를 바탕으로 대답해주세요. 만약 장바구니 조회를 요청하면 보안상 챗봇에서는 장바구니 조회가 불가능하다고 친절하게 안내하세요.)`;
-
-    // ★ [항목6] DB에서 해당 회원의 최근 3개 대화 이력 조회
-    const db = getDB();
-    let conversationHistory = [];
-    try {
-      const logs = await db.collection("conversationLogs")
-        .find({ memberId: memberId || null })
-        .sort({ _id: -1 })
-        .limit(2)
-        .toArray();
-      const allTurns = logs.flatMap(l => l.conversation || []);
-      conversationHistory = allTurns.slice(-3); // 최근 3턴
-    } catch (e) { /* 대화이력 조회 실패해도 챗봇은 정상 작동 */ }
 
     let gptAnswer = await getLLMResponse(getCurrentSystemPrompt() + personalInfoContext, message, docs, conversationHistory);
     gptAnswer = formatResponseText(gptAnswer);

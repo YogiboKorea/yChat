@@ -83,17 +83,11 @@ async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts, c
     - 고객이 "소파", "가구", "빈백", "쇼파" 를 추천해달라고 하면 반드시 category가 "소파"인 상품 중에서만 추천하세요. (이름에 커버·스퀴지보·메이트·필로우·커버가 들어간 상품은 절대 제외)
     - 고객이 "바디필로우"나 "베개", "껴안고 자는" 것을 원하면 반드시 category가 "바디필로우"인 상품 중에서만 추천하세요.
     - 고객이 "인형", "캐릭터", "아기 선물" 등을 원하면 반드시 category가 "메이트/캐릭터"인 상품 중에서만 추천하세요.
-
-    ★★★ [요기보 대표상품 '요기보 맥스' 추천 필수 규칙 - 절대 준수] ★★★
-    - 요기보의 최고 대표 상품은 아래 상품 데이터에 있는 "요기보 맥스 (product_no=39)" 입니다.
-    - 고객이 "소파", "빈백", "편안한 의자", 혹은 막연한 "추천해줘" 같은 질문을 하면:
-      → 무조건 1순위 추천 상품(첫 번째 ID)으로 "요기보 맥스(product_no=39)"를 지정하세요.
-    - 요기보 맥스를 추천할 때는 반드시 아래 멘트를 응답 메시지 초반에 넣어주세요:
-      "요기보 시그니처 대표 상품인 <b>요기보 맥스</b>는 소파·침대·놀이매트로 모두 활용 가능하며, 가장 많은 분들이 선택하시는 베스트셀러입니다. 가격은 389,000원입니다."
+    - [경고] 예산(가격) 조건에 맞더라도, 고객이 요청한 카테고리(예: 빈백, 소파)와 일치하지 않는 엉뚱한 카테고리 상품(예: 인형, 바디필로우)은 절대로 추천 목록에 섞지 마세요.
     ${coverExclusionRule}
     
     위 전체 상품 목록에서 고객의 질문에 맞는 상품 딱 3개를 골라주세요.
-    선택 우선순위: ① 맥스 최우선 규칙 → ② 카테고리 매칭 규칙 → ③ 보조 지식 데이터 참고
+    선택 우선순위: ① 카테고리 일치 여부(가장 중요) → ② 예산 범위 제한 → ③ 보조 지식 데이터 참고
     
     [다양성 확보 필수 규칙]
     - 매번 기계적으로 똑같은 상품(예: 메가 문 필로우, 스퀴지보 플랜트 등)만 추천하지 마세요. 
@@ -127,8 +121,8 @@ async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts, c
       const HAS_PRICE_LIMIT = /[0-9]+만원|[0-9]+만 원|이하|이내|저렴한|싼/;
       if (SOFA_KEYWORDS.test(userMsg) && !HAS_PRICE_LIMIT.test(userMsg)) {
         // Cafe24 product_no=39 로 정확히 검색 (없으면 이름으로 fallback)
-        let maxProduct = products.find(p => p.productUrl && p.productUrl.includes('product_no=39'));
-        if (!maxProduct) maxProduct = products.find(p => p.name.includes('맥스') && p.category === '소파');
+        let maxProduct = allProducts.find(p => p.productUrl && p.productUrl.includes('product_no=39'));
+        if (!maxProduct) maxProduct = allProducts.find(p => p.name.includes('맥스') && p.category === '소파');
 
         if (maxProduct) {
           const maxId = maxProduct.id;

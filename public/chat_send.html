@@ -561,7 +561,7 @@
 
                 <div class="text-right mt-3">
                     <button class="btn btn-sm btn-success mr-1" onclick="submitUpdate('${id}')">저장 완료</button>
-                    <button class="btn btn-sm btn-secondary" onclick="cancelEdit('${id}', '${encodeURIComponent(headerDiv.outerHTML)}')">취소</button>
+                    <button class="btn btn-sm btn-secondary" onclick="cancelEdit('${id}')">취소</button>
                 </div>
             </div>
         `;
@@ -571,7 +571,7 @@
             document.getElementById(`edit-a-${id}`).value = post.answer;
 
             // 취소 함수 정의
-            window.cancelEdit = function (postId, headerHtmlEnc) {
+            window.cancelEdit = function (postId) {
                 const c = document.getElementById(`card-${postId}`);
                 c.querySelector('.qa-header').style.display = 'flex';
                 c.querySelector('.qa-body').innerHTML = originalContent;

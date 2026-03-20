@@ -49,9 +49,9 @@ async function fetchProductsFromCafe24() {
           
           if (prod.product_name.includes("스퀴지보") || prod.product_name.includes("메이트")) {
               category = "메이트/캐릭터";
-          } else if (prod.product_name.includes("필로우") || prod.product_name.includes("바디필로우")) {
-              category = "바디필로우";
-          } else if (prod.product_name.includes("서포트") || prod.product_name.includes("롤") || prod.product_name.includes("쿠션") || prod.product_name.includes("커버")) {
+          } else if (prod.product_name.includes("필로우") || prod.product_name.includes("바디필로우") || prod.product_name.includes("서포트")) {
+              category = "바디필로우"; // 서포트를 악세서리가 아닌 바디필로우 그룹으로 편입 (임산부 추천 시 카테고리 충돌 방지)
+          } else if (prod.product_name.includes("롤") || prod.product_name.includes("쿠션") || prod.product_name.includes("커버")) {
               category = "악세서리";
           }
           

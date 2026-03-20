@@ -170,11 +170,20 @@ function getCurrentSystemPrompt() {
 
 async function recommendProducts(userMsg, memberId) {
     const purchaseHistory = await getMemberPurchaseHistory(memberId);
-    const yogiboProducts = getCachedProducts();
+    let yogiboProducts = getCachedProducts();
     const relevantContext = await findAllRelevantContent(userMsg);
     
-    if(!yogiboProducts || yogiboProducts.length === 0) {
-        return "현재 상품 데이터를 불러올 수 없습니다. 잠시 후 다시 시도해주세요.";
+    // 상품 캐시가 비어있는 경우(서버 기동 시 지연 등), 1회 강제 재동기화 시도
+    if (!yogiboProducts || yogiboProducts.length === 0) {
+        console.warn("⚠️ 상품 캐시가 비어있습니다. 실시간 재요청을 시도합니다...");
+        const { fetchProductsFromCafe24 } = require("./cafe24Service");
+        await fetchProductsFromCafe24();
+        yogiboProducts = getCachedProducts();
+        
+        // 재시도 후에도 없으면 에러 응답
+        if (!yogiboProducts || yogiboProducts.length === 0) {
+            return "현재 상품 데이터를 불러올 수 없습니다. 잠시 후 다시 시도해주세요.";
+        }
     }
 
     try {

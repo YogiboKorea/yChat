@@ -373,8 +373,11 @@
         // ✅ 서버 주소
         const BASE_URL = 'https://port-0-chat-lzgmwhc4d9883c97.sel4.cloudtype.app';
 
-        // [중요] 데이터를 저장해둘 전역 변수 (HTML 깨짐 방지용)
+        // [중요] 데이터를 저장해둘 전역 변수
         let currentPostsData = [];
+        // ★ [Lazy Loading] 카테고리별 로드 완료 여부 캐시 (최상단 선언)
+        const loadedCategories = {};
+        let currentCategory = 'homepage';
 
         // 요소 선택
         const normalInputArea = document.getElementById('normalInputArea');
@@ -390,6 +393,9 @@
         function showNormalForm(category) {
             normalInputArea.style.display = 'block';
             categorySelect.value = category;
+            // ★ [Lazy Loading] 해당 카테고리가 아직 로드 안 됐으면 로드
+            if (!loadedCategories[category]) loadCategoryPosts(category);
+            currentCategory = category;
         }
         function showLLMForm() {
             normalInputArea.style.display = 'none';
@@ -465,35 +471,48 @@
             } catch (error) { alert("실패: " + error.message); }
         });
 
-        // [데이터 로드]
-        async function loadPosts() {
+        // ★ [Lazy Loading] 카테고리별 로드 완료 여부 캐시
+        // (변수는 파일 최상단에 선언됨)
+
+        // ★ 카테고리별 개별 로드
+        async function loadCategoryPosts(category) {
+            const container = document.getElementById(category + 'Container');
+            if (!container) return;
+            container.innerHTML = '<p class="text-center text-muted py-4 small"><i class="fa-solid fa-spinner fa-spin mr-1"></i> 불러오는 중...</p>';
             try {
-                const res = await axios.get(`${BASE_URL}/postIt`, { params: { page: 1 } });
-                // ★ 데이터를 전역 변수에 저장 (수정 버튼 클릭 시 사용)
-                currentPostsData = res.data.notes;
-                renderPosts(currentPostsData);
-            } catch (error) { console.error("Load Error:", error); }
+                const res = await axios.get(`${BASE_URL}/postIt`, { params: { page: 1, category } });
+                const posts = res.data.notes || [];
+                // 전역 캐시 병합 (수정 버튼 클릭 시 사용)
+                currentPostsData = currentPostsData.filter(p => p.category !== category);
+                currentPostsData = [...currentPostsData, ...posts];
+                loadedCategories[category] = true;
+                renderCategoryPosts(category, posts);
+            } catch (error) {
+                console.error('Load Error:', error);
+                if (container) container.innerHTML = '<p class="text-center text-danger py-3 small">불러오기 실패. 새로고침 해주세요.</p>';
+            }
         }
 
-        function renderPosts(posts) {
-            ['homepage', 'product', 'delivery', 'laundry', 'service', 'refund', 'normal'].forEach(cat => {
-                const el = document.getElementById(cat + 'Container');
-                if (el) el.innerHTML = '<p class="text-center text-muted py-3 small">데이터가 없습니다.</p>';
-            });
+        // ★ 등록/수정/삭제 후 현재 탭 카테고리만 새로고침
+        async function loadPosts() {
+            loadedCategories[currentCategory] = false;
+            await loadCategoryPosts(currentCategory);
+        }
 
-            if (posts.length > 0) {
-                posts.forEach(post => {
-                    const container = document.getElementById(post.category + 'Container');
-                    const targetContainer = container || document.getElementById('normalContainer');
-
-                    if (targetContainer.innerHTML.includes('데이터가 없습니다')) targetContainer.innerHTML = '';
-
-                    const card = document.createElement('div');
-                    card.className = 'qa-card';
-                    // HTML id를 부여하여 나중에 찾기 쉽게 함
-                    card.id = `card-${post._id}`;
-
-                    card.innerHTML = `
+        // ★ 카테고리별 렌더링
+        function renderCategoryPosts(category, posts) {
+            const container = document.getElementById(category + 'Container');
+            if (!container) return;
+            if (!posts || posts.length === 0) {
+                container.innerHTML = '<p class="text-center text-muted py-3 small">데이터가 없습니다.</p>';
+                return;
+            }
+            container.innerHTML = '';
+            posts.forEach(post => {
+                const card = document.createElement('div');
+                card.className = 'qa-card';
+                card.id = `card-${post._id}`;
+                card.innerHTML = `
                 <div class="qa-header" data-toggle="collapse" data-target="#col-${post._id}">
                     <span style="font-weight:600;"><i class="fa-regular fa-circle-question mr-2 text-primary"></i> ${post.question}</span>
                     <i class="fa-solid fa-chevron-down text-muted"></i>
@@ -504,11 +523,9 @@
                         <button class="btn btn-sm btn-outline-primary mr-1" onclick="startEditMode('${post._id}')">수정</button>
                         <button class="btn btn-sm btn-outline-danger" onclick="deletePost('${post._id}')">삭제</button>
                     </div>
-                </div>
-             `;
-                    targetContainer.appendChild(card);
-                });
-            }
+                </div>`;
+                container.appendChild(card);
+            });
         }
 
         async function deletePost(id) {
@@ -521,56 +538,43 @@
 
         // [핵심] 수정 모드 시작 (전역 변수에서 데이터를 안전하게 가져옴)
         window.startEditMode = function (id) {
-            // 1. 저장된 데이터에서 해당 게시글 찾기
             const post = currentPostsData.find(p => p._id === id);
             if (!post) return;
 
             const card = document.getElementById(`card-${id}`);
             const bodyDiv = card.querySelector('.qa-body');
             const headerDiv = card.querySelector('.qa-header');
-
-            // 원상복구를 위해 내용 백업
             const originalContent = bodyDiv.innerHTML;
 
-            // UI 변경
             headerDiv.style.display = 'none';
             bodyDiv.classList.add('show');
 
             const hasImage = post.answer.includes('<img');
-
             let fileInputHtml = '';
             if (hasImage) {
                 fileInputHtml = `
                 <div class="alert alert-secondary p-2 mt-2 mb-2">
                     <label class="small font-weight-bold mb-1"><i class="fa-solid fa-image"></i> 이미지 교체 (선택사항)</label>
                     <input type="file" class="form-control-file small" id="edit-file-${id}" accept="image/*">
-                </div>
-            `;
+                </div>`;
             }
 
-            // 인풋창에 값 넣을 때 따옴표 깨짐 방지를 위해 value 속성 사용
             bodyDiv.innerHTML = `
             <div class="p-3" style="background:#fff; border:1px solid #ddd; border-radius:8px;">
                 <label class="small text-muted font-weight-bold">질문 수정</label>
                 <input type="text" class="form-control mb-3" id="edit-q-${id}">
-                
                 <label class="small text-muted font-weight-bold">답변 수정</label>
                 <textarea class="form-control mb-3" id="edit-a-${id}" rows="4"></textarea>
-                
                 ${fileInputHtml}
-
                 <div class="text-right mt-3">
                     <button class="btn btn-sm btn-success mr-1" onclick="submitUpdate('${id}')">저장 완료</button>
                     <button class="btn btn-sm btn-secondary" onclick="cancelEdit('${id}')">취소</button>
                 </div>
-            </div>
-        `;
+            </div>`;
 
-            // 값 주입 (안전한 방식)
             document.getElementById(`edit-q-${id}`).value = post.question;
             document.getElementById(`edit-a-${id}`).value = post.answer;
 
-            // 취소 함수 정의
             window.cancelEdit = function (postId) {
                 const c = document.getElementById(`card-${postId}`);
                 c.querySelector('.qa-header').style.display = 'flex';
@@ -604,8 +608,8 @@
             }
         }
 
-        // 초기 실행
-        loadPosts();
+        // ★ 초기 실행: homepage 탭만 로드
+        loadCategoryPosts('homepage');
     </script>
 </body>
 

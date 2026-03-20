@@ -4,10 +4,7 @@
   href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
 
 <style>
-  .fa-magnifying-glass:before,
-  .fa-search:before {
-    display: none;
-  }
+  .fa-magnifying-glass:before, .fa-search:before { display: none; }
 
   /* [1] 전체 컨테이너 */
   .chat-container {
@@ -17,388 +14,261 @@
     max-width: 95%;
     height: 750px;
     max-height: 85vh;
-    border-radius: 35px;
-    box-shadow: 0 25px 50px -12px rgba(88, 181, 202, 0.25);
+    border-radius: 32px;
+    box-shadow: 0 30px 60px rgba(30, 120, 145, 0.18), 0 6px 20px rgba(88,181,202,0.10);
     display: flex;
     flex-direction: column;
     overflow: hidden;
     font-family: 'Pretendard', sans-serif;
-    border: 1px solid #eef2f5;
+    border: 1px solid #e0eff5;
     position: relative;
   }
 
   /* [2] 헤더 */
   .chat-header {
-    padding: 20px;
-    text-align: center;
-    background: linear-gradient(135deg, #58b5ca 0%, #2c9db6 100%);
+    padding: 18px 24px;
+    background: linear-gradient(135deg, #1e7891 0%, #2c9db6 60%, #58b5ca 100%);
     color: white;
-    box-shadow: 0 4px 15px rgba(88, 181, 202, 0.2);
     z-index: 10;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 12px;
+    position: relative;
+    overflow: hidden;
   }
-
+  .chat-header::before {
+    content: '';
+    position: absolute;
+    top: -40px; right: -40px;
+    width: 120px; height: 120px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.07);
+    pointer-events: none;
+  }
+  .chat-header::after {
+    content: '';
+    position: absolute;
+    bottom: -30px; left: -20px;
+    width: 90px; height: 90px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.05);
+    pointer-events: none;
+  }
   .chat-header h2 {
     margin: 0;
-    font-size: 18px;
+    font-size: 17px;
     font-weight: 700;
     letter-spacing: 0.5px;
+    opacity: 0.95;
   }
 
-  /* 경고 문구 배너 */
+  /* 경고 배너 — 컴팩트 */
   .warning-banner {
-    background-color: #fff8e1;
-    color: #8a6d3b;
-    padding: 15px 20px;
-    font-size: 13px;
-    line-height: 1.5;
-    border-bottom: 1px solid #faebcc;
+    background: linear-gradient(90deg, #fffbee 0%, #fff9e6 100%);
+    color: #7a5c20;
+    padding: 10px 18px;
+    font-size: 12px;
+    line-height: 1.6;
+    border-bottom: 1px solid #f5e2a8;
     display: flex;
     align-items: flex-start;
-    gap: 10px;
+    gap: 8px;
     animation: slideDown 0.3s ease-out;
   }
-
-  .warning-banner i {
-    color: #f0ad4e;
-    margin-top: 3px;
-  }
-
+  .warning-banner i { color: #e0a020; margin-top: 2px; flex-shrink: 0; }
   @keyframes slideDown {
-    from {
-      opacity: 0;
-      transform: translateY(-10px);
-    }
-
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
   }
 
   /* [3] 메시지 영역 */
   .chat-messages {
     flex: 1;
-    padding: 25px 20px;
+    padding: 22px 18px;
     overflow-y: auto;
-    background: #f8fbff;
+    background: linear-gradient(180deg, #f0f7fb 0%, #f6fbff 100%);
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 18px;
     scroll-behavior: smooth;
   }
+  .chat-messages::-webkit-scrollbar { width: 4px; }
+  .chat-messages::-webkit-scrollbar-thumb { background: #cde6f0; border-radius: 4px; }
 
-  .chat-messages::-webkit-scrollbar {
-    width: 5px;
-  }
-
-  .chat-messages::-webkit-scrollbar-thumb {
-    background-color: #dbe4ea;
-    border-radius: 3px;
-  }
-
-  /* [4] 메시지 스타일 */
+  /* [4] 메시지 */
   .message {
     display: flex;
     flex-direction: column;
     width: 100%;
-    position: relative;
-    animation: slideUp 0.3s ease-out both;
+    animation: slideUp 0.28s ease-out both;
   }
-
   @keyframes slideUp {
-    from {
-      opacity: 0;
-      transform: translateY(15px);
-    }
-
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
   }
 
-  .bot-container {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    max-width: 100%;
-  }
+  .bot-container { display: flex; align-items: flex-start; gap: 10px; max-width: 100%; }
 
   .bot-profile {
-    width: 44px;
-    height: 44px;
+    width: 42px; height: 42px;
     border-radius: 50%;
-    border: 3px solid #fff;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
-    background: #fff;
+    border: 2.5px solid #fff;
+    box-shadow: 0 4px 12px rgba(88,181,202,0.2);
+    background: #e8f5fb;
     object-fit: cover;
     flex-shrink: 0;
   }
 
   .bot-message {
-    max-width: 85%;
+    max-width: 84%;
     background: #fff;
-    color: #444;
-    padding: 18px 22px;
-    border-radius: 5px 25px 25px 25px;
-    font-size: 15px;
-    line-height: 1.65;
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.05);
+    color: #3a3a4a;
+    padding: 16px 20px;
+    border-radius: 4px 22px 22px 22px;
+    font-size: 14.5px;
+    line-height: 1.7;
+    box-shadow: 0 6px 20px rgba(44,120,150,0.08);
     word-break: break-all;
-    position: relative;
   }
+  .bot-message a { color: #2c9db6; font-weight: 700; text-decoration: none; border-bottom: 1.5px dotted #58b5ca; }
+  .bot-message img { max-width: 100% !important; height: auto !important; display: block; margin: 12px 0 4px; border-radius: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
 
-  /* 링크 스타일 */
-  .bot-message a {
-    color: #58b5ca;
-    font-weight: 700;
-    text-decoration: none;
-    border-bottom: 2px dotted #58b5ca;
-    transition: all 0.2s;
-    cursor: pointer;
-  }
-
-  /* 이미지 스타일 */
-  .bot-message img {
-    max-width: 100% !important;
-    height: auto !important;
-    display: block;
-    margin: 15px 0 5px 0;
-    border-radius: 15px;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-    transition: transform 0.2s;
-  }
-
-  /* ★ 상담사 버튼 전용 스타일 (서버에서 class="consult-btn"으로 보냄) */
-  .consult-container {
-    margin-top: 15px;
-    padding-top: 15px;
-    border-top: 1px dashed #eee;
-  }
-
+  /* 상담사 버튼 */
+  .consult-container { margin-top: 14px; padding-top: 14px; border-top: 1px dashed #e8eef2; }
   .consult-btn {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 14px;
-    border-radius: 12px;
-    text-decoration: none !important;
-    border: none !important;
-    font-size: 14px;
-    font-weight: 700;
-    margin-bottom: 8px;
-    transition: transform 0.2s;
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px; border-radius: 12px;
+    text-decoration: none !important; border: none !important;
+    font-size: 13.5px; font-weight: 700; margin-bottom: 7px; transition: transform 0.2s, box-shadow 0.2s;
   }
+  .consult-btn:hover { transform: translateY(-2px); opacity: 0.92; color: inherit !important; }
+  .consult-btn.kakao { background: #fee500; color: #3c1e1e !important; }
+  .consult-btn.naver { background: #03c75a; color: #fff !important; }
 
-  .consult-btn:hover {
-    transform: translateY(-2px);
-    opacity: 0.9;
-    color: inherit !important;
-  }
-
-  .consult-btn.kakao {
-    background: #fee500;
-    color: #3c1e1e !important;
-  }
-
-  .consult-btn.naver {
-    background: #03c75a;
-    color: #fff !important;
-  }
-
-  .consult-text {
-    font-size: 12px;
-    color: #888;
-    margin-top: 5px;
-  }
-
-  .message.user {
-    align-items: flex-end;
-  }
-
+  .message.user { align-items: flex-end; }
   .user-message {
-    max-width: 82%;
-    background: linear-gradient(135deg, #58b5ca 0%, #48c6ef 100%);
+    max-width: 80%;
+    background: linear-gradient(135deg, #2c9db6 0%, #58b5ca 100%);
     color: #fff;
-    padding: 16px 22px;
-    border-radius: 25px 5px 25px 25px;
-    font-size: 15px;
+    padding: 14px 20px;
+    border-radius: 22px 4px 22px 22px;
+    font-size: 14.5px;
     line-height: 1.65;
-    box-shadow: 0 8px 20px rgba(88, 181, 202, 0.3);
+    box-shadow: 0 6px 18px rgba(44,157,182,0.28);
   }
 
-  .timestamp {
-    font-size: 12px;
-    color: #b0b8c1;
-    margin-top: 8px;
-    font-weight: 500;
-    padding: 0 5px;
-  }
+  .timestamp { font-size: 11px; color: #b8c5cd; margin-top: 6px; font-weight: 500; padding: 0 4px; }
+  .message.user .timestamp { text-align: right; }
+  .message.bot .timestamp { margin-left: 55px; }
 
-  .message.user .timestamp {
-    text-align: right;
-  }
-
-  .message.bot .timestamp {
-    margin-left: 60px;
-  }
-
-  /* 로딩 애니메이션 */
-  .typing-indicator {
-    display: flex;
-    gap: 6px;
-    padding: 8px 0;
-    justify-content: center;
-  }
-
+  /* 로딩 */
+  .typing-indicator { display: flex; gap: 5px; padding: 6px 2px; justify-content: center; }
   .typing-dot {
-    width: 10px;
-    height: 10px;
-    background-color: #58b5ca;
+    width: 9px; height: 9px;
+    background: linear-gradient(135deg, #58b5ca, #2c9db6);
     border-radius: 50%;
-    animation: bounce 1.4s infinite ease-in-out both;
-    opacity: 0.6;
+    animation: bounce 1.3s infinite ease-in-out both;
   }
-
-  .typing-dot:nth-child(1) {
-    animation-delay: -0.32s;
-  }
-
-  .typing-dot:nth-child(2) {
-    animation-delay: -0.16s;
-  }
-
+  .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+  .typing-dot:nth-child(2) { animation-delay: -0.16s; }
   @keyframes bounce {
-
-    0%,
-    80%,
-    100% {
-      transform: scale(0);
-    }
-
-    40% {
-      transform: scale(1);
-    }
+    0%, 80%, 100% { transform: scale(0); opacity: 0.4; }
+    40%           { transform: scale(1); opacity: 1; }
   }
 
   /* 입력창 */
   .chat-input-area {
-    padding: 20px 25px 25px 25px;
+    padding: 16px 20px 22px;
     background: #fff;
-    border-top: 1px solid #f5f8fa;
-    border-radius: 0 0 35px 35px;
+    border-top: 1px solid #eef3f7;
+    border-radius: 0 0 32px 32px;
   }
-
   .chat-input {
-    display: flex;
-    gap: 12px;
-    background: #f0f4f8;
-    padding: 10px;
-    border-radius: 40px;
+    display: flex; gap: 10px;
+    background: #eef4f8;
+    padding: 8px 8px 8px 16px;
+    border-radius: 50px;
     border: 2px solid transparent;
-    transition: all 0.3s;
-    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.03);
+    transition: all 0.25s;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.03);
   }
-
   .chat-input:focus-within {
     background: #fff;
     border-color: #58b5ca;
-    box-shadow: 0 10px 25px rgba(88, 181, 202, 0.15);
+    box-shadow: 0 8px 24px rgba(88,181,202,0.15);
   }
-
   .chat-input input {
-    flex: 1;
-    height: 44px;
-    border: none;
-    background: transparent;
-    padding: 0 15px;
-    outline: none;
-    font-size: 16px;
-    color: #333;
+    flex: 1; height: 42px; border: none; background: transparent;
+    outline: none; font-size: 15px; color: #333;
+    font-family: 'Pretendard', sans-serif;
   }
-
   .chat-input button {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    border: none;
-    background: linear-gradient(135deg, #58b5ca 0%, #2c9db6 100%);
-    color: #fff;
-    cursor: pointer;
-    transition: all 0.3s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 5px 15px rgba(88, 181, 202, 0.4);
-    font-size: 20px;
+    width: 44px; height: 44px;
+    border-radius: 50%; border: none;
+    background: linear-gradient(135deg, #2c9db6 0%, #58b5ca 100%);
+    color: #fff; cursor: pointer;
+    transition: all 0.25s;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 14px rgba(44,157,182,0.38);
+    font-size: 18px; flex-shrink: 0;
   }
+  .chat-input button:hover { transform: translateY(-2px) scale(1.07); box-shadow: 0 7px 18px rgba(44,157,182,0.45); }
+  .chat-input button:disabled { opacity: 0.5; transform: none; }
 
-  .chat-input button:hover {
-    transform: translateY(-3px) scale(1.05);
-    box-shadow: 0 8px 20px rgba(88, 181, 202, 0.5);
+  /* 웰컴 화면 */
+  .info_list {
+    text-align: center;
+    margin-top: 30px;
+    animation: slideUp 0.5s ease-out;
+    padding: 0 10px;
+  }
+  .greeting-emoji {
+    margin-bottom: 14px;
+    position: relative;
+    display: inline-block;
+  }
+  .greeting-emoji img {
+    width: 68px; height: 68px;
+    border-radius: 50%;
+    border: 3px solid #fff;
+    box-shadow: 0 0 0 6px rgba(88,181,202,0.15), 0 8px 24px rgba(44,120,150,0.18);
+    object-fit: cover;
+  }
+  .greeting-title {
+    font-weight: 800; font-size: 21px;
+    margin-bottom: 8px; color: #1e3a47;
+    letter-spacing: -0.3px;
+  }
+  .greeting-desc {
+    font-size: 14px; color: #7d98a6;
+    line-height: 1.65; margin-bottom: 28px;
   }
 
   /* 퀵 버튼 */
-  .info_list {
-    text-align: center;
-    margin-top: 40px;
-    animation: slideUp 0.6s ease-out;
-  }
-
-  .greeting-emoji {
-    font-size: 40px;
-    margin-bottom: 15px;
-    filter: drop-shadow(0 5px 10px rgba(0, 0, 0, 0.1));
-  }
-
-  .greeting-title {
-    font-weight: 800;
-    font-size: 22px;
-    margin-bottom: 10px;
-    color: #2c3e50;
-  }
-
-  .greeting-desc {
-    font-size: 15px;
-    color: #7f8c8d;
-    line-height: 1.6;
-    margin-bottom: 30px;
-  }
-
   .best_choice_list ul {
-    list-style: none;
-    padding: 0;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
+    list-style: none; padding: 0;
+    display: flex; flex-wrap: wrap; gap: 8px;
     justify-content: center;
-    width: 95%;
-    margiN: 0 auto;
   }
-
   .best_choice_list span {
     background: #fff;
-    border: 2px solid #e0e7ee;
-    color: #555;
+    border: 1.8px solid #c8e6f0;
+    color: #2c7d96;
     padding: 10px 20px;
-    border-radius: 30px;
-    font-size: 14px;
+    border-radius: 50px;
+    font-size: 13.5px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.3s;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+    transition: all 0.25s;
+    box-shadow: 0 4px 12px rgba(44,157,182,0.08);
   }
-
   .best_choice_list span:hover {
-    background: #58b5ca;
+    background: linear-gradient(135deg, #2c9db6, #58b5ca);
     color: #fff;
-    border-color: #58b5ca;
+    border-color: transparent;
     transform: translateY(-3px);
-    box-shadow: 0 10px 20px rgba(88, 181, 202, 0.25);
+    box-shadow: 0 8px 22px rgba(44,157,182,0.28);
   }
 </style>
 
@@ -410,19 +280,15 @@
   </div>
 
   <div id="warning-banner" class="warning-banner">
-    <i class="fa-solid fa-triangle-exclamation"></i>
-    <div>
-      <strong>안내사항</strong><br>
-      • AI가 부정확한 답변을 할 수 있습니다.<br>
-      • 품질 향상을 위해 대화가 1년간 보관됩니다.<br>
-      • 개인/민감 정보 입력은 자제해 주세요. <br />
-    </div>
+    <i class="fa-solid fa-circle-info"></i>
+    <span>AI 답변은 참고용입니다 &nbsp;·&nbsp; 대화는 품질 향상을 위해 1년간 보관됩니다 &nbsp;·&nbsp; 개인/민감 정보 입력 자제</span>
   </div>
 
   <div id="chat-messages" class="chat-messages">
     <div class="info_list" id="initial-info">
-      <div class="greeting-emoji">‍<img src="/web/test/tmp-3922227795.webp" class="bot-profile"
-          onerror="this.src='https://via.placeholder.com/44'"></div>
+      <div class="greeting-emoji">
+        <img src="/web/test/tmp-3922227795.webp" onerror="this.src='https://via.placeholder.com/68'" alt="AI">
+      </div>
       <h3 class="greeting-title">반가워요! 무엇을 도와드릴까요?</h3>
       <p class="greeting-desc">편안한 요기보 라이프를 위해<br>AI 상담원이 대기하고 있어요.</p>
       <div class="best_choice_list" id="quick-buttons">

@@ -1,12 +1,12 @@
 const { getDB } = require("../config/db");
 const { getShipmentDetail, getOrderShippingInfo, getCachedProducts, getMemberPurchaseHistory } = require("./cafe24Service");
 const { recommendProductsWithGPT } = require("./openaiService");
-const { 
-    normalizeSentence, 
-    containsOrderNumber, 
-    isUserLoggedIn, 
-    COUNSELOR_BUTTONS_ONLY_HTML, 
-    LOGIN_BTN_HTML 
+const {
+    normalizeSentence,
+    containsOrderNumber,
+    isUserLoggedIn,
+    COUNSELOR_BUTTONS_ONLY_HTML,
+    LOGIN_BTN_HTML
 } = require("../utils/helpers");
 
 const path = require("path");
@@ -18,13 +18,13 @@ try { staticFaqList = require("../faq"); } catch (e) { console.warn("faq.js load
 
 const companyDataPath = path.join(__dirname, "../json", "companyData.json");
 let companyData = {};
-try { 
+try {
     if (fs.existsSync(companyDataPath)) {
-        companyData = JSON.parse(fs.readFileSync(companyDataPath, "utf-8")); 
+        companyData = JSON.parse(fs.readFileSync(companyDataPath, "utf-8"));
     }
 } catch (e) { console.error("companyData load error:", e); }
 
-let allSearchableData = []; 
+let allSearchableData = [];
 let currentSystemPrompt = `
 1. 역할: 당신은 '요기보(Yogibo)'의 AI 상담원입니다.
 
@@ -45,73 +45,73 @@ let currentSystemPrompt = `
 `;
 
 async function updateSearchableData() {
-  const db = getDB();
-  try {
-    const notes = await db.collection("postItNotes").find({}).toArray();
-    const dbData = notes.map(n => ({ 
-        source: "DB", category: n.category || "general", q: n.question, a: n.answer 
-    }));
+    const db = getDB();
+    try {
+        const notes = await db.collection("postItNotes").find({}).toArray();
+        const dbData = notes.map(n => ({
+            source: "DB", category: n.category || "general", q: n.question, a: n.answer
+        }));
 
-    const faqData = staticFaqList.map(f => ({
-        source: "FAQ", category: "faq", q: f.q, a: f.a
-    }));
+        const faqData = staticFaqList.map(f => ({
+            source: "FAQ", category: "faq", q: f.q, a: f.a
+        }));
 
-    let jsonData = [];
-    if (companyData.covering) {
-        Object.keys(companyData.covering).forEach(key => {
-            jsonData.push({ source: "JSON", category: "covering", q: key, a: companyData.covering[key].answer });
-        });
-    }
-    if (companyData.sizeInfo) {
-        Object.keys(companyData.sizeInfo).forEach(key => {
-            jsonData.push({ source: "JSON", category: "size", q: key, a: companyData.sizeInfo[key].description });
-        });
-    }
+        let jsonData = [];
+        if (companyData.covering) {
+            Object.keys(companyData.covering).forEach(key => {
+                jsonData.push({ source: "JSON", category: "covering", q: key, a: companyData.covering[key].answer });
+            });
+        }
+        if (companyData.sizeInfo) {
+            Object.keys(companyData.sizeInfo).forEach(key => {
+                jsonData.push({ source: "JSON", category: "size", q: key, a: companyData.sizeInfo[key].description });
+            });
+        }
 
-    // 1) DB에서 누락된 임베딩(Vector) 일괄 생성 (Backfill)
-    const missingEmbeddings = notes.filter(n => !n.embedding);
-    if (missingEmbeddings.length > 0) {
-        console.log(`[RAG] DB 내 ${missingEmbeddings.length}개의 데이터에 대한 임베딩(Vector) 생성을 시작합니다...`);
-        const batchSize = 500;
-        for (let i = 0; i < missingEmbeddings.length; i += batchSize) {
-            const batch = missingEmbeddings.slice(i, i + batchSize);
-            const textsToEmbed = batch.map(b => `Q: ${b.question || ''}\nA: ${(b.answer || '').replace(/<[^>]*>?/gm, '')}`);
-            const embeddings = await getEmbedding(textsToEmbed);
-            if (embeddings && embeddings.length === batch.length) {
-                await Promise.all(batch.map((b, idx) => {
-                    b.embedding = embeddings[idx]; 
-                    return db.collection("postItNotes").updateOne({ _id: b._id }, { $set: { embedding: embeddings[idx] } });
-                }));
+        // 1) DB에서 누락된 임베딩(Vector) 일괄 생성 (Backfill)
+        const missingEmbeddings = notes.filter(n => !n.embedding);
+        if (missingEmbeddings.length > 0) {
+            console.log(`[RAG] DB 내 ${missingEmbeddings.length}개의 데이터에 대한 임베딩(Vector) 생성을 시작합니다...`);
+            const batchSize = 500;
+            for (let i = 0; i < missingEmbeddings.length; i += batchSize) {
+                const batch = missingEmbeddings.slice(i, i + batchSize);
+                const textsToEmbed = batch.map(b => `Q: ${b.question || ''}\nA: ${(b.answer || '').replace(/<[^>]*>?/gm, '')}`);
+                const embeddings = await getEmbedding(textsToEmbed);
+                if (embeddings && embeddings.length === batch.length) {
+                    await Promise.all(batch.map((b, idx) => {
+                        b.embedding = embeddings[idx];
+                        return db.collection("postItNotes").updateOne({ _id: b._id }, { $set: { embedding: embeddings[idx] } });
+                    }));
+                }
             }
         }
-    }
 
-    // 2) 메모리 로드 
-    allSearchableData = [...faqData, ...dbData, ...jsonData];
-    
-    // 3) 메모리에만 존재하는 정적 데이터(FAQ/JSON) 임베딩 생성 (서버 시작 또는 갱신 시점 1회)
-    const memoryMissing = allSearchableData.filter(i => !i.embedding);
-    if (memoryMissing.length > 0) {
-        console.log(`[RAG] 정적 데이터 ${memoryMissing.length}개의 임베딩(Vector) 생성을 시작합니다...`);
-        const batchSize = 500;
-        for (let i = 0; i < memoryMissing.length; i += batchSize) {
-            const batch = memoryMissing.slice(i, i + batchSize);
-            const textsToEmbed = batch.map(b => `Q: ${b.q || ''}\nA: ${(b.a || '').replace(/<[^>]*>?/gm, '')}`);
-            const embeddings = await getEmbedding(textsToEmbed);
-            if (embeddings && embeddings.length === batch.length) {
-                batch.forEach((b, idx) => { b.embedding = embeddings[idx]; });
+        // 2) 메모리 로드 
+        allSearchableData = [...faqData, ...dbData, ...jsonData];
+
+        // 3) 메모리에만 존재하는 정적 데이터(FAQ/JSON) 임베딩 생성 (서버 시작 또는 갱신 시점 1회)
+        const memoryMissing = allSearchableData.filter(i => !i.embedding);
+        if (memoryMissing.length > 0) {
+            console.log(`[RAG] 정적 데이터 ${memoryMissing.length}개의 임베딩(Vector) 생성을 시작합니다...`);
+            const batchSize = 500;
+            for (let i = 0; i < memoryMissing.length; i += batchSize) {
+                const batch = memoryMissing.slice(i, i + batchSize);
+                const textsToEmbed = batch.map(b => `Q: ${b.q || ''}\nA: ${(b.a || '').replace(/<[^>]*>?/gm, '')}`);
+                const embeddings = await getEmbedding(textsToEmbed);
+                if (embeddings && embeddings.length === batch.length) {
+                    batch.forEach((b, idx) => { b.embedding = embeddings[idx]; });
+                }
             }
         }
-    }
 
-    // 4) systemPrompts 테이블 최신값 가져오기
-    const prompts = await db.collection("systemPrompts").find({}).sort({createdAt: -1}).limit(1).toArray();
-    if (prompts.length > 0) currentSystemPrompt = prompts[0].content; 
-    
-    console.log(`✅ [데이터 로드 완료] 총 ${allSearchableData.length}개의 지식 데이터가 벡터 기반 RAG로 준비되었습니다.`);
-  } catch (err) { 
-      console.error("데이터 갱신 실패:", err); 
-  }
+        // 4) systemPrompts 테이블 최신값 가져오기
+        const prompts = await db.collection("systemPrompts").find({}).sort({ createdAt: -1 }).limit(1).toArray();
+        if (prompts.length > 0) currentSystemPrompt = prompts[0].content;
+
+        console.log(`✅ [데이터 로드 완료] 총 ${allSearchableData.length}개의 지식 데이터가 벡터 기반 RAG로 준비되었습니다.`);
+    } catch (err) {
+        console.error("데이터 갱신 실패:", err);
+    }
 }
 
 function cosineSimilarity(vecA, vecB) {
@@ -127,41 +127,41 @@ function cosineSimilarity(vecA, vecB) {
 }
 
 async function findAllRelevantContent(msg) {
-  const queryEmbedding = await getEmbedding(msg);
-  
-  if (!queryEmbedding) {
-      console.warn("[RAG] 임베딩 API 장애: 키워드 기반 검색으로 폴백합니다.");
-      const kws = msg.split(/\s+/).filter(w => w.length > 1);
-      if (!kws.length && msg.length < 2) return [];
+    const queryEmbedding = await getEmbedding(msg);
 
-      const scored = allSearchableData.map(item => {
-        let score = 0;
-        const q = (item.q || "").toLowerCase().replace(/\s+/g, "");
-        const cleanMsg = msg.toLowerCase().replace(/\s+/g, "");
-        if (q === cleanMsg) score += 100;
-        else if (q.includes(cleanMsg) || cleanMsg.includes(q)) score += 50;
-        
-        kws.forEach(w => {
-          if ((item.q || "").toLowerCase().includes(w)) score += 30;
-          if ((item.a || "").toLowerCase().includes(w)) score += 30;
+    if (!queryEmbedding) {
+        console.warn("[RAG] 임베딩 API 장애: 키워드 기반 검색으로 폴백합니다.");
+        const kws = msg.split(/\s+/).filter(w => w.length > 1);
+        if (!kws.length && msg.length < 2) return [];
+
+        const scored = allSearchableData.map(item => {
+            let score = 0;
+            const q = (item.q || "").toLowerCase().replace(/\s+/g, "");
+            const cleanMsg = msg.toLowerCase().replace(/\s+/g, "");
+            if (q === cleanMsg) score += 100;
+            else if (q.includes(cleanMsg) || cleanMsg.includes(q)) score += 50;
+
+            kws.forEach(w => {
+                if ((item.q || "").toLowerCase().includes(w)) score += 30;
+                if ((item.a || "").toLowerCase().includes(w)) score += 30;
+            });
+            return { ...item, score };
         });
+        return scored.filter(i => i.score >= 12).sort((a, b) => b.score - a.score).slice(0, 6);
+    }
+
+    // 코사인 유사도 계산
+    const scored = allSearchableData.map(item => {
+        let score = 0;
+        if (item.embedding) {
+            const sim = cosineSimilarity(queryEmbedding, item.embedding);
+            score = Math.floor(sim * 100); // 0~100 스케일
+        }
         return { ...item, score };
-      });
-      return scored.filter(i => i.score >= 12).sort((a, b) => b.score - a.score).slice(0, 6);
-  }
+    });
 
-  // 코사인 유사도 계산
-  const scored = allSearchableData.map(item => {
-      let score = 0;
-      if (item.embedding) {
-          const sim = cosineSimilarity(queryEmbedding, item.embedding);
-          score = Math.floor(sim * 100); // 0~100 스케일
-      }
-      return { ...item, score };
-  });
-
-  // 유사도 40점 이상만 추출 (OpenAI 임베딩에서 0.4 정도면 꽤 관련성이 있음)
-  return scored.filter(i => i.score >= 40).sort((a, b) => b.score - a.score).slice(0, 6);
+    // 유사도 40점 이상만 추출 (OpenAI 임베딩에서 0.4 정도면 꽤 관련성이 있음)
+    return scored.filter(i => i.score >= 40).sort((a, b) => b.score - a.score).slice(0, 6);
 }
 
 function getCurrentSystemPrompt() {
@@ -172,14 +172,14 @@ async function recommendProducts(userMsg, memberId) {
     const purchaseHistory = await getMemberPurchaseHistory(memberId);
     let yogiboProducts = getCachedProducts();
     const relevantContext = await findAllRelevantContent(userMsg);
-    
+
     // 상품 캐시가 비어있는 경우(서버 기동 시 지연 등), 1회 강제 재동기화 시도
     if (!yogiboProducts || yogiboProducts.length === 0) {
         console.warn("⚠️ 상품 캐시가 비어있습니다. 실시간 재요청을 시도합니다...");
         const { fetchProductsFromCafe24 } = require("./cafe24Service");
         await fetchProductsFromCafe24();
         yogiboProducts = getCachedProducts();
-        
+
         // 재시도 후에도 없으면 에러 응답
         if (!yogiboProducts || yogiboProducts.length === 0) {
             return "현재 상품 데이터를 불러올 수 없습니다. 잠시 후 다시 시도해주세요.";
@@ -188,96 +188,96 @@ async function recommendProducts(userMsg, memberId) {
 
     try {
         const aiResult = await recommendProductsWithGPT(userMsg, purchaseHistory, yogiboProducts, relevantContext);
-        
+
         let answer = aiResult.message || "고객님께 딱 맞는 상품을 찾았습니다!";
         const recommendedProducts = aiResult.recommendedIds
             .map(id => yogiboProducts.find(p => p.id === id))
             .filter(p => p !== undefined); // 혹시 모를 매치 실패 방지
-            
+
         if (recommendedProducts.length === 0) {
-             return "원하시는 조건에 맞는 상품을 찾지 못했어요. 조금 더 구체적으로 말씀해주시겠어요?";
+            return "원하시는 조건에 맞는 상품을 찾지 못했어요. 조금 더 구체적으로 말씀해주시겠어요?";
         }
 
         const buttons = recommendedProducts.map(p => `<a href="${p.productUrl}" target="_blank" class="consult-btn" style="background:#58b5ca; color:#fff; display:inline-block; margin:5px; text-decoration:none;">🛍️ ${p.name} 보러가기</a>`).join("");
         return answer + "<br><br>" + buttons;
-    } catch (e) { 
+    } catch (e) {
         console.error("추천 처리 실패:", e);
-        return "추천 상품을 불러오는 중 오류가 발생했습니다."; 
+        return "추천 상품을 불러오는 중 오류가 발생했습니다.";
     }
 }
 
 const counselorTriggers = ["상담사", "상담원", "상담사 연결", "상담원 연결", "사람 상담", "직원 연결", "카톡 상담", "카카오 상담", "네이버 상담", "톡톡 상담"];
 
 async function findRuleBasedAnswer(userInput, memberId, wantsCounselor = false) {
-  const normalized = normalizeSentence(userInput);
+    const normalized = normalizeSentence(userInput);
 
-  // [상담원 사전 질문 로직] 상담원을 불렀을 때
-  if (counselorTriggers.some(t => normalized.includes(t))) {
-      // 이미 직전 턴에서 문의내용 적어달라고 했는데 돌아서 또 불렀다면, 포기하고 바로 버튼 줌
-      if (wantsCounselor) {
-          return { text: COUNSELOR_BUTTONS_ONLY_HTML };
-      }
-      return { text: "원활한 상담을 위해, <b>상담사에게 전달할 문의 내용</b>을 이 채팅 창에 먼저 자세히 적어주세요.<br>(내용 입력 후 자동으로 상담원 연결 버튼이 나타납니다.)" };
-  }
-
-  // [쇼룸 링크 강제 교정 룰]
-  const showroomKeywords = ["쇼룸", "온라인쇼룸", "온라인 쇼룸", "온라인 매장"];
-  if (showroomKeywords.some(k => normalized.includes(k))) {
-    return { text: `요기보 온라인 쇼룸은 아래 링크에서 확인하실 수 있습니다.<br><br><a href="https://yogibo.kr/show_room/new/index.html" target="_blank" class="consult-btn" style="background:#58b5ca; color:#fff; display:inline-block; padding:10px; border-radius:8px; text-decoration:none;">🛋️ 요기보 온라인 쇼룸 입장하기</a>` };
-  }
-
-  const recommendKeywords = ["추천", "뭐가 좋", "어떤게 좋", "골라", "선택", "뭐 사"];
-  if (recommendKeywords.some(k => normalized.includes(k))) {
-    const recommendResult = await recommendProducts(userInput, memberId);
-    return { text: recommendResult };
-  }
-
-  if (containsOrderNumber(normalized)) {
-    if (isUserLoggedIn(memberId)) {
-      try {
-        const orderId = normalized.match(/\d{8}-\d{7}/)[0];
-        const ship = await getShipmentDetail(orderId);
-        if (ship) return { text: `주문번호 <strong>${orderId}</strong>의 배송 상태는 <strong>${ship.status || "배송 준비중"}</strong>입니다.` };
-        return { text: "해당 주문번호의 정보를 찾을 수 없습니다." };
-      } catch (e) { return { text: "조회 중 오류가 발생했습니다." }; }
-    }
-    return { text: `조회를 위해 로그인이 필요합니다.${LOGIN_BTN_HTML}` };
-  }
-
-  const isTracking = (normalized.includes("배송") || normalized.includes("주문")) && (normalized.includes("조회") || normalized.includes("확인") || normalized.includes("언제") || normalized.includes("어디"));
-  if (isTracking) {
-    if (isUserLoggedIn(memberId)) {
-      try {
-        const data = await getOrderShippingInfo(memberId);
-        if (data.orders?.[0]) {
-            const orderId = data.orders[0].order_id;
-            try {
-                const ship = await getShipmentDetail(orderId);
-                if (ship) {
-                    let text = `최근 주문(<strong>${orderId}</strong>)의 배송 상태는 <strong>${ship.status || "배송 준비중"}</strong>입니다.`;
-                    if (ship.tracking_no) {
-                        text += `<br>택배사: ${ship.shipping_company_name}<br>운송장 번호: ${ship.tracking_no}`;
-                        if (ship.tracking_url && ship.tracking_url !== "#") {
-                            text += `<br><br><a href="${ship.tracking_url}" target="_blank" class="consult-btn" style="background:#58b5ca; color:#fff; display:inline-block; text-decoration:none;"><i class="fa-solid fa-truck"></i> 실시간 배송조회</a>`;
-                        } else {
-                            // 롯데택배 기본 페이지로 강제 안내 (알려주신 링크 기반)
-                            text += `<br><br><a href="https://www.lotteglogis.com/" target="_blank" class="consult-btn" style="background:#58b5ca; color:#fff; display:inline-block; text-decoration:none;"><i class="fa-solid fa-truck"></i> 배송조회 (롯데택배 홈페이지)</a>`;
-                        }
-                    }
-                    return { text };
-                }
-            } catch (e) {
-                // 배송 정보 조회를 못했지만 주문번호는 아는 경우
-                return { text: `최근 주문(<strong>${orderId}</strong>) 내역을 확인했습니다.<br>배송 준비 중이거나 배송사 연동이 지연되고 있을 수 있습니다.` };
-            }
-            return { text: `최근 주문(<strong>${orderId}</strong>) 내역을 확인했습니다.` };
+    // [상담원 사전 질문 로직] 상담원을 불렀을 때
+    if (counselorTriggers.some(t => normalized.includes(t))) {
+        // 이미 직전 턴에서 문의내용 적어달라고 했는데 돌아서 또 불렀다면, 포기하고 바로 버튼 줌
+        if (wantsCounselor) {
+            return { text: COUNSELOR_BUTTONS_ONLY_HTML };
         }
-        return { text: "최근 주문(배송) 내역이 없습니다." };
-      } catch (e) { return { text: "조회 실패." }; }
+        return { text: "원활한 상담을 위해, <b>상담사에게 전달할 문의 내용</b>을 이 채팅 창에 먼저 자세히 적어주세요.<br>(내용 입력 후 자동으로 상담원 연결 버튼이 나타납니다.)" };
     }
-    return { text: `배송정보 확인을 위해 로그인이 필요합니다.${LOGIN_BTN_HTML}` };
-  }
-  return null;
+
+    // [쇼룸 링크 강제 교정 룰]
+    const showroomKeywords = ["쇼룸", "온라인쇼룸", "온라인 쇼룸", "온라인 매장"];
+    if (showroomKeywords.some(k => normalized.includes(k))) {
+        return { text: `요기보 온라인 쇼룸은 아래 링크에서 확인하실 수 있습니다.<br><br><a href="https://yogibo.kr/show_room/new/index.html" target="_blank" class="consult-btn" style="background:#58b5ca; color:#fff; display:inline-block; padding:10px; border-radius:8px; text-decoration:none;">🛋️ 요기보 온라인 쇼룸 입장하기</a>` };
+    }
+
+    const recommendKeywords = ["추천", "뭐가 좋", "어떤게 좋", "골라", "선택", "뭐 사"];
+    if (recommendKeywords.some(k => normalized.includes(k))) {
+        const recommendResult = await recommendProducts(userInput, memberId);
+        return { text: recommendResult };
+    }
+
+    if (containsOrderNumber(normalized)) {
+        if (isUserLoggedIn(memberId)) {
+            try {
+                const orderId = normalized.match(/\d{8}-\d{7}/)[0];
+                const ship = await getShipmentDetail(orderId);
+                if (ship) return { text: `주문번호 <strong>${orderId}</strong>의 배송 상태는 <strong>${ship.status || "배송 준비중"}</strong>입니다.` };
+                return { text: "해당 주문번호의 정보를 찾을 수 없습니다." };
+            } catch (e) { return { text: "조회 중 오류가 발생했습니다." }; }
+        }
+        return { text: `조회를 위해 로그인이 필요합니다.${LOGIN_BTN_HTML}` };
+    }
+
+    const isTracking = (normalized.includes("배송") || normalized.includes("주문")) && (normalized.includes("조회") || normalized.includes("확인") || normalized.includes("언제") || normalized.includes("어디"));
+    if (isTracking) {
+        if (isUserLoggedIn(memberId)) {
+            try {
+                const data = await getOrderShippingInfo(memberId);
+                if (data.orders?.[0]) {
+                    const orderId = data.orders[0].order_id;
+                    try {
+                        const ship = await getShipmentDetail(orderId);
+                        if (ship) {
+                            let text = `최근 주문(<strong>${orderId}</strong>)의 배송 상태는 <strong>${ship.status || "배송 준비중"}</strong>입니다.`;
+                            if (ship.tracking_no) {
+                                text += `<br>택배사: ${ship.shipping_company_name}<br>운송장 번호: ${ship.tracking_no}`;
+                                if (ship.tracking_url && ship.tracking_url !== "#") {
+                                    text += `<br><br><a href="${ship.tracking_url}" target="_blank" class="consult-btn" style="background:#58b5ca; color:#fff; display:inline-block; text-decoration:none;"><i class="fa-solid fa-truck"></i> 실시간 배송조회</a>`;
+                                } else {
+                                    // 롯데택배 기본 페이지로 강제 안내 (알려주신 링크 기반)
+                                    text += `<br><br><a href="https://www.lotteglogis.com/" target="_blank" class="consult-btn" style="background:#58b5ca; color:#fff; display:inline-block; text-decoration:none;"><i class="fa-solid fa-truck"></i> 배송조회 (롯데택배 홈페이지)</a>`;
+                                }
+                            }
+                            return { text };
+                        }
+                    } catch (e) {
+                        // 배송 정보 조회를 못했지만 주문번호는 아는 경우
+                        return { text: `최근 주문(<strong>${orderId}</strong>) 내역을 확인했습니다.<br>배송 준비 중이거나 배송사 연동이 지연되고 있을 수 있습니다.` };
+                    }
+                    return { text: `최근 주문(<strong>${orderId}</strong>) 내역을 확인했습니다.` };
+                }
+                return { text: "최근 주문(배송) 내역이 없습니다." };
+            } catch (e) { return { text: "조회 실패." }; }
+        }
+        return { text: `배송정보 확인을 위해 로그인이 필요합니다.${LOGIN_BTN_HTML}` };
+    }
+    return null;
 }
 
 // ★ [경량] 단일 항목 추가 - CRUD 시 전체 재로드 대신 사용

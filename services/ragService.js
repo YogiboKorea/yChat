@@ -258,9 +258,41 @@ async function findRuleBasedAnswer(userInput, memberId) {
   return null;
 }
 
+// ★ [경량] 단일 항목 추가 - CRUD 시 전체 재로드 대신 사용
+async function addItemToSearchable(doc) {
+    try {
+        const item = { source: "DB", category: doc.category || "general", q: doc.question, a: doc.answer, _id: doc._id };
+        const textToEmbed = `Q: ${item.q || ''}\nA: ${(item.a || '').replace(/<[^>]*>?/gm, '')}`;
+        const embedding = await getEmbedding(textToEmbed);
+        if (embedding) item.embedding = embedding;
+        allSearchableData.push(item);
+    } catch (e) {
+        console.error("[RAG] addItemToSearchable 오류:", e.message);
+    }
+}
+
+// ★ [경량] 단일 항목 삭제 - 메모리에서만 제거
+function removeItemFromSearchable(id) {
+    const idStr = String(id);
+    allSearchableData = allSearchableData.filter(i => String(i._id) !== idStr);
+}
+
+// ★ [경량] 단일 항목 수정 - 메모리에서 교체
+async function updateItemInSearchable(id, doc) {
+    try {
+        removeItemFromSearchable(id);
+        await addItemToSearchable({ ...doc, _id: id });
+    } catch (e) {
+        console.error("[RAG] updateItemInSearchable 오류:", e.message);
+    }
+}
+
 module.exports = {
     updateSearchableData,
     findAllRelevantContent,
     getCurrentSystemPrompt,
-    findRuleBasedAnswer
+    findRuleBasedAnswer,
+    addItemToSearchable,
+    removeItemFromSearchable,
+    updateItemInSearchable
 };

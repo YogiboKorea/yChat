@@ -1,5 +1,5 @@
 const { getDB } = require("../config/db");
-const { updateSearchableData } = require("../services/ragService");
+const { updateSearchableData, addItemToSearchable, removeItemFromSearchable, updateItemInSearchable } = require("../services/ragService");
 const { ObjectId } = require("mongodb");
 const fs = require("fs");
 const ftp = require('basic-ftp');
@@ -22,16 +22,21 @@ async function handleChatSend(req, res) {
                 const chunks = []; 
                 for (let i = 0; i < cleanText.length; i += 500) chunks.push(cleanText.substring(i, i + 500));
                 const docs = chunks.map((chunk, index) => ({ category: "pdf-knowledge", question: `[PDF 학습데이터] ${req.file.originalname} (Part ${index + 1})`, answer: chunk, createdAt: new Date() }));
-                if (docs.length > 0) await db.collection("postItNotes").insertMany(docs);
+                if (docs.length > 0) {
+                    const result = await db.collection("postItNotes").insertMany(docs);
+                    // ★ [경량] 전체 재로드 대신 새 청크만 직접 메모리에 추가 (비동기 다수 병렬 체어)
+                    const insertedIds = Object.values(result.insertedIds);
+                    await Promise.all(docs.map((doc, i) => addItemToSearchable({ ...doc, _id: insertedIds[i] })));
+                }
                 fs.unlink(req.file.path, () => {}); 
-                await updateSearchableData(); 
                 return res.json({ message: `PDF 분석 완료! 총 ${docs.length}개의 데이터로 학습되었습니다.` });
             }
         }
         if (role && content) {
             const fullPrompt = `역할: ${role}\n지시사항: ${content}`;
             await db.collection("systemPrompts").insertOne({ role, content: fullPrompt, createdAt: new Date() });
-            await updateSearchableData(); 
+            // ★ LLM 역할 변경은 시스템 프롬프트 전체에 영향을 주므로 기존적으로 전체 리로드
+            await updateSearchableData();
             return res.json({ message: "LLM 역할 설정이 완료되었습니다." });
         }
         res.status(400).json({ error: "파일이나 내용이 없습니다." });
@@ -56,8 +61,11 @@ async function uploadKnowledgeImage(req, res) {
         await ftpClient.uploadFrom(req.file.path, safeFilename);
         const remotePath = "web/chat"; const publicBase = FTP_PUBLIC_BASE || `http://${cleanFtpHost}`;
         const imageUrl = `${publicBase}/${remotePath}/${safeFilename}`.replace(/([^:]\/)\/+/g, '$1');
-        await db.collection("postItNotes").insertOne({ category: "image-knowledge", question: keyword, answer: `<img src="${imageUrl}" style="max-width:100%; border-radius:10px; margin-top:10px;">`, createdAt: new Date() });
-        fs.unlink(req.file.path, () => {}); ftpClient.close(); await updateSearchableData();
+        const insertedDoc = { category: "image-knowledge", question: keyword, answer: `<img src="${imageUrl}" style="max-width:100%; border-radius:10px; margin-top:10px;">`, createdAt: new Date() };
+        const insertResult = await db.collection("postItNotes").insertOne(insertedDoc);
+        fs.unlink(req.file.path, () => {}); ftpClient.close();
+        // ★ [경량] 이미지 항목만 메모리에 추가 (전체 재로드 안 함)
+        await addItemToSearchable({ ...insertedDoc, _id: insertResult.insertedId });
         res.json({ message: "이미지 지식 등록 완료" });
     } catch (e) { 
         if (req.file) fs.unlink(req.file.path, () => {}); 
@@ -84,7 +92,9 @@ async function updatePostIt(req, res) {
             fs.unlink(file.path, () => {}); ftpClient.close();
         }
         await db.collection("postItNotes").updateOne({ _id: new ObjectId(id) }, { $set: { question, answer: newAnswer, updatedAt: new Date() } });
-        await updateSearchableData(); res.json({ message: "수정 완료" });
+        // ★ [경량] 해당 항목만 메모리에서 교체
+        await updateItemInSearchable(id, { category: req.body.category, question, answer: newAnswer });
+        res.json({ message: "수정 완료" });
     } catch (e) { 
         if (file) fs.unlink(file.path, () => {}); ftpClient.close(); res.status(500).json({ error: e.message }); 
     }
@@ -108,8 +118,10 @@ async function deletePostIt(req, res) {
                 }
             }
         }
-        await db.collection("postItNotes").deleteOne({ _id: new ObjectId(id) }); 
-        await updateSearchableData(); res.json({ message: "OK" });
+        await db.collection("postItNotes").deleteOne({ _id: new ObjectId(id) });
+        // ★ [경량] 메모리에서만 제거 (전체 재로드 안 함)
+        removeItemFromSearchable(id);
+        res.json({ message: "OK" });
     } catch(e) { res.status(500).json({ error: e.message }); }
 }
 
@@ -126,8 +138,9 @@ async function getPostIts(req, res) {
 async function createPostIt(req,res) { 
     try{
         const db = getDB();
-        await db.collection("postItNotes").insertOne({...req.body,createdAt:new Date()}); 
-        await updateSearchableData(); 
+        const result = await db.collection("postItNotes").insertOne({...req.body, createdAt:new Date()});
+        // ★ [경량] 새 항목만 메모리에 추가 (전체 재로드 안 함)
+        await addItemToSearchable({ ...req.body, _id: result.insertedId });
         res.json({message:"OK"})
     } catch(e){ res.status(500).json({error:e.message}) } 
 }

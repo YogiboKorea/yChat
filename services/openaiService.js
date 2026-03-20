@@ -94,6 +94,7 @@ async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts, c
     - [바디필로우 대표 추천 요청 시]: "요기보 서포트(Support)" 1순위 추천.
     
     위 매뉴얼의 조건에 맞는 상품 딱 3개를 골라주세요.
+    선택 우선순위: ① 위 고객 지정 고정 매뉴얼(가장 중요) ② 보조 지식 데이터 참고
 
     [상품 설명 안내 룰 (DB 지식 연동)]
     - 안내 멘트(message)를 작성할 때, 제품의 스펙이나 특징을 임의로 상상하지 마시고, 가급적 위쪽에 제공된 [보조 지식 데이터]에 담긴 해당 제품의 실제 설명(챗봇 관리자가 등록한 내용)을 핵심적으로 참고하여 고객에게 안내해 주세요. 데이터가 불충분할 때만 당신의 일반 상식으로 안내하세요.
@@ -127,9 +128,9 @@ async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts, c
       const SOFA_KEYWORDS = /소파|빈백|쇼파|bean bag|베개소파|공중부양|게임용|거실|추천|베스트|대표설정|대표상품/;
       const HAS_PRICE_LIMIT = /[0-9]+만원|[0-9]+만 원|이하|이내|저렴한|싼/;
       if (SOFA_KEYWORDS.test(userMsg) && !HAS_PRICE_LIMIT.test(userMsg)) {
-        // Cafe24 product_no=39 로 정확히 검색 (없으면 이름으로 fallback)
+        // Cafe24 product_no=39 로 찾거나, 없으면 이름에 '맥스'가 들어간(커버 제외) 아무 상품이나 매칭 (카테고리 기타여도 무방)
         let maxProduct = allProducts.find(p => p.productUrl && p.productUrl.includes('product_no=39'));
-        if (!maxProduct) maxProduct = allProducts.find(p => p.name.includes('맥스') && p.category === '소파');
+        if (!maxProduct) maxProduct = allProducts.find(p => p.name.includes('맥스') && !p.name.includes('커버'));
 
         if (maxProduct) {
           const maxId = maxProduct.id;

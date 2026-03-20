@@ -33,9 +33,8 @@ async function handleChat(req, res) {
     const isPersonalQuery = /(내 정보|아이디|구매이력|장바구니|안녕|반가|결제|최근|뭐야|누구|이름)/.test(message);
 
     if ((!docs || docs.length === 0) && !isPersonalQuery) {
-      const fallback = `${FALLBACK_MESSAGE_HTML}`;
-      await saveConversationLog(memberId, message, fallback);
-      return res.json({ text: fallback });
+      // 바로 Fallback 버튼을 띄우는 대신, AI가 일반 상식이나 제공된 카탈로그 내에서 대답할 수 있도록 그냥 넘김.
+      console.log(`[RAG] 검색결과가 없어 일반 LLM 프롬프트로 처리: ${message}`);
     }
 
     // ★ [항목4 연동] 쿨타임 적용된 syncCafe24Orders (30분 내 중복 호출 자동 스킵)

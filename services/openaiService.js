@@ -45,9 +45,8 @@ ${txt || "정보 없음."}`;
 }
 
 async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts, context = []) {
-    // ★ [커버 배제 로직] 고객이 명시적으로 "커버"를 찾지 않으면, 제품명에 '커버'가 들어간 항목은 애초에 AI에게 주지 않음
-    const isCoverRequested = userMsg.includes("커버");
-    const filteredProducts = isCoverRequested ? allProducts : allProducts.filter(p => !p.name.includes("커버"));
+    // ★ [커버 배제 로직] 커버 상품은 어떤 경우에도 추천에서 제외되도록 수정 (요청사항 반영)
+    const filteredProducts = allProducts.filter(p => !p.name.includes("커버"));
 
     const productsJson = JSON.stringify(filteredProducts.map(p => ({
         id: p.id,

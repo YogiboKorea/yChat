@@ -32,48 +32,48 @@ app.use("/", legacyRoutes);
 
 // ★ 서버 실행 로직
 (async function initialize() {
-  try { 
-      console.log("🟡 서버 시작..."); 
-      
-      // 1. DB Connection Pool 초기화 (재사용 가능한 커넥션 풀)
-      await connectDB();
-      
-      // 2. 외부 서비스(Cafe24) 토큰 및 데이터 로드
-      await getTokensFromDB(); 
-      await fetchProductsFromCafe24();
-      
-      // 3. 지식 및 FAQ 데이터 (RAG 검색용)
-      await updateSearchableData(); 
+  try {
+    console.log("🟡 서버 시작...");
 
-      // 3.5 레거시 크론 및 초기화 (블랙프라이데이 로직 등)
-      await initializeLegacyCronJobs();
+    // 1. DB Connection Pool 초기화 (재사용 가능한 커넥션 풀)
+    await connectDB();
 
-      // 4. HTTP 서버 실행
-      app.listen(PORT, () => console.log(`🚀 앱 실행 완료 (포트: ${PORT})`)); 
+    // 2. 외부 서비스(Cafe24) 토큰 및 데이터 로드
+    await getTokensFromDB();
+    await fetchProductsFromCafe24();
 
-      // 5. ★ [항목10] conversationLogs TTL 인덱스 설정 (365일 후 자동 삭제 - 개인정보 보호)
-      const { getDB } = require("./config/db");
-      const db = getDB();
-      await db.collection("conversationLogs").createIndex(
-        { createdAt: 1 },
-        { expireAfterSeconds: 365 * 24 * 60 * 60, background: true }
-      );
-      // cafe24Orders도 3개월 후 자동 정리
-      await db.collection("cafe24Orders").createIndex(
-        { updatedAt: 1 },
-        { expireAfterSeconds: 90 * 24 * 60 * 60, background: true }
-      );
-      console.log("✅ TTL 인덱스 설정 완료 (대화로그 365일 / 주문이력 90일 자동 삭제)");
+    // 3. 지식 및 FAQ 데이터 (RAG 검색용)
+    await updateSearchableData();
 
-      // 5. 스케줄러 실행
-      // 기존 전체 매출 집계 스케줄러 비활성화 (Cafe24 503 우회 목적 - on-demand로 전환)
-      // syncCafe24Orders(); 
-      // setInterval(syncCafe24Orders, 10 * 60 * 1000); 
-      
-      setInterval(fetchProductsFromCafe24, 60 * 60 * 1000); // 추천 상품 데이터 풀 동기화 (1시간 간격 - CDN 장애시 자동 복구 및 신규 상품 업데이트 목적)
+    // 3.5 레거시 크론 및 초기화 (블랙프라이데이 로직 등)
+    await initializeLegacyCronJobs();
 
-  } catch (err) { 
-      console.error("❌ 초기화 오류:", err.message); 
-      process.exit(1); 
-  }
+    // 4. HTTP 서버 실행
+    app.listen(PORT, () => console.log(`🚀 앱 실행 완료 (포트: ${PORT})`));
+
+    // 5. ★ [항목10] conversationLogs TTL 인덱스 설정 (365일 후 자동 삭제 - 개인정보 보호)
+    const { getDB } = require("./config/db");
+    const db = getDB();
+    await db.collection("conversationLogs").createIndex(
+      { createdAt: 1 },
+      { expireAfterSeconds: 365 * 24 * 60 * 60, background: true }
+    );
+    // cafe24Orders도 3개월 후 자동 정리
+    await db.collection("cafe24Orders").createIndex(
+      { updatedAt: 1 },
+      { expireAfterSeconds: 90 * 24 * 60 * 60, background: true }
+    );
+    console.log("✅ TTL 인덱스 설정 완료 (대화로그 365일 / 주문이력 90일 자동 삭제)");
+
+    // 5. 스케줄러 실행
+    // 기존 전체 매출 집계 스케줄러 비활성화 (Cafe24 503 우회 목적 - on-demand로 전환)
+    // syncCafe24Orders(); 
+    // setInterval(syncCafe24Orders, 10 * 60 * 1000); 
+
+    setInterval(fetchProductsFromCafe24, 60 * 60 * 1000); // 추천 상품 데이터 풀 동기화 (1시간 간격 - CDN 장애시 자동 복구 및 신규 상품 업데이트 목적)
+
+  } catch (err) {
+    console.error("❌ 초기화 오류:", err.message);
+    process.exit(1);
+  }//123
 })();

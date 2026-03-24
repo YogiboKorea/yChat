@@ -224,21 +224,25 @@ async function findRuleBasedAnswer(userInput, memberId) {
 
     const recommendKeywords = ["추천", "뭐가 좋", "어떤게 좋", "골라", "선택", "뭐 사"];
 
-    // ★ [메이트 우선 처리] 메이트 관련 추천 질문은 관리자가 등록한 지식 데이터(RAG)를 우선 사용
-    const mateKeywords = ["메이트", "인형", "애착인형", "mate"];
-    if (mateKeywords.some(k => normalized.includes(k)) && recommendKeywords.some(k => normalized.includes(k))) {
+    // ★ [관리자 지식 데이터 우선 추천] 추천 질문이 들어오면 먼저 chat_send에 등록된 RAG 데이터를 검색
+    // → 관리자가 미리 등록해둔 답변이 있으면 그 데이터 기반으로 GPT가 자연스럽게 답변 생성
+    // → 없으면 기존 Cafe24 상품 카탈로그 기반 GPT 추천 파이프라인으로 폴백
+    if (recommendKeywords.some(k => normalized.includes(k))) {
         const ragResults = await findAllRelevantContent(userInput);
-        if (ragResults && ragResults.length > 0) {
-            // 관리자 등록 데이터 중 가장 관련성 높은 답변을 GPT에게 전달하여 자연스럽게 답변 생성
+        if (ragResults && ragResults.length > 0 && ragResults[0].score >= 50) {
+            // 관리자 등록 데이터가 유사도 50점 이상이면 해당 데이터 우선 사용
             const { getLLMResponse } = require("./openaiService");
-            const ragContext = ragResults.slice(0, 3); // 상위 3개 컨텍스트
-            const matePrompt = `고객이 "${userInput}"라고 질문했습니다. 아래 [참고 정보]를 기반으로 메이트 상품을 추천해주세요. [참고 정보]에 있는 상품명, 설명, 가격 정보를 그대로 활용하되, 자연스럽고 친절한 톤으로 답변하세요. [참고 정보]에 없는 상품은 절대 추가하지 마세요.`;
-            const response = await getLLMResponse(getCurrentSystemPrompt(), matePrompt, ragContext);
+            const ragContext = ragResults.slice(0, 5); // 상위 5개 컨텍스트 활용
+            const ragPrompt = `고객이 "${userInput}"라고 질문했습니다. 아래 [참고 정보]를 기반으로 상품을 추천해주세요.
+[필수 규칙]
+- [참고 정보]에 명시된 상품명을 반드시 우선 추천하세요.
+- 각 상품의 특징과 가격 정보가 [참고 정보]에 있으면 그대로 활용하세요.
+- [참고 정보]에 없는 상품을 임의로 추가하지 마세요.
+- 친절하고 자연스러운 톤으로 답변하세요.`;
+            const response = await getLLMResponse(getCurrentSystemPrompt(), ragPrompt, ragContext);
             return { text: response };
         }
-    }
-
-    if (recommendKeywords.some(k => normalized.includes(k))) {
+        // RAG에 관련 데이터가 없으면 기존 Cafe24 기반 GPT 추천 파이프라인 사용
         const recommendResult = await recommendProducts(userInput, memberId);
         return { text: recommendResult };
     }

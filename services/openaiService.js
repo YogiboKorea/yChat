@@ -46,7 +46,7 @@ ${txt || "정보 없음."}`;
 
 async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts, context = []) {
     // ★ [비완제품 배제 로직] 커버, 비즈, 이너, 케어, 패키지 등 부자재/서비스 상품은 추천에서 완전 제외
-    const EXCLUDE_KEYWORDS = ["커버", "비즈", "이너", "케어", "패키지", "리필", "충전"];
+    const EXCLUDE_KEYWORDS = ["커버", "비즈", "이너", "케어", "패키지", "리필", "충전", "365", "서비스"];
     const filteredProducts = allProducts.filter(p => !EXCLUDE_KEYWORDS.some(kw => p.name.includes(kw)));
 
     const productsJson = JSON.stringify(filteredProducts.map(p => ({

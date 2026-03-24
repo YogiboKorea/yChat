@@ -45,8 +45,8 @@ ${txt || "정보 없음."}`;
 }
 
 async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts, context = []) {
-    // ★ [커버 배제 로직] 커버 상품은 어떤 경우에도 추천에서 제외되도록 수정 (요청사항 반영)
-    const filteredProducts = allProducts.filter(p => !p.name.includes("커버"));
+    // ★ [커버 / 비즈 배제 로직] 커버 및 비즈 상품은 어떤 경우에도 추천에서 제외되도록 수정
+    const filteredProducts = allProducts.filter(p => !p.name.includes("커버") && !p.name.includes("비즈"));
 
     const productsJson = JSON.stringify(filteredProducts.map(p => ({
         id: p.id,
@@ -59,7 +59,7 @@ async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts, c
 
     const hasPurchaseHistory = purchaseHistory && purchaseHistory.products && purchaseHistory.products.length > 0;
     const coverExclusionRule = !hasPurchaseHistory 
-        ? `- [매우 중요] 이름에 "커버"가 들어간 상품은 추천에서 절대로 제외하세요.` 
+        ? `- [매우 중요] 이름에 "커버" 또는 "비즈"가 들어간 상품은 추천에서 절대로 제외하세요.` 
         : `- [리뷰 유도] 고객이 소유한 상품 목록(${purchaseHistory.products.join(", ")}) 중, 고객이 대화 중 언급하지 않았거나 리뷰를 작성하지 않았을 가능성이 있는 상품이 있다면 친절하게 리뷰 작성을 권유하는 멘트를 자연스럽게 한 줄 추가하세요.`;
 
     const prompt = `

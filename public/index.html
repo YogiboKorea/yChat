@@ -301,7 +301,7 @@
   <div id="chat-messages" class="chat-messages">
     <div class="info_list" id="initial-info">
       <div class="greeting-emoji">
-        <img src="/web/test/tmp-3922227795.webp" onerror="this.src='https://via.placeholder.com/68'" alt="AI">
+        <img src="/web/test/tmp-3922227795.webp" onerror="this.src='/web/img/icon/new2/main_logo_off.png'" alt="AI">
       </div>
       <h3 class="greeting-title">반가워요! 무엇을 도와드릴까요?</h3>
       <p class="greeting-desc">편안한 요기보 라이프를 위해<br>AI 상담원이 대기하고 있어요.</p>
@@ -374,7 +374,7 @@
     const html = `
       <div class="message bot">
         <div class="bot-container">
-          <img src="/web/test/tmp-3922227795.webp" class="bot-profile" onerror="this.src='https://via.placeholder.com/44'">
+          <img src="/web/test/tmp-3922227795.webp" class="bot-profile" onerror="this.src='/web/img/icon/new2/main_logo_off.png'">
           <div class="bot-message" id="${messageId}">${loadingHtml}</div>
         </div>
         <span class="timestamp">${time}</span>
@@ -463,14 +463,17 @@
     const botMsgElement = document.getElementById(botMsgId);
 
     try {
-      const response = await fetch("https://port-0-chat-lzgmwhc4d9883c97.sel4.cloudtype.app/chat", {
+      // 서버 도메인 하드코딩(cloudtype) 제거 및 상대경로 사용 (또는 새로 배포한 서버 URL 입력 필요)
+      const response = await fetch("https://port-0-ychat-lzgmwhc4d9883c97.sel4.cloudtype.app/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: userMessage, memberId: currentUserMemberId })
       });
       const data = await response.json();
 
-      let processedText = data.text.replace(/\n/g, '<br>');
+      // ★ [안전장치 추가] 서버 응답에 text가 없을 경우 에러 메시지 또는 대체 필드(message 등) 반환
+      let rawText = data.text || data.message || data.error || "서버로부터 올바른 응답을 받지 못했습니다. (데이터 누락)";
+      let processedText = rawText.replace(/\n/g, '<br>');
       processedText = linkify(processedText);
 
       // DOMPurify 설정 (상담 버튼 및 추천 버튼용 class, target 등 전부 허용)

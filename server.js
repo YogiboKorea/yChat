@@ -24,8 +24,11 @@ app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "public")));
 
 // Routes
+const { router: legacyRoutes, initializeLegacyCronJobs } = require("./routes/legacyRoutes");
+
 app.use("/chat", chatRoutes);
 app.use("/", knowledgeRoutes);
+app.use("/", legacyRoutes);
 
 // ★ 서버 실행 로직
 (async function initialize() {
@@ -41,6 +44,9 @@ app.use("/", knowledgeRoutes);
       
       // 3. 지식 및 FAQ 데이터 (RAG 검색용)
       await updateSearchableData(); 
+
+      // 3.5 레거시 크론 및 초기화 (블랙프라이데이 로직 등)
+      await initializeLegacyCronJobs();
 
       // 4. HTTP 서버 실행
       app.listen(PORT, () => console.log(`🚀 앱 실행 완료 (포트: ${PORT})`)); 

@@ -91,6 +91,7 @@ async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts, c
     - [여행 / 이동 / 휴대용 목적 지정 시]: "요기보 냅(Nap)", "요기보 냅엑스(NapX)" 위주로 추천.
     - [빈백 대표 상품 추천 요청 시]: "요기보 맥스(Max)" 무조건 추천.
     - [바디필로우 대표 추천 요청 시]: "요기보 서포트(Support)" 1순위 추천.
+    - [메이트 / 인형 / 애착인형 관련 추천 요청 시]: 조건 막론하고 "메이트(Mate)" 상품군을 1순위로 강력 추천.
     
     위 매뉴얼의 조건에 맞는 상품 딱 3개를 골라주세요.
     선택 우선순위: ① 위 고객 지정 고정 매뉴얼(가장 중요) ② 보조 지식 데이터 참고
@@ -177,6 +178,31 @@ async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts, c
                  // 기존 엉뚱한 임산부 타겟 멘트 제거 방어 로직
                  parsed.message = parsed.message.replace(/임산부에게는.*?다!/g, ''); 
                  parsed.message = supportText + parsed.message;
+             }
+          }
+        }
+      }
+
+      // ★ [코드 레벨 강제 3] 메이트/인형 키워드 감지 시 메이트 상품을 1번으로 강제 삽입 처리
+      const MATE_KEYWORDS = /메이트|인형|애착인형/;
+      if (MATE_KEYWORDS.test(userMsg)) {
+        let mateProduct = allProducts.find(p => p.name.includes('메이트') && !p.name.includes('커버'));
+
+        if (mateProduct) {
+          const mateId = mateProduct.id;
+          const originalIds = parsed.recommendedIds || [];
+          
+          if (originalIds[0] !== mateId) {
+             const ids = originalIds.filter(id => id !== mateId);
+             parsed.recommendedIds = [mateId, ...ids].slice(0, 3);
+             console.log(`[메이트 강제 삽입] 메이트/인형 쿼리에서 메이트(${mateId})를 1번으로 교정`);
+             
+             if (!parsed.message.includes('메이트') && !parsed.message.includes(mateProduct.name)) {
+                 const formattedPrice = mateProduct.price ? mateProduct.price.toLocaleString() + '원' : '';
+                 const priceStr = formattedPrice ? ` (가격: ${formattedPrice})` : '';
+                 const mateText = `아이들의 애착인형이나 귀여운 파트너로 인기가 많은 <b>${mateProduct.name}</b>(을)를 가장 먼저 강력 추천드립니다! 부드러운 촉감으로 남녀노소 모두에게 사랑받는 요기보의 대표 인형입니다.${priceStr}<br><br>`;
+                 
+                 parsed.message = mateText + parsed.message;
              }
           }
         }

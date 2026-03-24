@@ -126,7 +126,7 @@ async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts, c
 
       // ★ [코드 레벨 강제] 소파/빈백 키워드 감지 시 맥스(product_no=39)를 반드시 1번으로 삽입 및 멘트 교정
       // 단, 예산(O만원 이하/이내) 제한이 있을 경우 맥스 강제를 해제하여 GPT의 가격 필터링이 온전히 작동하게 함
-      const SOFA_KEYWORDS = /소파|빈백|쇼파|bean bag|베개소파|공중부양|게임용|거실|추천|베스트|대표설정|대표상품/;
+      const SOFA_KEYWORDS = /소파|빈백|쇼파|bean bag|베개소파|공중부양|게임용|거실|대표상품/;
       const HAS_PRICE_LIMIT = /[0-9]+만원|[0-9]+만 원|이하|이내|저렴한|싼/;
       if (SOFA_KEYWORDS.test(userMsg) && !HAS_PRICE_LIMIT.test(userMsg)) {
         // Cafe24 product_no=39 로 찾거나, 없으면 이름에 '맥스'가 들어간 완제품만 매칭 (이너/패키지/비즈/커버 등 부자재 제외)

@@ -223,6 +223,21 @@ async function findRuleBasedAnswer(userInput, memberId) {
     }
 
     const recommendKeywords = ["추천", "뭐가 좋", "어떤게 좋", "골라", "선택", "뭐 사"];
+
+    // ★ [메이트 우선 처리] 메이트 관련 추천 질문은 관리자가 등록한 지식 데이터(RAG)를 우선 사용
+    const mateKeywords = ["메이트", "인형", "애착인형", "mate"];
+    if (mateKeywords.some(k => normalized.includes(k)) && recommendKeywords.some(k => normalized.includes(k))) {
+        const ragResults = await findAllRelevantContent(userInput);
+        if (ragResults && ragResults.length > 0) {
+            // 관리자 등록 데이터 중 가장 관련성 높은 답변을 GPT에게 전달하여 자연스럽게 답변 생성
+            const { getLLMResponse } = require("./openaiService");
+            const ragContext = ragResults.slice(0, 3); // 상위 3개 컨텍스트
+            const matePrompt = `고객이 "${userInput}"라고 질문했습니다. 아래 [참고 정보]를 기반으로 메이트 상품을 추천해주세요. [참고 정보]에 있는 상품명, 설명, 가격 정보를 그대로 활용하되, 자연스럽고 친절한 톤으로 답변하세요. [참고 정보]에 없는 상품은 절대 추가하지 마세요.`;
+            const response = await getLLMResponse(getCurrentSystemPrompt(), matePrompt, ragContext);
+            return { text: response };
+        }
+    }
+
     if (recommendKeywords.some(k => normalized.includes(k))) {
         const recommendResult = await recommendProducts(userInput, memberId);
         return { text: recommendResult };

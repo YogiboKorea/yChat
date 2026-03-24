@@ -229,18 +229,48 @@ async function findRuleBasedAnswer(userInput, memberId) {
     // → 없으면 기존 Cafe24 상품 카탈로그 기반 GPT 추천 파이프라인으로 폴백
     if (recommendKeywords.some(k => normalized.includes(k))) {
         const ragResults = await findAllRelevantContent(userInput);
-        if (ragResults && ragResults.length > 0 && ragResults[0].score >= 50) {
-            // 관리자 등록 데이터가 유사도 50점 이상이면 해당 데이터 우선 사용
+        if (ragResults && ragResults.length > 0 && ragResults[0].score >= 40) {
+            // 관리자 등록 데이터가 유사도 40점 이상이면 해당 데이터 우선 사용
             const { getLLMResponse } = require("./openaiService");
-            const ragContext = ragResults.slice(0, 5); // 상위 5개 컨텍스트 활용
+            const ragContext = ragResults.slice(0, 5);
+
+            // ★ [Cafe24 가격 연동] RAG 답변에 언급된 상품명을 Cafe24 캐시에서 매칭하여 가격/URL 추출
+            const yogiboProducts = getCachedProducts();
+            const EXCLUDE_KW = ["커버", "비즈", "이너", "케어", "패키지", "리필", "충전", "365", "서비스"];
+            const allRagText = ragContext.map(r => `${r.q || ''} ${r.a || ''}`).join(' ');
+            
+            const matchedProducts = yogiboProducts.filter(p => {
+                // RAG 경로에서는 충전재/비즈 상품도 가격 조회 허용 (배제는 GPT 상품추천 파이프라인에서만 적용)
+                const shortName = p.name.replace(/요기보\s*/g, '').trim();
+                return shortName.length >= 2 && allRagText.includes(shortName);
+            });
+
+            // 가격 정보 텍스트 생성
+            let priceInfo = "";
+            if (matchedProducts.length > 0) {
+                priceInfo = "\n\n[Cafe24 실시간 가격 데이터 - 반드시 이 가격을 사용하세요]\n" +
+                    matchedProducts.map(p => `- ${p.name}: ${p.price ? p.price.toLocaleString() + '원' : '가격 미정'}`).join("\n");
+            }
+
             const ragPrompt = `고객이 "${userInput}"라고 질문했습니다. 아래 [참고 정보]를 기반으로 상품을 추천해주세요.
 [필수 규칙]
 - [참고 정보]에 명시된 상품명을 반드시 우선 추천하세요.
-- 각 상품의 특징과 가격 정보가 [참고 정보]에 있으면 그대로 활용하세요.
+- 각 상품의 특징과 가격 정보가 있으면 그대로 활용하세요.
 - [참고 정보]에 없는 상품을 임의로 추가하지 마세요.
-- 친절하고 자연스러운 톤으로 답변하세요.`;
+- 가격은 반드시 아래 [Cafe24 실시간 가격 데이터]에 명시된 금액만 사용하세요. 가격을 상상하지 마세요.
+- 친절하고 자연스러운 톤으로 답변하세요.${priceInfo}`;
+
             const response = await getLLMResponse(getCurrentSystemPrompt(), ragPrompt, ragContext);
-            return { text: response };
+
+            // ★ [상품 링크 버튼 자동 추가] 매칭된 상품의 구매 링크 버튼 생성
+            let buttons = "";
+            if (matchedProducts.length > 0) {
+                buttons = "<br><br>" + matchedProducts.slice(0, 5).map(p => 
+                    `<a href="${p.productUrl}" target="_blank" class="consult-btn" style="background:#58b5ca; color:#fff; display:inline-block; margin:5px; text-decoration:none;">🛍️ ${p.name} 보러가기</a>`
+                ).join("");
+            }
+
+            return { text: response + buttons };
         }
         // RAG에 관련 데이터가 없으면 기존 Cafe24 기반 GPT 추천 파이프라인 사용
         const recommendResult = await recommendProducts(userInput, memberId);

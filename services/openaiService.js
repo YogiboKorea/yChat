@@ -45,8 +45,9 @@ ${txt || "정보 없음."}`;
 }
 
 async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts, context = []) {
-    // ★ [커버 / 비즈 배제 로직] 커버 및 비즈 상품은 어떤 경우에도 추천에서 제외되도록 수정
-    const filteredProducts = allProducts.filter(p => !p.name.includes("커버") && !p.name.includes("비즈"));
+    // ★ [비완제품 배제 로직] 커버, 비즈, 이너, 케어, 패키지 등 부자재/서비스 상품은 추천에서 완전 제외
+    const EXCLUDE_KEYWORDS = ["커버", "비즈", "이너", "케어", "패키지", "리필", "충전"];
+    const filteredProducts = allProducts.filter(p => !EXCLUDE_KEYWORDS.some(kw => p.name.includes(kw)));
 
     const productsJson = JSON.stringify(filteredProducts.map(p => ({
         id: p.id,
@@ -59,7 +60,7 @@ async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts, c
 
     const hasPurchaseHistory = purchaseHistory && purchaseHistory.products && purchaseHistory.products.length > 0;
     const coverExclusionRule = !hasPurchaseHistory 
-        ? `- [매우 중요] 이름에 "커버" 또는 "비즈"가 들어간 상품은 추천에서 절대로 제외하세요.` 
+        ? `- [매우 중요] 이름에 "커버", "비즈", "이너", "케어", "패키지", "리필", "충전"이 들어간 상품은 추천에서 절대로 제외하세요. 완제품(소파/필로우/인형 등)만 추천하세요.` 
         : `- [리뷰 유도] 고객이 소유한 상품 목록(${purchaseHistory.products.join(", ")}) 중, 고객이 대화 중 언급하지 않았거나 리뷰를 작성하지 않았을 가능성이 있는 상품이 있다면 친절하게 리뷰 작성을 권유하는 멘트를 자연스럽게 한 줄 추가하세요.`;
 
     const prompt = `
@@ -128,9 +129,9 @@ async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts, c
       const SOFA_KEYWORDS = /소파|빈백|쇼파|bean bag|베개소파|공중부양|게임용|거실|추천|베스트|대표설정|대표상품/;
       const HAS_PRICE_LIMIT = /[0-9]+만원|[0-9]+만 원|이하|이내|저렴한|싼/;
       if (SOFA_KEYWORDS.test(userMsg) && !HAS_PRICE_LIMIT.test(userMsg)) {
-        // Cafe24 product_no=39 로 찾거나, 없으면 이름에 '맥스'가 들어간(커버 제외) 아무 상품이나 매칭 (카테고리 기타여도 무방)
-        let maxProduct = allProducts.find(p => p.productUrl && p.productUrl.includes('product_no=39'));
-        if (!maxProduct) maxProduct = allProducts.find(p => p.name.includes('맥스') && !p.name.includes('커버'));
+        // Cafe24 product_no=39 로 찾거나, 없으면 이름에 '맥스'가 들어간 완제품만 매칭 (이너/패키지/비즈/커버 등 부자재 제외)
+        let maxProduct = allProducts.find(p => p.productUrl && p.productUrl.includes('product_no=39') && !EXCLUDE_KEYWORDS.some(kw => p.name.includes(kw)));
+        if (!maxProduct) maxProduct = allProducts.find(p => p.name.includes('맥스') && !EXCLUDE_KEYWORDS.some(kw => p.name.includes(kw)));
 
         if (maxProduct) {
           const maxId = maxProduct.id;
@@ -160,7 +161,7 @@ async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts, c
       const PREGNANT_KEYWORDS = /임산부|임신|산모|허리|요통/;
       // (단, "소파" 질문으로 윗 로직에서 이미 맥스가 1번으로 박힌 경우 굳이 덮어쓰지 않거나, 필요 시 서포트도 포함시킬 수 있으나 여기선 서포트를 최우선으로 보정)
       if (PREGNANT_KEYWORDS.test(userMsg) && !HAS_PRICE_LIMIT.test(userMsg)) {
-        let supportProduct = allProducts.find(p => p.name.includes('서포트') && !p.name.includes('커버'));
+        let supportProduct = allProducts.find(p => p.name.includes('서포트') && !EXCLUDE_KEYWORDS.some(kw => p.name.includes(kw)));
 
         if (supportProduct) {
           const supportId = supportProduct.id;
@@ -186,7 +187,7 @@ async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts, c
       // ★ [코드 레벨 강제 3] 메이트/인형 키워드 감지 시 메이트 상품을 1번으로 강제 삽입 처리
       const MATE_KEYWORDS = /메이트|인형|애착인형/;
       if (MATE_KEYWORDS.test(userMsg)) {
-        let mateProduct = allProducts.find(p => p.name.includes('메이트') && !p.name.includes('커버'));
+        let mateProduct = allProducts.find(p => p.name.includes('메이트') && !EXCLUDE_KEYWORDS.some(kw => p.name.includes(kw)));
 
         if (mateProduct) {
           const mateId = mateProduct.id;

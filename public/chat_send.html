@@ -239,6 +239,9 @@
                         onclick="showNormalForm('refund')">교환/환불</a></li>
                 <li class="nav-item"><a class="nav-link" id="tab-normal" data-toggle="tab" href="#normal"
                         onclick="showNormalForm('normal')">일반문의</a></li>
+                <li class="nav-item"><a class="nav-link" id="tab-feedback" data-toggle="tab" href="#feedback"
+                        onclick="showFeedbackForm()">
+                        <i class="fa-solid fa-triangle-exclamation mr-1 text-danger"></i> 고객 불만접수</a></li>
                 <li class="nav-item ml-auto">
                     <a class="nav-link" id="tab-llm" data-toggle="tab" href="#llm" onclick="showLLMForm()">
                         <i class="fa-solid fa-brain mr-1"></i> AI 지식 관리
@@ -301,6 +304,10 @@
                 </div>
                 <div class="tab-pane fade" id="normal">
                     <div id="normalContainer"></div>
+                </div>
+
+                <div class="tab-pane fade" id="feedback">
+                    <div id="feedbackContainer"></div>
                 </div>
 
                 <div class="tab-pane fade" id="llm">
@@ -399,6 +406,49 @@
         }
         function showLLMForm() {
             normalInputArea.style.display = 'none';
+        }
+
+        function showFeedbackForm() {
+            normalInputArea.style.display = 'none';
+            currentCategory = 'feedback';
+            if (!loadedCategories['feedback']) loadFeedbackList();
+        }
+
+        async function loadFeedbackList() {
+            const container = document.getElementById('feedbackContainer');
+            if (!container) return;
+            container.innerHTML = '<p class="text-center text-muted py-4 small"><i class="fa-solid fa-spinner fa-spin mr-1"></i> 불러오는 중...</p>';
+            try {
+                const res = await axios.get(`${BASE_URL}/chat/feedback`);
+                const feedbacks = res.data || [];
+                loadedCategories['feedback'] = true;
+                renderFeedbackList(feedbacks);
+            } catch (e) {
+                container.innerHTML = '<p class="text-center text-danger py-3 small">불러오기 실패.</p>';
+            }
+        }
+
+        function renderFeedbackList(feedbacks) {
+            const container = document.getElementById('feedbackContainer');
+            if (!feedbacks || feedbacks.length === 0) {
+                container.innerHTML = '<p class="text-center text-muted py-3 small">접수된 불만사항이 없습니다.</p>';
+                return;
+            }
+            container.innerHTML = '';
+            feedbacks.forEach(fb => {
+                const dateStr = new Date(fb.createdAt).toLocaleString();
+                const card = document.createElement('div');
+                card.className = 'qa-card';
+                card.innerHTML = `
+                <div class="qa-header" style="cursor:default; display:flex; flex-direction:column; align-items:flex-start;">
+                    <div style="width:100%; display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <span class="badge badge-danger">불만접수</span>
+                        <small class="text-muted"><i class="fa-regular fa-clock"></i> ${dateStr} | ID: ${fb.memberId}</small>
+                    </div>
+                    <div style="font-weight:400; font-size:15px; width:100%; white-space:pre-wrap; color:#333;">${fb.message}</div>
+                </div>`;
+                container.appendChild(card);
+            });
         }
 
         // 엑셀 다운로드

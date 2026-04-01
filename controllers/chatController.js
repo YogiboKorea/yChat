@@ -71,6 +71,41 @@ async function handleChat(req, res) {
   }
 }
 
+async function handleFeedback(req, res) {
+  const { message, memberId } = req.body;
+  if (!message) return res.status(400).json({ error: "No message" });
+  
+  try {
+    const db = getDB();
+    await db.collection("chatFeedback").insertOne({
+      memberId: memberId || "비로그인",
+      message: message,
+      createdAt: new Date()
+    });
+    return res.json({ text: "소중한 의견 감사합니다. 더 발전하는 요기보 챗봇이 되겠습니다!" });
+  } catch (e) {
+    console.error("Feedback API Error:", e);
+    return res.status(500).json({ text: "의견 접수 중 문제가 발생했습니다." });
+  }
+}
+
+async function getFeedbacks(req, res) {
+  try {
+    const db = getDB();
+    const feedbacks = await db.collection("chatFeedback")
+      .find({})
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .toArray();
+    return res.json(feedbacks);
+  } catch (e) {
+    console.error("GetFeedbacks API Error:", e);
+    return res.status(500).json({ error: "Failed to fetch feedbacks" });
+  }
+}
+
 module.exports = {
-  handleChat
+  handleChat,
+  handleFeedback,
+  getFeedbacks
 };

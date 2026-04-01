@@ -472,6 +472,7 @@
           <ul>
             <li><span onclick="sendQuickMessage('배송정보 확인 🎁')">배송정보 확인 🎁</span></li>
             <li><span onclick="sendQuickMessage('오프라인 매장 위치 찾기 📍')">오프라인 매장 위치 찾기 📍</span></li>
+            <li><span onclick="startFeedbackMode()">챗봇이용 불편/불만사항 🚨</span></li>
           </ul>
         </div>
       </div>
@@ -608,6 +609,23 @@
 
     // ★ [항목9 개선] 중복 전송 방지 플래그
     let isSending = false;
+    let isFeedbackMode = false;
+
+    function startFeedbackMode() {
+      isFeedbackMode = true;
+      hideInitialUI();
+      const time = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+      const html = `
+      <div class="message bot">
+        <div class="bot-container">
+          <img src="/web/test/tmp-3922227795.webp" class="bot-profile" onerror="this.src='/web/img/icon/new2/main_logo_off.png'">
+          <div class="bot-message">이용 중 불편을 드려 죄송합니다. 챗봇 이용 중 어떤 점이 불편하셨는지 채팅창에 자유롭게 남겨주시면 담당 부서로 전달하여 개선하겠습니다.</div>
+        </div>
+        <span class="timestamp">${time}</span>
+      </div>`;
+      chatMessages.insertAdjacentHTML('beforeend', html);
+      scrollToBottom();
+    }
 
     async function sendMessage() {
       if (isSending) return; // 전송 중이면 무시
@@ -626,13 +644,19 @@
       const botMsgElement = document.getElementById(botMsgId);
 
       try {
+        const requestUrl = isFeedbackMode ? "https://port-0-ychat-lzgmwhc4d9883c97.sel4.cloudtype.app/chat/feedback" : "https://port-0-ychat-lzgmwhc4d9883c97.sel4.cloudtype.app/chat";
+
         // 서버 도메인 하드코딩(cloudtype) 제거 및 상대경로 사용 (또는 새로 배포한 서버 URL 입력 필요)
-        const response = await fetch("https://port-0-ychat-lzgmwhc4d9883c97.sel4.cloudtype.app/chat", {
+        const response = await fetch(requestUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: userMessage, memberId: currentUserMemberId })
         });
         const data = await response.json();
+
+        if (isFeedbackMode) {
+          isFeedbackMode = false;
+        }
 
         // ★ [안전장치 추가] 서버 응답에 text가 없을 경우 에러 메시지 또는 대체 필드(message 등) 반환
         let rawText = data.text || data.message || data.error || "서버로부터 올바른 응답을 받지 못했습니다. (데이터 누락)";

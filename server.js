@@ -18,6 +18,25 @@ const knowledgeRoutes = require("./routes/knowledgeRoutes");
 const { PORT = 5000 } = process.env;
 
 const app = express();
+
+const allowedOrigins = [
+  'https://yogibo.kr', 
+  'http://skin-skin123.yogibo.cafe24.com', 
+  'https://skin-skin123.yogibo.cafe24.com'
+];
+app.use(cors({
+  origin: function (origin, callback) {
+    // origin이 없거나(서버 간 통신 등) 허용 목록에 있으면 통과
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET', 'POST', 'OPTIONS'],
+  credentials: true
+}));
+
 app.use(cors());
 app.use(compression());
 app.use(bodyParser.json());
@@ -25,11 +44,7 @@ app.use(express.static(path.join(__dirname, "public")));
 
 // Routes
 const { router: legacyRoutes, initializeLegacyCronJobs } = require("./routes/legacyRoutes");
-app.use(cors({
-  origin: 'https://yogibo.kr', // 요청을 허용할 클라이언트 도메인
-  methods: ['GET', 'POST', 'OPTIONS'], // 허용할 HTTP 메서드
-  credentials: true // 쿠키나 인증 정보(Authorization 헤더 등)를 함께 보낼 경우 true
-}));
+
 
 
 app.use("/chat", chatRoutes);

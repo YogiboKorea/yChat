@@ -446,9 +446,22 @@
                         <small class="text-muted"><i class="fa-regular fa-clock"></i> ${dateStr} | ID: ${fb.memberId}</small>
                     </div>
                     <div style="font-weight:400; font-size:15px; width:100%; white-space:pre-wrap; color:#333;">${fb.message}</div>
+                    <div style="width:100%; text-align:right; margin-top:12px; border-top:1px dashed #eee; padding-top:10px;">
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteFeedback('${fb._id}')"><i class="fa-solid fa-check mr-1"></i>확인 완료 (삭제)</button>
+                    </div>
                 </div>`;
                 container.appendChild(card);
             });
+        }
+
+        async function deleteFeedback(id) {
+            if (!confirm("확인 완료 처리하시겠습니까? (삭제 후 복구할 수 없습니다)")) return;
+            try {
+                await axios.delete(`${BASE_URL}/chat/feedback/${id}`);
+                loadFeedbackList();
+            } catch (e) {
+                alert("삭제 실패: " + e.message);
+            }
         }
 
         // 엑셀 다운로드

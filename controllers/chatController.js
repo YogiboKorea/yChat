@@ -1,3 +1,4 @@
+const { ObjectId } = require("mongodb");
 const { findRuleBasedAnswer, findAllRelevantContent, getCurrentSystemPrompt } = require("../services/ragService");
 const { getLLMResponse } = require("../services/openaiService");
 const { getMemberPurchaseHistory, syncCafe24Orders } = require("../services/cafe24Service");
@@ -104,8 +105,21 @@ async function getFeedbacks(req, res) {
   }
 }
 
+async function deleteFeedback(req, res) {
+  const { id } = req.params;
+  try {
+    const db = getDB();
+    await db.collection("chatFeedback").deleteOne({ _id: new ObjectId(id) });
+    return res.json({ success: true });
+  } catch (e) {
+    console.error("DeleteFeedback API Error:", e);
+    return res.status(500).json({ error: "Failed to delete feedback" });
+  }
+}
+
 module.exports = {
   handleChat,
   handleFeedback,
-  getFeedbacks
+  getFeedbacks,
+  deleteFeedback
 };

@@ -9,7 +9,8 @@ async function getLLMResponse(currentSystemPrompt, input, context = [], conversa
 
 [운영 규칙 - 매우 중요]
 - 답변은 반드시 아래 [참고 정보]에서 근거가 확인되는 내용만 안내하세요.
-- [참고 정보]에 없는 내용은 절대 추측하지 말고, "정확한 확인이 필요합니다"라고 말하세요.
+- [참고 정보]에 없는 내용은 절대 추측, 창작, 혹은 외부 지식을 활용하지 마세요. 오직 제공된 [참고 정보] 내에서만 답해야 합니다.
+- 만약 질문에 대한 답을 [참고 정보]에서 찾을 수 없다면, 무조건 "정확히 확인 중이거나 상담원 확인이 필요합니다."라고 답변하고 임의로 말을 지어내지 마세요.
 - 고객에게 추가 확인이 필요한 정보(주문번호/구매처/제품명 등)가 있으면 먼저 요청하세요.
 
 [참고 정보]
@@ -26,8 +27,8 @@ ${txt || "정보 없음."}`;
       OPEN_URL,
       {
         model: FINETUNED_MODEL,
-        temperature: 0.2,
-        top_p: 0.9,
+        temperature: 0.1,
+        top_p: 0.8,
         messages: [
           { role: "system", content: system },
           ...historyMessages,
@@ -114,7 +115,7 @@ async function recommendProductsWithGPT(userMsg, purchaseHistory, allProducts, c
     try {
       const gptRes = await axios.post(OPEN_URL, {
         model: FINETUNED_MODEL,
-        temperature: 0.4, // 답변 다양성을 위해 기존 0.1에서 0.4로 상향 (JSON 출력 보장 상태이므로 안전)
+        temperature: 0.2, // 답변 다양성을 위해 기존 0.1에서 0.4로 상향했던 것을 정확도를 위해 다시 0.2로 조정 (JSON 출력 보장 상태이므로 안전)
         response_format: { type: "json_object" }, 
         messages: [
           { role: "system", content: "당신은 요기보 상담원입니다. 제공된 상품 카탈로그 안에서만 상품을 선택하고, 반드시 명시된 JSON 포맷으로만 응답하세요." },

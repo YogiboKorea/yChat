@@ -34,9 +34,9 @@ let currentSystemPrompt = `
 - 답변은 반드시 [참고 정보]에서 근거가 확인되는 내용만 안내하세요.
 - [참고 정보]에 동일한 문장이 없더라도, 여러 근거를 종합하면 논리적으로 답할 수 있는 경우에는
   "참고 정보 기준으로 종합하면" 형태로 설명하는 것은 허용합니다.
-- 단, [참고 정보]에 없는 사실(전화번호/주소/정책/가격/기간/효과 등)을 새로 만들어내거나 추측하면 안 됩니다.
+- 단, [참고 정보]에 없는 사실(전화번호/주소/정책/가격/기간/효과 등 외부 상식 포함)을 '절대' 새로 만들어내거나 추측하지 마세요. 모르면 무조건 관련된 [참고 정보]가 없다고 간주하세요.
 - 만약 (a) 관련 근거가 전혀 없거나, (b) 요기보와 무관한 내용(코딩/주식/날씨 등)이라면,
-  절대 지어내지 말고 오직 "NO_CONTEXT"라고만 출력하세요.
+  절대 거짓말을 지어내지 말고 오직 "NO_CONTEXT"라고만 출력하세요.
 
 3. 답변 스타일:
 - 친절하고 전문적인 톤으로 답변하세요.
@@ -160,8 +160,8 @@ async function findAllRelevantContent(msg) {
         return { ...item, score };
     });
 
-    // 유사도 40점 이상만 추출 (OpenAI 임베딩에서 0.4 정도면 꽤 관련성이 있음)
-    return scored.filter(i => i.score >= 40).sort((a, b) => b.score - a.score).slice(0, 6);
+    // 유사도 45점 이상만 추출 (OpenAI 임베딩에서 0.45 이상이면 관련성이 높음)
+    return scored.filter(i => i.score >= 45).sort((a, b) => b.score - a.score).slice(0, 6);
 }
 
 function getCurrentSystemPrompt() {
@@ -229,8 +229,8 @@ async function findRuleBasedAnswer(userInput, memberId) {
     // → 없으면 기존 Cafe24 상품 카탈로그 기반 GPT 추천 파이프라인으로 폴백
     if (recommendKeywords.some(k => normalized.includes(k))) {
         const ragResults = await findAllRelevantContent(userInput);
-        if (ragResults && ragResults.length > 0 && ragResults[0].score >= 40) {
-            // 관리자 등록 데이터가 유사도 40점 이상이면 해당 데이터 우선 사용
+        if (ragResults && ragResults.length > 0 && ragResults[0].score >= 45) {
+            // 관리자 등록 데이터가 유사도 45점 이상이면 해당 데이터 우선 사용
             const { getLLMResponse } = require("./openaiService");
             const ragContext = ragResults.slice(0, 5);
 

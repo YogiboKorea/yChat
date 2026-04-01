@@ -25,6 +25,12 @@ app.use(express.static(path.join(__dirname, "public")));
 
 // Routes
 const { router: legacyRoutes, initializeLegacyCronJobs } = require("./routes/legacyRoutes");
+app.use(cors({
+  origin: 'https://yogibo.kr', // 요청을 허용할 클라이언트 도메인
+  methods: ['GET', 'POST', 'OPTIONS'], // 허용할 HTTP 메서드
+  credentials: true // 쿠키나 인증 정보(Authorization 헤더 등)를 함께 보낼 경우 true
+}));
+
 
 app.use("/chat", chatRoutes);
 app.use("/", knowledgeRoutes);

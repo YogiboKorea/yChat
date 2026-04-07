@@ -14,6 +14,7 @@ const { updateSearchableData } = require("./services/ragService");
 
 const chatRoutes = require("./routes/chatRoutes");
 const knowledgeRoutes = require("./routes/knowledgeRoutes");
+const gameRoutes = require("./routes/gameRoutes");
 
 const { PORT = 5000 } = process.env;
 
@@ -50,6 +51,7 @@ const { router: legacyRoutes, initializeLegacyCronJobs } = require("./routes/leg
 app.use("/chat", chatRoutes);
 app.use("/", knowledgeRoutes);
 app.use("/", legacyRoutes);
+app.use("/api/game", gameRoutes);
 
 // ★ 서버 실행 로직
 (async function initialize() {

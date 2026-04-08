@@ -987,7 +987,8 @@
         }
 
         .mission-btn.done {
-            opacity: 0.5;
+            opacity: 0.8;
+            filter: blur(1.5px) grayscale(50%);
             pointer-events: none;
         }
 
@@ -1038,7 +1039,7 @@
             <div class="lives-container" id="lives-display"></div>
         </div>
 
-        <div id="screen-intro" class="screen active" onclick="switchScreen('select')"> </div>
+        <div id="screen-intro" class="screen active" onclick="onIntroClick()"> </div>
 
         <div id="screen-select" class="screen">
             <div class="select-top-section">
@@ -1074,10 +1075,10 @@
             </div>
 
             <!-- 회원 전용 발급 가능 쿠폰 (로그인 시 노출) -->
-            <img src="http://yogibo.kr/game/쿠폰_아이콘.png" class="floating-coupon coupon-left" id="member-coupon-1"
+            <img src="http://yogibo.kr/game/회원전용쿠폰.png" class="floating-coupon coupon-left" id="member-coupon-1"
                 onclick="alert('쿠폰 1 발급 바로가기 예정')" alt="쿠폰"
                 onerror="this.onerror=null; this.src='http://yogibo.kr/game/sns_logo.png';">
-            <img src="http://yogibo.kr/game/쿠폰_아이콘.png" class="floating-coupon coupon-right" id="member-coupon-2"
+            <img src="http://yogibo.kr/game/회원전용쿠폰.png" class="floating-coupon coupon-right" id="member-coupon-2"
                 onclick="alert('쿠폰 2 발급 바로가기 예정')" alt="쿠폰"
                 onerror="this.onerror=null; this.src='http://yogibo.kr/game/sns_logo.png';">
 
@@ -1232,7 +1233,7 @@
             MISSIONS.forEach((m, idx) => {
                 const isDone = STATE.completedMissions.includes(idx);
                 const rewardHtml = isDone
-                    ? `<span class="mission-reward" style="opacity:0.6;">✅ 미션완료</span>`
+                    ? `<span class="mission-reward" style="opacity:0.6;">✅ 참여완료</span>`
                     : `<span class="mission-reward"><img src="http://yogibo.kr/game/피라미드_on.png"> +${m.reward}</span>`;
                 container.innerHTML += `
                     <div class="mission-btn ${isDone ? 'done' : ''}" id="mission-btn-${idx}" ${!isDone ? `onclick="doMission('${m.url}', ${m.reward}, ${idx})"` : ''}>
@@ -1279,7 +1280,7 @@
                             if (btn) {
                                 btn.classList.add('done');
                                 btn.onclick = null;
-                                btn.querySelector('.mission-reward').innerHTML = '✅ 미션완료';
+                                btn.querySelector('.mission-reward').innerHTML = '✅ 참여완료';
                             }
                         }
                     })
@@ -1419,24 +1420,12 @@
                         if (c2) c2.style.display = 'block';
                     }
 
-                    // 회원마다 개별적으로 보너스 지급 확인 (백엔드 오류 시에도 정상 동작 및 새로고침 유지)
-                    const bonusKey = 'bonus_given_v4_' + memberId;
-                    const livesKey = 'bonus_lives_v4_' + memberId;
-
-                    if (memberId && !localStorage.getItem(bonusKey)) {
-                        localStorage.setItem(bonusKey, 'true');
-                        localStorage.setItem(livesKey, '2'); // 로컬에 보너스 2 목숨 할당
-                    }
-
+                    // DB 목숨 정보 그대로 사용 (로컬 보너스 로직 제거)
                     if (memberId) {
-                        let localBonus = parseInt(localStorage.getItem(livesKey) || '0');
-                        if (localBonus > 0) {
-                            STATE.currentLives = Math.min(STATE.maxLives, STATE.currentLives + localBonus);
-                            const bubble = document.querySelector('#screen-confirm .speech-bubble');
-                            if (bubble) {
-                                const cName = STATE.selectedChar && CHARACTERS[STATE.selectedChar] ? CHARACTERS[STATE.selectedChar].name : '';
-                                bubble.innerHTML = '<span id="confirm-char-name">내 캐릭터 : ' + cName + '</span><br><span style="color:#e84887; font-weight:900;">✨ 회원가입(로그인)으로 +2가 지급되었어요!</span><br>다시 10초 디톡스 시작해볼까요?';
-                            }
+                        const bubble = document.querySelector('#screen-confirm .speech-bubble');
+                        if (bubble && STATE.selectedChar) {
+                            const cName = CHARACTERS[STATE.selectedChar] ? CHARACTERS[STATE.selectedChar].name : '';
+                            bubble.innerHTML = '<span id="confirm-char-name">내 캐릭터 : ' + cName + '</span><br>도파민 10초 디톡스 시작해볼까요?';
                         }
                     }
 
@@ -1444,12 +1433,6 @@
                 })
                 .catch(err => {
                     console.error('상태 로드 실패:', err);
-                    if (memberId) {
-                        let localBonus = parseInt(localStorage.getItem('bonus_lives_v4_' + memberId) || '0');
-                        if (localBonus > 0) {
-                            STATE.currentLives = Math.min(STATE.maxLives, STATE.currentLives + localBonus);
-                        }
-                    }
                     renderLives();
                 });
         }
@@ -1540,8 +1523,39 @@
         }
 
         document.querySelectorAll('.char-label, .character-card').forEach(el => {
-            el.addEventListener('click', function (e) { e.stopPropagation(); selectCharacter(this.dataset.char); });
+            el.addEventListener('click', function (e) {
+                e.stopPropagation();
+                selectCharacter(this.dataset.char);
+                // 캐릭터 클릭 시 회원 여부 재확인
+                if (typeof CAFE24API !== 'undefined') {
+                    CAFE24API.getMemberID(function (res) {
+                        const newId = res ? res : null;
+                        if (newId !== memberId) {
+                            memberId = newId;
+                            STATE.guestId = getFinalId();
+                            fetchGameStatus();
+                        }
+                    });
+                }
+            });
         });
+
+        function onIntroClick() {
+            // 인트로 클릭 시 회원 여부 재확인 후 캐릭터 선택 화면으로 이동
+            if (typeof CAFE24API !== 'undefined') {
+                CAFE24API.getMemberID(function (res) {
+                    const newId = res ? res : null;
+                    if (newId !== memberId) {
+                        memberId = newId;
+                        STATE.guestId = getFinalId();
+                        fetchGameStatus();
+                    }
+                    switchScreen('select');
+                });
+            } else {
+                switchScreen('select');
+            }
+        }
 
         document.getElementById('btn-select-complete').addEventListener('click', (e) => {
             e.stopPropagation();
@@ -1553,7 +1567,37 @@
             document.getElementById('confirm-char-img').src = d.img;
 
             preloadFrames([d.start, ...d.frames]);
-            switchScreen('confirm');
+            
+            const btn = e.target;
+            btn.style.opacity = '0.5';
+            btn.style.pointerEvents = 'none';
+
+            function goNext() {
+                btn.style.opacity = '1';
+                btn.style.pointerEvents = 'auto';
+                switchScreen('confirm');
+            }
+
+            if (typeof CAFE24API !== 'undefined') {
+                CAFE24API.getMemberID(function (res) {
+                    memberId = res ? res : null;
+                    STATE.guestId = getFinalId();
+                    fetch(`${API_BASE_URL}/api/game/detox/status?memberId=${memberId || ''}&guestId=${STATE.guestId || ''}`)
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data.success) {
+                                STATE.currentLives = data.hearts;
+                                STATE.hasReceivedCoupon = data.hasReceivedCoupon;
+                            }
+                            if (!memberId && STATE.currentLives === 0) STATE.currentLives = 1;
+                            renderLives();
+                            goNext();
+                        })
+                        .catch(() => goNext());
+                });
+            } else {
+                goNext();
+            }
         });
 
         function preloadFrames(frames) {
@@ -1563,20 +1607,49 @@
         document.getElementById('btn-game-start').addEventListener('click', (e) => {
             e.stopPropagation();
 
-            if (typeof CAFE24API !== 'undefined') {
-                CAFE24API.getMemberID(function (res) {
-                    if (res) {
-                        memberId = res;
-                        console.log('🎯 입장하기 클릭 시 회원확인:', memberId);
-                    } else {
-                        memberId = null;
-                        console.log('🎯 입장하기 클릭 시 회원확인: 비회원(게스트)');
-                    }
-                });
-            }
-
             if (STATE.currentLives <= 0) { alert('목숨이 부족합니다. 하트를 충전해주세요!'); return; }
 
+            const btn = e.target;
+            if (btn.dataset.loading) return;
+            btn.dataset.loading = "true";
+            btn.style.opacity = '0.5';
+
+            fetch(`${API_BASE_URL}/api/game/detox/play`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    memberId: memberId || null,
+                    guestId: STATE.guestId
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                delete btn.dataset.loading;
+                btn.style.opacity = '1';
+
+                if (!data.success && data.error === 'lack_of_hearts') {
+                    alert('목숨이 부족합니다. 하트를 충전해주세요!');
+                    STATE.currentLives = 0;
+                    renderLives();
+                    return;
+                }
+
+                if (data.success) {
+                    STATE.currentLives = data.hearts;
+                    renderLives();
+                }
+
+                startGameUI();
+            })
+            .catch(err => {
+                console.error(err);
+                delete btn.dataset.loading;
+                btn.style.opacity = '1';
+                startGameUI();
+            });
+        });
+
+        function startGameUI() {
             document.getElementById('timer-text').innerText = '00:00';
             gameCharImg.src = CHARACTERS[STATE.selectedChar].start;
 
@@ -1584,7 +1657,7 @@
             const pb = document.getElementById('touch-point-bar');
             if (pb) pb.classList.add('show');
             switchScreen('game');
-        });
+        }
 
         // --- 게임 코어 ---
         let isPressing = false, startTime = 0, timerReqId;
@@ -1690,14 +1763,7 @@
             //     localStorage.setItem('guest_free_life_used', 'true');
             // }
 
-            // 회원 로컬 보너스 목숨 1 차감 (새로고침 시 증발 방지)
-            if (memberId) {
-                const livesKey = 'bonus_lives_v4_' + memberId;
-                let localBonus = parseInt(localStorage.getItem(livesKey) || '0');
-                if (localBonus > 0) {
-                    localStorage.setItem(livesKey, String(localBonus - 1));
-                }
-            }
+            // 회원 로컬 보너스 목숨 1 차감 로직은 시작버튼 클릭 시 발생하도록 이동됨 (startGameUI 이전)
 
             const pb = document.getElementById('touch-point-bar');
             if (pb) pb.classList.remove('show');
@@ -1774,15 +1840,22 @@
 
                 failExtraUi.style.display = 'none';
 
+                // 성공 화면에도 남은 재도전 횟수 표시
+                if (STATE.currentLives > 0) {
+                    textBox.innerHTML = '축하합니다~<br>요기보에 누울 자격 획득!<br><span style="font-size:13px; font-weight:normal; color:rgba(255,255,255,0.85);">남은 재도전 기회: <strong style="color:#ffe082;">' + STATE.currentLives + '번</strong></span>';
+                } else {
+                    textBox.innerHTML = '축하합니다~<br>요기보에 누울 자격 획득!';
+                }
+
                 if (!memberId) {
                     btnWrapper.innerHTML = `
                     <button class="btn-result" style="background:#4bc8d8; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:16px; font-weight:bold; cursor:pointer;" onclick="location.href='${getLoginUrlWithReturn()}'">회원가입해야 받아갈 수 있다</button>
                     <img src="http://yogibo.kr/game/친구에게_자랑하기.png" class="btn-result" onclick="alert('공유 API 연결 필요')">
                     `;
                 } else {
-                    const receivedText = STATE.hasReceivedCoupon ? '이미 보상을 수령하셨습니다' : '상품 수령하기';
+                    let rewardBtn = STATE.hasReceivedCoupon ? '' : `<button class="btn-result" style="background:#e84887; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:18px; font-weight:bold; cursor:pointer;" onclick="openRewardModal()">상품 수령하기</button>`;
                     btnWrapper.innerHTML = `
-                    <button class="btn-result" style="background:#e84887; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:18px; font-weight:bold; cursor:pointer;" onclick="openRewardModal()">${receivedText}</button>
+                    ${rewardBtn}
                     <img src="http://yogibo.kr/game/친구에게_자랑하기.png" class="btn-result" onclick="alert('공유 API 연결 필요')">
                     `;
                 }
@@ -1790,7 +1863,7 @@
                 resultScreen.classList.add('fail');
                 banner.src = 'http://yogibo.kr/game/실패_텍스트.png';
                 charImg.src = d.fail;
-                textBox.innerText = '아쉬워요...\n도파민 디톡스에 실패했어요';
+                textBox.innerHTML = '아쉬워요...<br>도파민 디톡스에 실패했어요<br><span style="font-size:13px; font-weight:normal;">남은 재도전 기회: <strong style="color:#ffe082;">' + STATE.currentLives + '번</strong></span>';
                 retryCountNum.innerText = STATE.currentLives;
 
                 if (!memberId) {
@@ -1800,17 +1873,23 @@
                         <img src="http://yogibo.kr/game/재도전_회원가입2.png" class="btn-result" onclick="location.href='${getLoginUrlWithReturn()}'">
                         `;
                     } else {
+                        let rewardBtn = STATE.hasReceivedCoupon ? '' : `<button class="btn-result" style="background:#fff; color:#4bc8d8; border:2px solid #4bc8d8; padding:15px 0; border-radius:30px; font-size:16px; font-weight:bold; cursor:pointer;" onclick="openRewardModal()">게임 그만하고 상품 수령하기</button>`;
                         btnWrapper.innerHTML = `
                         <img src="http://yogibo.kr/game/재도전_회원가입2.png" class="btn-result" onclick="location.href='${getLoginUrlWithReturn()}'">
-                        <button class="btn-result" style="background:#fff; color:#4bc8d8; border:2px solid #4bc8d8; padding:15px 0; border-radius:30px; font-size:16px; font-weight:bold; cursor:pointer;" onclick="openRewardModal()">게임 그만하고 상품 수령하기</button>
+                        ${rewardBtn}
                         `;
                     }
                 } else {
                     failExtraUi.style.display = 'none';
+                    let rewardBtn = STATE.hasReceivedCoupon ? '' : `<button class="btn-result" style="background:#fff; color:#4bc8d8; border:2px solid #4bc8d8; padding:15px 0; border-radius:30px; font-size:16px; font-weight:bold; cursor:pointer;" onclick="openRewardModal()">게임 그만하고 상품 수령하기</button>`;
+                    let retryBtn = STATE.currentLives > 0 ? `<button class="btn-result" style="background:#4bc8d8; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:18px; font-weight:bold; cursor:pointer;" onclick="retryGame()">게임 더 할게요</button>` : '';
                     btnWrapper.innerHTML = `
-                    <button class="btn-result" style="background:#4bc8d8; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:18px; font-weight:bold; cursor:pointer;" onclick="retryGame()">게임 더 할게요</button>
-                    <button class="btn-result" style="background:#fff; color:#4bc8d8; border:2px solid #4bc8d8; padding:15px 0; border-radius:30px; font-size:16px; font-weight:bold; cursor:pointer;" onclick="openRewardModal()">게임 그만하고 상품 수령하기</button>
+                    ${retryBtn}
+                    ${rewardBtn}
                     `;
+                    if (!rewardBtn && !retryBtn) {
+                        btnWrapper.innerHTML = `<button class="btn-result" style="background:#4bc8d8; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:18px; font-weight:bold; cursor:pointer;" onclick="goHome()">메인으로 돌아가기</button>`;
+                    }
                 }
             }
 
@@ -1840,9 +1919,33 @@
         
         function confirmEmployee() {
             // 브라우저 기본 confirm 창으로 '확인', '취소' 버튼 제공
-            if (confirm('매장 직원이 맞으신가요?')) {
-                closeRewardModal();
-                alert('상품 지급 확인이 완료되었습니다.');
+            if (confirm('매장 직원이 맞으신가요? (확인 시 상품 지급이 확정되며, 남은 게임 기회가 모두 소멸됩니다.)')) {
+                fetch(`${API_BASE_URL}/api/game/detox/claim`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ memberId: memberId || null, guestId: STATE.guestId })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    closeRewardModal();
+                    if (data.success) {
+                        STATE.hasReceivedCoupon = true;
+                        STATE.currentLives = 0;
+                        renderLives();
+                        alert('상품 지급 확인이 완료되었습니다.');
+                        if (document.getElementById('retry-count-num')) {
+                            document.getElementById('retry-count-num').innerText = '0';
+                        }
+                        const isSuccess = document.getElementById('screen-result').classList.contains('success');
+                        showResult(isSuccess, 0); // 화면 버튼 갱신
+                    } else {
+                        alert('처리에 실패하였습니다.');
+                    }
+                })
+                .catch(() => {
+                    closeRewardModal();
+                    alert('서버 오류가 발생했습니다.');
+                });
             }
         }
     </script>

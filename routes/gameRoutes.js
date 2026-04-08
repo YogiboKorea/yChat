@@ -125,6 +125,64 @@ router.post('/detox/success', async (req, res) => {
     }
 });
 
+// POST /api/game/detox/play - 게임 시작 (목숨 1 차감)
+router.post('/detox/play', async (req, res) => {
+    try {
+        const { memberId, guestId } = req.body;
+        const db = getDB();
+        const userId = memberId || guestId;
+
+        if (!userId) {
+            return res.status(400).json({ success: false, error: 'userId is required' });
+        }
+
+        const user = await db.collection('game_detox_users').findOne({ userId });
+        if (!user || user.hearts <= 0) {
+            return res.json({ success: false, error: 'lack_of_hearts', hearts: 0 });
+        }
+
+        const updated = await db.collection('game_detox_users').findOneAndUpdate(
+            { userId },
+            { 
+                $inc: { hearts: -1 },
+                $set: { updatedAt: new Date() }
+            },
+            { returnDocument: 'after' }
+        );
+
+        res.json({ success: true, hearts: updated ? Math.max(updated.hearts, 0) : 0 });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: '서버 에러' });
+    }
+});
+
+// POST /api/game/detox/claim - 상품 수령 처리
+router.post('/detox/claim', async (req, res) => {
+    try {
+        const { memberId, guestId } = req.body;
+        const db = getDB();
+        const userId = memberId || guestId;
+
+        if (!userId) {
+            return res.status(400).json({ success: false, error: 'userId is required' });
+        }
+
+        const updated = await db.collection('game_detox_users').findOneAndUpdate(
+            { userId },
+            { 
+                $set: { hasReceivedCoupon: true, hearts: 0, updatedAt: new Date() }
+            },
+            { returnDocument: 'after' }
+        );
+
+        res.json({ success: true, hearts: 0, hasReceivedCoupon: true });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: '서버 에러' });
+    }
+});
+
 // POST /api/game/detox/fail
 router.post('/detox/fail', async (req, res) => {
     try {
@@ -146,7 +204,6 @@ router.post('/detox/fail', async (req, res) => {
         const updated = await db.collection('game_detox_users').findOneAndUpdate(
             { userId },
             { 
-                $inc: { hearts: -1 },
                 $set: { updatedAt: new Date() }
             },
             { returnDocument: 'after' }

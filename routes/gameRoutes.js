@@ -18,11 +18,13 @@ router.get('/detox/status', async (req, res) => {
         let hearts = 0;
         let hasReceivedCoupon = false;
         let completedMissions = [];
+        let downloadedCoupons = [];
 
         if (user) {
             hearts = user.hearts;
             hasReceivedCoupon = user.hasReceivedCoupon || false;
             completedMissions = user.completedMissions || [];
+            downloadedCoupons = user.downloadedCoupons || [];
         } else {
             // 초기 수치 설정
             hearts = memberId ? 5 : 1; 
@@ -32,12 +34,44 @@ router.get('/detox/status', async (req, res) => {
                 hearts,
                 hasReceivedCoupon: false,
                 completedMissions: [],
+                downloadedCoupons: [],
                 createdAt: new Date(),
                 updatedAt: new Date()
             });
         }
 
-        res.json({ success: true, hearts, hasReceivedCoupon, completedMissions });
+        res.json({ success: true, hearts, hasReceivedCoupon, completedMissions, downloadedCoupons });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: '서버 에러' });
+    }
+});
+
+// POST /api/game/detox/coupon - 쿠폰 수령 기록
+router.post('/detox/coupon', async (req, res) => {
+    try {
+        const { memberId, couponIdx } = req.body;
+        const db = getDB();
+
+        if (!memberId) {
+            return res.status(400).json({ success: false, error: '회원만 쿠폰을 수령할 수 있습니다.' });
+        }
+
+        const user = await db.collection('game_detox_users').findOne({ userId: memberId });
+        if (user && user.downloadedCoupons && user.downloadedCoupons.includes(couponIdx)) {
+            return res.json({ success: false, error: 'already_downloaded', downloadedCoupons: user.downloadedCoupons });
+        }
+
+        const updated = await db.collection('game_detox_users').findOneAndUpdate(
+            { userId: memberId },
+            {
+                $addToSet: { downloadedCoupons: couponIdx },
+                $set: { updatedAt: new Date() }
+            },
+            { returnDocument: 'after', upsert: true }
+        );
+
+        res.json({ success: true, downloadedCoupons: updated ? updated.downloadedCoupons : [couponIdx] });
     } catch (err) {
         console.error(err);
         res.status(500).json({ success: false, error: '서버 에러' });

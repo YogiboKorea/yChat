@@ -1325,16 +1325,12 @@
             });
         }
 
-        const STATE = { currentScreen: 'intro', selectedChar: null, maxLives: 5, currentLives: 0, history: [], guestId: null, hasReceivedCoupon: false, completedMissions: [] };
+        const STATE = { currentScreen: 'intro', selectedChar: null, maxLives: 5, currentLives: 0, history: [], guestId: null, hasReceivedCoupon: false, completedMissions: [], downloadedCoupons: [] };
 
         function getLoginUrlWithReturn() {
-            const params = new URLSearchParams(window.location.search);
-            if (STATE.selectedChar) {
-                params.set('char', STATE.selectedChar);
-            }
-            let fullPath = window.location.pathname + '?' + params.toString() + window.location.hash;
-            const cleanPath = fullPath.replace(/([?&])hmac=[^&]*(&?)/g, (_, p1, p2) => p2 ? p1 : '');
-            return LOGIN_BASE + '?returnUrl=' + encodeURIComponent(cleanPath);
+            // 회원가입 완료 후 항상 게임 인트로로 유도 (인트로에서 회원 재확인 후 시작하도록)
+            const basePath = window.location.pathname;
+            return LOGIN_BASE + '?returnUrl=' + encodeURIComponent(basePath);
         }
 
         function getFinalId() {
@@ -1403,6 +1399,7 @@
                         STATE.currentLives = data.hearts;
                         STATE.hasReceivedCoupon = data.hasReceivedCoupon;
                         STATE.completedMissions = data.completedMissions || [];
+                        STATE.downloadedCoupons = data.downloadedCoupons || [];
                     }
 
                     // 비회원인 경우 최초 1회 기회 부여 (테스트를 위해 로컬스토리지 제한 해제)

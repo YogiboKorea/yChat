@@ -26,7 +26,7 @@ router.get('/detox/status', async (req, res) => {
             completedMissions = user.completedMissions || [];
             downloadedCoupons = user.downloadedCoupons || [];
         } else {
-            // 초기 수치 설정
+            // ✅ 초기 수치 설정: 회원 2개, 비회원 1개
             hearts = memberId ? 2 : 1;
             await db.collection('game_detox_users').insertOne({
                 userId,
@@ -107,7 +107,8 @@ router.post('/detox/mission', async (req, res) => {
             { returnDocument: 'after', upsert: true }
         );
 
-        const newHearts = updated ? Math.min(updated.hearts, 5) : 5;
+        // ✅ 최대 하트 수는 5개로 유지하되, 예외 발생 시 기본값을 5에서 2로 변경
+        const newHearts = updated ? Math.min(updated.hearts, 5) : 2;
 
         res.json({ success: true, hearts: newHearts, completedMissions: updated ? updated.completedMissions : [missionIdx] });
     } catch (err) {
@@ -145,7 +146,8 @@ router.post('/detox/success', async (req, res) => {
                 },
                 { returnDocument: 'after', upsert: true }
             );
-            hearts = updated ? updated.hearts : 5;
+            // ✅ 기존 5로 세팅되던 예외 기본값을 2로 변경
+            hearts = updated ? updated.hearts : 2;
             hasReceivedCoupon = true;
         } else {
             const user = await db.collection('game_detox_users').findOne({ userId });

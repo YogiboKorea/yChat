@@ -14,7 +14,7 @@ router.get('/detox/status', async (req, res) => {
         }
 
         const user = await db.collection('game_detox_users').findOne({ userId });
-        
+
         let hearts = 0;
         let hasReceivedCoupon = false;
         let completedMissions = [];
@@ -27,7 +27,7 @@ router.get('/detox/status', async (req, res) => {
             downloadedCoupons = user.downloadedCoupons || [];
         } else {
             // 초기 수치 설정
-            hearts = memberId ? 5 : 1; 
+            hearts = memberId ? 2 : 1;
             await db.collection('game_detox_users').insertOne({
                 userId,
                 isMember: !!memberId,
@@ -140,7 +140,7 @@ router.post('/detox/success', async (req, res) => {
         if (memberId) {
             const updated = await db.collection('game_detox_users').findOneAndUpdate(
                 { userId },
-                { 
+                {
                     $set: { hasReceivedCoupon: true, updatedAt: new Date() }
                 },
                 { returnDocument: 'after', upsert: true }
@@ -177,7 +177,7 @@ router.post('/detox/play', async (req, res) => {
 
         const updated = await db.collection('game_detox_users').findOneAndUpdate(
             { userId },
-            { 
+            {
                 $inc: { hearts: -1 },
                 $set: { updatedAt: new Date() }
             },
@@ -204,7 +204,7 @@ router.post('/detox/claim', async (req, res) => {
 
         const updated = await db.collection('game_detox_users').findOneAndUpdate(
             { userId },
-            { 
+            {
                 $set: { hasReceivedCoupon: true, hearts: 0, updatedAt: new Date() }
             },
             { returnDocument: 'after' }
@@ -237,7 +237,7 @@ router.post('/detox/fail', async (req, res) => {
 
         const updated = await db.collection('game_detox_users').findOneAndUpdate(
             { userId },
-            { 
+            {
                 $set: { updatedAt: new Date() }
             },
             { returnDocument: 'after' }

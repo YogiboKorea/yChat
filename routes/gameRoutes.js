@@ -17,12 +17,14 @@ router.get('/detox/status', async (req, res) => {
 
         let hearts = 0;
         let hasReceivedCoupon = false;
+        let hasReceivedOnlineCoupon = false;
         let completedMissions = [];
         let downloadedCoupons = [];
 
         if (user) {
             hearts = user.hearts;
             hasReceivedCoupon = user.hasReceivedCoupon || false;
+            hasReceivedOnlineCoupon = user.hasReceivedOnlineCoupon || false;
             completedMissions = user.completedMissions || [];
             downloadedCoupons = user.downloadedCoupons || [];
 
@@ -50,6 +52,7 @@ router.get('/detox/status', async (req, res) => {
                 isMember: !!memberId,
                 hearts,
                 hasReceivedCoupon: false,
+                hasReceivedOnlineCoupon: false,
                 completedMissions: [],
                 downloadedCoupons: [],
                 createdAt: new Date(),
@@ -57,7 +60,7 @@ router.get('/detox/status', async (req, res) => {
             });
         }
 
-        res.json({ success: true, hearts, hasReceivedCoupon, completedMissions, downloadedCoupons });
+        res.json({ success: true, hearts, hasReceivedCoupon, hasReceivedOnlineCoupon, completedMissions, downloadedCoupons });
     } catch (err) {
         console.error(err);
         res.status(500).json({ success: false, error: '서버 에러' });
@@ -154,24 +157,16 @@ router.post('/detox/success', async (req, res) => {
 
         let hearts = 0;
         let hasReceivedCoupon = false;
+        let hasReceivedOnlineCoupon = false;
 
-        if (memberId) {
-            const updated = await db.collection('game_detox_users').findOneAndUpdate(
-                { userId },
-                {
-                    $set: { hasReceivedCoupon: true, updatedAt: new Date() }
-                },
-                { returnDocument: 'after', upsert: true }
-            );
-            // ✅ 기존 5로 세팅되던 예외 기본값을 2로 변경
-            hearts = updated ? updated.hearts : 2;
-            hasReceivedCoupon = true;
-        } else {
-            const user = await db.collection('game_detox_users').findOne({ userId });
-            if (user) hearts = user.hearts;
+        const user = await db.collection('game_detox_users').findOne({ userId });
+        if (user) {
+            hearts = user.hearts;
+            hasReceivedCoupon = user.hasReceivedCoupon || false;
+            hasReceivedOnlineCoupon = user.hasReceivedOnlineCoupon || false;
         }
 
-        res.json({ success: true, hearts, hasReceivedCoupon });
+        res.json({ success: true, hearts, hasReceivedCoupon, hasReceivedOnlineCoupon });
     } catch (err) {
         console.error(err);
         res.status(500).json({ success: false, error: '서버 에러' });
@@ -210,10 +205,10 @@ router.post('/detox/play', async (req, res) => {
     }
 });
 
-// POST /api/game/detox/claim - 상품 수령 처리
+// POST /api/game/detox/claim - 상품 수령 처리 (type: 'offline' | 'online')
 router.post('/detox/claim', async (req, res) => {
     try {
-        const { memberId, guestId } = req.body;
+        const { memberId, guestId, type } = req.body;
         const db = getDB();
         const userId = memberId || guestId;
 
@@ -221,15 +216,37 @@ router.post('/detox/claim', async (req, res) => {
             return res.status(400).json({ success: false, error: 'userId is required' });
         }
 
-        const updated = await db.collection('game_detox_users').findOneAndUpdate(
+        // 중복 수령 체크
+        const user = await db.collection('game_detox_users').findOne({ userId });
+        if (type === 'offline' && user && user.hasReceivedCoupon) {
+            return res.json({ success: false, error: 'already_claimed', type: 'offline' });
+        }
+        if (type === 'online' && user && user.hasReceivedOnlineCoupon) {
+            return res.json({ success: false, error: 'already_claimed', type: 'online' });
+        }
+
+        const setFields = { updatedAt: new Date() };
+        if (type === 'online') {
+            setFields.hasReceivedOnlineCoupon = true;
+        } else {
+            // offline (기본값) - 하트 소진
+            setFields.hasReceivedCoupon = true;
+            setFields.hearts = 0;
+        }
+
+        await db.collection('game_detox_users').findOneAndUpdate(
             { userId },
-            {
-                $set: { hasReceivedCoupon: true, hearts: 0, updatedAt: new Date() }
-            },
+            { $set: setFields },
             { returnDocument: 'after' }
         );
 
-        res.json({ success: true, hearts: 0, hasReceivedCoupon: true });
+        const hearts = type === 'online' ? (user ? user.hearts : 0) : 0;
+        res.json({
+            success: true,
+            hearts,
+            hasReceivedCoupon: type !== 'online' ? true : (user ? user.hasReceivedCoupon || false : false),
+            hasReceivedOnlineCoupon: type === 'online' ? true : (user ? user.hasReceivedOnlineCoupon || false : false)
+        });
     } catch (err) {
         console.error(err);
         res.status(500).json({ success: false, error: '서버 에러' });

@@ -220,7 +220,7 @@
 
         .character-card {
             display: flex;
-            flex-direction: column;
+            flex-direction: column-reverse;
             align-items: center;
             justify-content: flex-end;
             cursor: pointer;
@@ -1044,7 +1044,7 @@
                     </div>
                     <div class="character-card" data-char="uniq"><img src="http://yogibo.kr/game/유니콘.png" alt="유니콘">
                     </div>
-                    <div class="character-card" data-char="fox"><img src="http://yogibo.kr/game/팍스.png" alt="팍스"></div>
+                    <div class="character-card" data-char="fox"><img src="http://yogibo.kr/game/팍스1.png" alt="팍스"></div>
                 </div>
             </div>
             <div class="select-bottom">
@@ -1523,11 +1523,14 @@
             if (typeof CAFE24API !== 'undefined') {
                 CAFE24API.getMemberID(function (res) {
                     const newId = res ? res : null;
+                    console.log('🔄 [인트로 클릭] 회원 ID 확인:', newId || '비회원(게스트)');
                     if (newId !== memberId) {
+                        console.log('⚠️ [인트로 클릭] 상태 변경 감지:', memberId, '->', newId);
                         memberId = newId;
                         STATE.guestId = getFinalId();
-                        fetchGameStatus();
                     }
+                    // 항상 최신 게임 상태 동기화
+                    fetchGameStatus();
                     switchScreen('select');
                 });
             } else {
@@ -1642,38 +1645,37 @@
             };
 
             if (typeof CAFE24API !== 'undefined') {
-                console.log('🔄 [입장 버튼 클릭] Cafe24 회원 정보 재확인 요청 중...');
+                console.log('🔄 [시작하기 버튼 클릭] Cafe24 회원 정보 재확인 요청 중...');
 
                 CAFE24API.getMemberID(function (res) {
                     const newMemberId = res ? res : null;
-                    console.log('✅ [입장 버튼 클릭] 재확인된 회원 ID:', newMemberId || '비회원(게스트)');
+                    console.log('✅ [시작하기 버튼 클릭] 재확인된 회원 ID:', newMemberId || '비회원(게스트)');
 
                     if (newMemberId !== memberId) {
-                        console.log(`⚠️ [상태 변경 감지] 기존 ID: ${memberId} -> 새 ID: ${newMemberId}. 상태 동기화를 진행합니다.`);
-
+                        console.log(`⚠️ [상태 변경 감지] 기존 ID: ${memberId} -> 새 ID: ${newMemberId}`);
                         memberId = newMemberId;
                         STATE.guestId = getFinalId();
-
-                        fetch(`${API_BASE_URL}/api/game/detox/status?memberId=${memberId || ''}&guestId=${STATE.guestId || ''}`)
-                            .then(r => r.json())
-                            .then(data => {
-                                if (data.success) {
-                                    STATE.currentLives = data.hearts;
-                                    STATE.hasReceivedCoupon = data.hasReceivedCoupon;
-                                }
-                                if (!memberId && STATE.currentLives === 0) STATE.currentLives = 1;
-
-                                renderLives();
-                                proceedToPlay();
-                            })
-                            .catch((err) => {
-                                console.error('상태 동기화 실패:', err);
-                                proceedToPlay();
-                            });
-                    } else {
-                        console.log('➡️ [상태 유지] 로그인 상태 변경 없음. 게임 플레이 API 호출.');
-                        proceedToPlay();
                     }
+
+                    // 항상 최신 게임 상태 동기화 후 진행
+                    fetch(`${API_BASE_URL}/api/game/detox/status?memberId=${memberId || ''}&guestId=${STATE.guestId || ''}`)
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data.success) {
+                                STATE.currentLives = data.hearts;
+                                STATE.hasReceivedCoupon = data.hasReceivedCoupon;
+                                STATE.completedMissions = data.completedMissions || STATE.completedMissions;
+                                STATE.downloadedCoupons = data.downloadedCoupons || STATE.downloadedCoupons;
+                            }
+                            if (!memberId && STATE.currentLives === 0) STATE.currentLives = 1;
+
+                            renderLives();
+                            proceedToPlay();
+                        })
+                        .catch((err) => {
+                            console.error('상태 동기화 실패:', err);
+                            proceedToPlay();
+                        });
                 });
             } else {
                 console.warn('⚠️ Cafe24 API를 찾을 수 없습니다. 게임 플레이 API를 호출합니다.');

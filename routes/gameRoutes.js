@@ -25,6 +25,23 @@ router.get('/detox/status', async (req, res) => {
             hasReceivedCoupon = user.hasReceivedCoupon || false;
             completedMissions = user.completedMissions || [];
             downloadedCoupons = user.downloadedCoupons || [];
+
+            // ✅ 회원인데 미션 없이 hearts > 2인 경우 (과거 잘못 초기화된 데이터 보정)
+            // 미션으로 하트를 추가한 적 없는(completedMissions가 비어있는) 회원이
+            // 2개를 초과하는 hearts를 가진 경우 2개로 재조정
+            if (memberId && completedMissions.length === 0 && hearts > 2) {
+                hearts = 2;
+                await db.collection('game_detox_users').updateOne(
+                    { userId },
+                    { $set: { hearts: 2, isMember: true, updatedAt: new Date() } }
+                );
+            } else if (memberId && !user.isMember) {
+                // 비회원 → 회원 전환 감지: isMember 플래그 업데이트
+                await db.collection('game_detox_users').updateOne(
+                    { userId },
+                    { $set: { isMember: true, updatedAt: new Date() } }
+                );
+            }
         } else {
             // ✅ 초기 수치 설정: 회원 2개, 비회원 1개
             hearts = memberId ? 2 : 1;

@@ -269,4 +269,36 @@ router.post('/detox/fail', async (req, res) => {
     }
 });
 
+// GET /api/game/detox/successList - 성공자 목록 (명전)
+router.get('/detox/successList', async (req, res) => {
+    try {
+        const db = getDB();
+        // 회원 성공자만 조회 (isMember: true, result: 'success'), 최신순 최대 100건
+        const logs = await db.collection('game_detox_logs')
+            .find({ isMember: true, result: 'success' })
+            .sort({ createdAt: -1 })
+            .limit(100)
+            .toArray();
+
+        // 중복 제거 (한 사람이 여러 번 성공해도 1회만)
+        const seen = new Set();
+        const uniqueList = [];
+        for (const log of logs) {
+            if (!seen.has(log.userId)) {
+                seen.add(log.userId);
+                // 아이디 마스킹: 앞 3자리 + *** 처리
+                const id = log.userId;
+                const masked = id.length > 3 ? id.slice(0, 3) + '***' : id + '***';
+                uniqueList.push(masked);
+            }
+            if (uniqueList.length >= 50) break;
+        }
+
+        res.json({ success: true, list: uniqueList });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, list: [] });
+    }
+});
+
 module.exports = router;

@@ -993,6 +993,109 @@
             height: 18px;
             object-fit: contain;
         }
+
+        /* --- 명전 버튼 --- */
+        .btn-myeongjeon {
+            cursor: pointer;
+            width: 40px;
+            height: 40px;
+            object-fit: contain;
+            transition: transform 0.15s ease;
+            filter: drop-shadow(0 2px 6px rgba(0,0,0,0.2));
+        }
+        .btn-myeongjeon:active {
+            transform: scale(0.9);
+        }
+
+        /* --- 명전 모달 --- */
+        #myeongjeon-modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.65);
+            z-index: 100000;
+            justify-content: center;
+            align-items: center;
+        }
+        .myeongjeon-content {
+            background: linear-gradient(160deg, #1a0a00 0%, #3b1800 100%);
+            width: 88%;
+            max-width: 340px;
+            border-radius: 22px;
+            padding: 28px 20px 24px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,200,80,0.3);
+            border: 2px solid rgba(255,190,50,0.4);
+        }
+        .myeongjeon-close {
+            position: absolute;
+            top: 14px; right: 18px;
+            font-size: 22px;
+            color: rgba(255,220,100,0.7);
+            cursor: pointer;
+            line-height: 1;
+        }
+        .myeongjeon-title-img {
+            width: 70%;
+            max-width: 200px;
+            object-fit: contain;
+            margin-bottom: 18px;
+        }
+        .myeongjeon-ticker-wrap {
+            width: 100%;
+            overflow: hidden;
+            position: relative;
+            height: 200px;
+        }
+        .myeongjeon-ticker {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            animation: ticker-scroll 0s linear infinite;
+        }
+        @keyframes ticker-scroll {
+            0%   { transform: translateY(0); }
+            100% { transform: translateY(-50%); }
+        }
+        .myeongjeon-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 9px 16px;
+            border-bottom: 1px solid rgba(255,190,50,0.12);
+        }
+        .myeongjeon-rank {
+            font-size: 13px;
+            font-weight: 900;
+            color: #ffd060;
+            width: 28px;
+            flex-shrink: 0;
+        }
+        .myeongjeon-id {
+            flex: 1;
+            font-size: 14px;
+            font-weight: 700;
+            color: #fff;
+            padding-left: 8px;
+        }
+        .myeongjeon-badge {
+            font-size: 12px;
+            font-weight: 700;
+            color: #1a0a00;
+            background: linear-gradient(90deg, #ffd060, #ffaa00);
+            border-radius: 20px;
+            padding: 3px 10px;
+        }
+        .myeongjeon-count-text {
+            margin-top: 14px;
+            font-size: 13px;
+            color: rgba(255,220,100,0.7);
+            font-weight: 600;
+        }
     </style>
 
 
@@ -1064,9 +1167,6 @@
             <img src="http://yogibo.kr/game/회원전용쿠폰.png" class="floating-coupon coupon-left" id="member-coupon-1"
                 onclick="downloadCoupon10()" alt="쿠폰"
                 onerror="this.onerror=null; this.src='http://yogibo.kr/game/sns_logo.png';">
-            <img src="http://yogibo.kr/game/회원전용쿠폰.png" class="floating-coupon coupon-right" id="member-coupon-2"
-                onclick="downloadCoupon20()" alt="쿠폰"
-                onerror="this.onerror=null; this.src='http://yogibo.kr/game/sns_logo.png';">
 
             <div class="char-display-wrapper">
                 <img id="confirm-char-img" src="" alt="대기캐릭터">
@@ -1076,6 +1176,7 @@
                 <div class="start-action-wrapper">
                     <img src="http://yogibo.kr/game/게임설명무름표.png" class="btn-info-circle" onclick="openModal()" alt="설명">
                     <img src="http://yogibo.kr/game/시작하기버튼.png" class="btn-game-start" id="btn-game-start" alt="시작하기">
+                    <img src="http://yogibo.kr/game/명전.png" class="btn-myeongjeon" onclick="openMyeongjeonModal()" alt="명전">
                 </div>
             </div>
         </div>
@@ -1184,6 +1285,19 @@
     </div>
 
 
+
+    <div id="myeongjeon-modal">
+        <div class="myeongjeon-content">
+            <div class="myeongjeon-close" onclick="closeMyeongjeonModal()">✕</div>
+            <img src="http://yogibo.kr/game/명전.png" class="myeongjeon-title-img" alt="명전"
+                onerror="this.onerror=null; this.style.display='none';">
+            <div class="myeongjeon-ticker-wrap">
+                <div class="myeongjeon-ticker" id="myeongjeon-ticker"></div>
+            </div>
+            <div class="myeongjeon-count-text" id="myeongjeon-count-text"></div>
+        </div>
+    </div>
+
     <div id="mission-modal">
         <div class="mission-content">
             <div class="mission-close" onclick="closeMissionModal()">✕</div>
@@ -1200,14 +1314,18 @@
 
     <script>
 
-        // 쿠폰 다운로드 함수 (새 탭에서 열어 게임 페이지 유지)
+        // 쿠폰 다운로드 함수 (현재 페이지 이동 후 쿠폰 처리 완료 시 게임 페이지로 복귀)
         function downloadCoupon10() {
             var couponUrl = '/exec/front/newcoupon/IssueDownload?coupon_no=6084813679300001131';
-            window.open(couponUrl, '_blank');
+            var fullPath = window.location.pathname + window.location.search + window.location.hash;
+            var cleanPath = fullPath.replace(/([?&])hmac=[^&]*(&?)/g, function(_, p1, p2) { return p2 ? p1 : ''; });
+            window.location.href = couponUrl + '&opener_url=' + encodeURIComponent(cleanPath);
         }
         function downloadCoupon20() {
             var couponUrl = '/exec/front/newcoupon/IssueDownload?coupon_no=6084813701300001133,6084813697300001132';
-            window.open(couponUrl, '_blank');
+            var fullPath = window.location.pathname + window.location.search + window.location.hash;
+            var cleanPath = fullPath.replace(/([?&])hmac=[^&]*(&?)/g, function(_, p1, p2) { return p2 ? p1 : ''; });
+            window.location.href = couponUrl + '&opener_url=' + encodeURIComponent(cleanPath);
         }
 
         const CAFE24_APP_KEY = 'R4as6neTNyXXjVfpfUj9lE';

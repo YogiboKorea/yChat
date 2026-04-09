@@ -1350,6 +1350,29 @@
 
 
 
+    <!-- 온라인 쿠폰 모달 -->
+    <div id="online-reward-modal"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); z-index: 200; justify-content: center; align-items: center;">
+        <div
+            style="background: white; border-radius: 20px; width: 85%; max-width: 320px; padding: 30px 20px; text-align: center; position: relative; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+            <div onclick="closeOnlineRewardModal()"
+                style="position: absolute; top: 15px; right: 20px; font-size: 24px; font-weight: bold; color: #999; cursor: pointer;">
+                ✕</div>
+            <div style="font-size: 40px; margin-bottom: 10px;">🌐</div>
+            <h3 style="color: #333; margin-bottom: 15px; font-size: 20px; font-weight: 900;">온라인 참여 감사 선물</h3>
+            <div
+                style="background: #f0fbfc; border-radius: 12px; padding: 15px; margin-bottom: 20px; border: 2px solid #4bc8d8;">
+                <p style="font-size: 15px; color: #333; line-height: 1.5; font-weight: bold; margin: 0;">
+                    <span style="color: #4bc8d8;">온라인 케어 상품 20% 할인쿠폰</span>
+                </p>
+            </div>
+            <p style="font-size: 12px; color: #888; margin-bottom: 15px;">확인 버튼을 누르면 쿠폰이 발급되며<br>중복 수령이 불가합니다.</p>
+            <button onclick="confirmOnlineCoupon()"
+                style="background: #4bc8d8; color: white; border: none; border-radius: 30px; padding: 15px 0; width: 100%; font-size: 16px; font-weight: bold; cursor: pointer;">쿠폰
+                받기</button>
+        </div>
+    </div>
+
     <div id="myeongjeon-modal">
         <div class="myeongjeon-content">
             <div class="myeongjeon-close" onclick="closeMyeongjeonModal()">✕</div>
@@ -1561,12 +1584,17 @@
             });
         }
 
-        const STATE = { currentScreen: 'intro', selectedChar: null, maxLives: 5, currentLives: 0, history: [], guestId: null, hasReceivedCoupon: false, hasReceivedOnlineCoupon: false, completedMissions: [], downloadedCoupons: [] };
+        const STATE = { currentScreen: 'intro', selectedChar: null, maxLives: 5, currentLives: 0, history: [], guestId: null, hasReceivedCoupon: false, hasReceivedOnlineCoupon: false, completedMissions: [], downloadedCoupons: [], pendingAction: null };
 
-        function getLoginUrlWithReturn() {
-            // pathname + 쿼리스트링 + 해시 전체 포함
-            const fullPath = window.location.pathname + window.location.search + window.location.hash;
-            // Cafe24 앱이 자동 추가하는 hmac 파라미터 제거 (returnUrl 오염 방지)
+        function getLoginUrlWithReturn(extraParams = {}) {
+            const urlObj = new URL(window.location.href, window.location.origin);
+            if (STATE.selectedChar) {
+                urlObj.searchParams.set('char', STATE.selectedChar);
+            }
+            for (const key in extraParams) {
+                urlObj.searchParams.set(key, extraParams[key]);
+            }
+            const fullPath = urlObj.pathname + urlObj.search + urlObj.hash;
             const cleanPath = fullPath.replace(/([?&])hmac=[^&]*(&?)/g, (_, p1, p2) => p2 ? p1 : '');
             return LOGIN_BASE + '?returnUrl=' + encodeURIComponent(cleanPath);
         }
@@ -1584,6 +1612,8 @@
         document.addEventListener('DOMContentLoaded', function () {
             const params = new URLSearchParams(window.location.search);
             const savedChar = params.get('char');
+            const action = params.get('action');
+
             if (savedChar && CHARACTERS[savedChar]) {
                 STATE.selectedChar = savedChar;
                 const d = CHARACTERS[savedChar];
@@ -1591,9 +1621,15 @@
                 if (nameEl) nameEl.innerText = `내 캐릭터 : ${d.name}`;
                 document.getElementById('confirm-char-img').src = d.img;
                 preloadFrames([d.start, ...d.frames]);
-                switchScreen('confirm');
+                
+                if (action === 'claim_success') {
+                    STATE.pendingAction = 'claim_success';
+                } else {
+                    switchScreen('confirm');
+                }
 
                 params.delete('char');
+                params.delete('action');
                 const newQuery = params.toString() ? '?' + params.toString() : '';
                 window.history.replaceState({}, document.title, window.location.pathname + newQuery + window.location.hash);
             }
@@ -1662,10 +1698,18 @@
                     }
 
                     renderLives();
+                    if (STATE.pendingAction === 'claim_success') {
+                        STATE.pendingAction = null;
+                        showResult(true, 10000); // Trigger success screen
+                    }
                 })
                 .catch(err => {
                     console.error('상태 로드 실패:', err);
                     renderLives();
+                    if (STATE.pendingAction === 'claim_success') {
+                        STATE.pendingAction = null;
+                        showResult(true, 10000);
+                    }
                 });
         }
 
@@ -2131,8 +2175,9 @@
                 }
 
                 if (!memberId) {
+                    const loginUrl = getLoginUrlWithReturn({ action: 'claim_success' });
                     btnWrapper.innerHTML = `
-                    <button class="btn-result" style="background:#4bc8d8; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:16px; font-weight:bold; cursor:pointer;" onclick="location.href='${getLoginUrlWithReturn()}'">회원가입해야 받아갈 수 있다</button>
+                    <button class="btn-result" style="background:#4bc8d8; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:15px; font-weight:bold; cursor:pointer;" onclick="location.href='${loginUrl}'">회원가입하시고 성공보상을 받아가세요</button>
                     <img src="http://yogibo.kr/game/친구에게_자랑하기.png" class="btn-result" onclick="alert('공유 API 연결 필요')">
                     `;
                 } else {

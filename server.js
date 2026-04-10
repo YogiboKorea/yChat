@@ -53,6 +53,95 @@ app.use("/", knowledgeRoutes);
 app.use("/", legacyRoutes);
 app.use("/api/game", gameRoutes);
 
+// ========== [추가] 디톡스 페이지 1회성 적립금 지급 이벤트 참여 여부 조회 ==========
+app.get('/api/event/detox-reward/status', async (req, res) => {
+  const { memberId } = req.query;
+
+  if (!memberId || typeof memberId !== 'string' || memberId.startsWith('guest_')) {
+    return res.status(400).json({ success: false, message: '유효하지 않은 회원 ID입니다.' });
+  }
+
+  try {
+    const { getDB } = require("./config/db");
+    const db = getDB();
+    const collection = db.collection('detox_event_point_onOff');
+    const alreadyParticipated = await collection.findOne({ memberId });
+    if (alreadyParticipated) {
+      return res.json({ success: true, alreadyDone: true });
+    }
+    return res.json({ success: true, alreadyDone: false });
+  } catch (err) {
+    console.error('[디톡스이벤트] 상태 조회 오류:', err);
+    return res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+  }
+});
+
+// ========== [추가] 디톡스 페이지 1회성 적립금 지급 이벤트 API ==========
+app.post('/api/event/detox-reward', async (req, res) => {
+  const { memberId } = req.body;
+
+  // 1. 비회원(guest_) 및 파라미터 유효성 검사
+  if (!memberId || typeof memberId !== 'string' || memberId.startsWith('guest_')) {
+    return res.status(400).json({ success: false, message: '로그인 후 참여 가능한 이벤트입니다.' });
+  }
+
+  const amount = 3000;
+
+  try {
+    const { getDB } = require("./config/db");
+    const db = getDB();
+    const collection = db.collection('detox_event_point_onOff');
+
+    // 2. 중복 참여 확인
+    const alreadyParticipated = await collection.findOne({ memberId });
+    if (alreadyParticipated) {
+      return res.status(400).json({ success: false, message: '이미 적립 혜택을 받으셨습니다.', alreadyDone: true });
+    }
+
+    // 3. Cafe24 API로 포인트 적립
+    const { apiRequest } = require("./config/cafe24Api");
+    const CAFE24_MALLID = process.env.CAFE24_MALLID || 'yogibo';
+    
+    const payload = {
+      shop_no: 1,
+      request: {
+        member_id: memberId,
+        order_id: null,
+        amount: amount,
+        type: 'increase',
+        reason: '도파민 디톡스 3,000원 적립금 지급'
+      }
+    };
+
+    await apiRequest(
+      'POST',
+      `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/points`,
+      payload
+    );
+
+    // 4. 적립 성공 시 참여 기록 저장 (KST 기준)
+    const nowKST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+    await collection.insertOne({
+      memberId,
+      amount,
+      participatedAt: nowKST
+    });
+
+    console.log(`[디톡스이벤트] ${memberId} 적립금 ${amount}원 지급 완료`);
+    return res.json({ success: true, message: '🎉 3,000원 적립금이 지급되었습니다!' });
+
+  } catch (err) {
+    console.error('[디톡스이벤트] 포인트 지급 오류:', err);
+
+    // Unique Index 충돌 에러 처리 (동시성 방어)
+    if (err.code === 11000) {
+      return res.status(400).json({ success: false, message: '이미 혜택을 받으셨습니다.', alreadyDone: true });
+    }
+
+    return res.status(500).json({ success: false, message: '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.' });
+  }
+});
+
 // ★ 서버 실행 로직
 (async function initialize() {
   try {
@@ -87,6 +176,13 @@ app.use("/api/game", gameRoutes);
       { expireAfterSeconds: 90 * 24 * 60 * 60, background: true }
     );
     console.log("✅ TTL 인덱스 설정 완료 (대화로그 365일 / 주문이력 90일 자동 삭제)");
+
+    // 5.5 디톡스 이벤트 중복 방지 인덱스 (memberId = unique)
+    await db.collection("detox_event_point_onOff").createIndex(
+      { memberId: 1 },
+      { unique: true, background: true }
+    );
+    console.log("✅ 디톡스 이벤트 중복방지 유니크 인덱스 설정 완료");
 
     // 5. 스케줄러 실행
     // 기존 전체 매출 집계 스케줄러 비활성화 (Cafe24 503 우회 목적 - on-demand로 전환)

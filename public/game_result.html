@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>요기보 게임 결과 관리자</title>
+    <style>
+        body { font-family: 'Pretendard', sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; }
+        .container { max-width: 900px; margin: 0 auto; background: white; padding: 20px 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        h1 { font-size: 24px; color: #333; margin-bottom: 20px; border-bottom: 2px solid #eaeaea; padding-bottom: 10px; }
+        .config-panel { background: #fdfdfd; border: 1px solid #ddd; padding: 20px; border-radius: 8px; margin-bottom: 30px; }
+        .config-title { font-weight: bold; margin-bottom: 15px; font-size: 16px; color: #444; }
+        .input-group { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
+        .input-group input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; width: 100px; text-align: center; font-size: 15px; }
+        .btn-save { background-color: #4bc8d8; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: background 0.2s; }
+        .btn-save:hover { background-color: #3bb2c1; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #ddd; }
+        th { background-color: #f8f9fa; color: #555; font-weight: 600; }
+        tr:hover { background-color: #f1f1f1; }
+        
+        .badge { display: inline-block; padding: 4px 10px; border-radius: 15px; font-size: 12px; font-weight: bold; }
+        .badge-success { background: #d4edda; color: #155724; }
+        .badge-fail { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🎮 10초 디톡스 게임 관리자</h1>
+    
+    <div class="config-panel">
+        <div class="config-title">⚙️ 성공 통과 기준(초) 설정</div>
+        <div class="input-group">
+            <label>최소 시간(Sec): </label>
+            <input type="number" id="min-sec" step="0.01">
+            <label>~ 최대 시간(Sec): </label>
+            <input type="number" id="max-sec" step="0.01">
+        </div>
+        <button class="btn-save" onclick="saveConfig()">현재 기준 저장하기</button>
+        <span id="config-msg" style="margin-left: 15px; color: #155724; font-size: 14px; font-weight: bold;"></span>
+    </div>
+
+    <div>
+        <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+            <h3 style="margin-bottom: 10px;">📋 최근 참여자 로그 (최대 300건)</h3>
+            <button class="btn-save" style="margin-bottom: 10px; background-color:#888;" onclick="loadLogs()">새로고침</button>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>참여 일시</th>
+                    <th>회원/게스트 ID</th>
+                    <th>결과</th>
+                    <th>실제 멈춘 시간 (초)</th>
+                </tr>
+            </thead>
+            <tbody id="log-table-body">
+                <tr><td colspan="4" style="text-align: center;">데이터를 불러오는 중입니다...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    // 현재 포트 및 도메인 자동 인식
+    const API_BASE_URL = '';
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadConfig();
+        loadLogs();
+    });
+
+    function loadConfig() {
+        fetch(`${API_BASE_URL}/api/game/detox/config`)
+            .then(r => r.json())
+            .then(data => {
+                if(data.success) {
+                    document.getElementById('min-sec').value = (data.minTime / 1000).toFixed(2);
+                    document.getElementById('max-sec').value = (data.maxTime / 1000).toFixed(2);
+                }
+            })
+            .catch(err => console.error(err));
+    }
+
+    function saveConfig() {
+        const minSec = parseFloat(document.getElementById('min-sec').value);
+        const maxSec = parseFloat(document.getElementById('max-sec').value);
+        
+        if(isNaN(minSec) || isNaN(maxSec)) {
+            alert('숫자로 정확히 입력해주세요.');
+            return;
+        }
+        if(minSec > maxSec) {
+            alert('최소 시간이 최대 시간보다 클 수 없습니다.');
+            return;
+        }
+
+        const payload = {
+            minTime: Math.floor(minSec * 1000),
+            maxTime: Math.floor(maxSec * 1000)
+        };
+
+        fetch(`${API_BASE_URL}/api/game/detox/config`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        })
+        .then(r => r.json())
+        .then(data => {
+            if(data.success) {
+                const msg = document.getElementById('config-msg');
+                msg.innerText = '✅ 성공 기준이 실시간으로 반영되었습니다!';
+                setTimeout(() => msg.innerText = '', 3000);
+            }
+        })
+        .catch(err => alert('오류 발생: ' + err.message));
+    }
+
+    function loadLogs() {
+        fetch(`${API_BASE_URL}/api/game/detox/admin/logs`)
+            .then(r => r.json())
+            .then(data => {
+                if(data.success) {
+                    const tbody = document.getElementById('log-table-body');
+                    tbody.innerHTML = '';
+                    if(!data.logs || data.logs.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">참여 로그가 없습니다.</td></tr>';
+                        return;
+                    }
+
+                    data.logs.forEach(log => {
+                        const tr = document.createElement('tr');
+                        
+                        const d = new Date(log.createdAt);
+                        const dateStr = d.toLocaleString('ko-KR');
+
+                        const isSuccess = log.result === 'success';
+                        const badgeHtml = isSuccess ? '<span class="badge badge-success">성공</span>' : '<span class="badge badge-fail">실패</span>';
+                        
+                        let timeStr = '-';
+                        if(log.recordTime) {
+                            timeStr = (log.recordTime / 1000).toFixed(3) + ' 초';
+                        } else {
+                            timeStr = '(기록 없음)'; // 이전 구버전 데이터
+                        }
+
+                        tr.innerHTML = `
+                            <td>${dateStr}</td>
+                            <td>${log.userId} ${log.isMember ? '(회원)' : '(비회원)'}</td>
+                            <td>${badgeHtml}</td>
+                            <td><strong style="color: ${isSuccess ? '#155724' : '#721c24'}">${timeStr}</strong></td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                }
+            })
+            .catch(err => {
+                document.getElementById('log-table-body').innerHTML = '<tr><td colspan="4" style="text-align:center; color:red;">로그를 불러오지 못했습니다.</td></tr>';
+            });
+    }
+</script>
+
+</body>
+</html>

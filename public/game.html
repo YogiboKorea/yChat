@@ -1611,7 +1611,7 @@
             });
         }
 
-        const STATE = { currentScreen: 'intro', selectedChar: null, maxLives: 5, currentLives: 0, history: [], guestId: null, hasReceivedCoupon: false, hasReceivedOnlineCoupon: false, completedMissions: [], downloadedCoupons: [], pendingAction: null };
+        const STATE = { currentScreen: 'intro', selectedChar: null, maxLives: 5, currentLives: 0, history: [], guestId: null, hasReceivedCoupon: false, hasReceivedOnlineCoupon: false, completedMissions: [], downloadedCoupons: [], pendingAction: null, config: { minTime: 10000, maxTime: 11000 } };
 
         function getLoginUrlWithReturn(extraParams = {}) {
             const urlObj = new URL(window.location.href, window.location.origin);
@@ -1637,6 +1637,17 @@
         }
 
         document.addEventListener('DOMContentLoaded', function () {
+            // 성공 초수(config) 우선 가져오기
+            fetch(`${API_BASE_URL}/api/game/detox/config`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        STATE.config.minTime = data.minTime;
+                        STATE.config.maxTime = data.maxTime;
+                    }
+                })
+                .catch(err => console.error('Config Load Error:', err));
+
             const params = new URLSearchParams(window.location.search);
             const savedChar = params.get('char');
             const action = params.get('action');
@@ -2167,7 +2178,7 @@
             stopFrameAnimation();
             clearDistractors();
 
-            const isSuccess = finalTime >= 10000 && finalTime <= 11000;
+            const isSuccess = finalTime >= STATE.config.minTime && finalTime <= STATE.config.maxTime;
             const endpoint = isSuccess ? '/api/game/detox/success' : '/api/game/detox/fail';
 
             fetch(`${API_BASE_URL}${endpoint}`, {
@@ -2175,7 +2186,8 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     memberId: memberId || null,
-                    guestId: STATE.guestId
+                    guestId: STATE.guestId,
+                    recordTime: finalTime
                 })
             })
                 .then(res => res.json())

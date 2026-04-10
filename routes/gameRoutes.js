@@ -2,6 +2,41 @@ const express = require('express');
 const router = express.Router();
 const { getDB } = require('../config/db');
 
+// GET /api/game/detox/config - 성공 범위를 DB에서 가져오게 추가
+router.get('/detox/config', async (req, res) => {
+    try {
+        const db = getDB();
+        const config = await db.collection('game_detox_config').findOne({ type: 'success_criteria' });
+        if (config) {
+            res.json({ success: true, minTime: config.minTime, maxTime: config.maxTime });
+        } else {
+            // 기본값
+            res.json({ success: true, minTime: 10000, maxTime: 11000 });
+        }
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: '서버 에러' });
+    }
+});
+
+// POST /api/game/detox/config - 관리자가 성공 범위를 수정
+router.post('/detox/config', async (req, res) => {
+    try {
+        const { minTime, maxTime } = req.body;
+        const db = getDB();
+        
+        await db.collection('game_detox_config').updateOne(
+            { type: 'success_criteria' },
+            { $set: { minTime: parseInt(minTime), maxTime: parseInt(maxTime), updatedAt: new Date() } },
+            { upsert: true }
+        );
+        res.json({ success: true, minTime, maxTime });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: '서버 에러' });
+    }
+});
+
 // GET /api/game/detox/status
 router.get('/detox/status', async (req, res) => {
     try {
@@ -140,7 +175,7 @@ router.post('/detox/mission', async (req, res) => {
 // POST /api/game/detox/success
 router.post('/detox/success', async (req, res) => {
     try {
-        const { memberId, guestId } = req.body;
+        const { memberId, guestId, recordTime } = req.body;
         const db = getDB();
         const userId = memberId || guestId;
 
@@ -152,6 +187,7 @@ router.post('/detox/success', async (req, res) => {
             userId,
             isMember: !!memberId,
             result: 'success',
+            recordTime: recordTime || null,
             createdAt: new Date()
         });
 
@@ -256,7 +292,7 @@ router.post('/detox/claim', async (req, res) => {
 // POST /api/game/detox/fail
 router.post('/detox/fail', async (req, res) => {
     try {
-        const { memberId, guestId } = req.body;
+        const { memberId, guestId, recordTime } = req.body;
         const db = getDB();
         const userId = memberId || guestId;
 
@@ -268,6 +304,7 @@ router.post('/detox/fail', async (req, res) => {
             userId,
             isMember: !!memberId,
             result: 'fail',
+            recordTime: recordTime || null,
             createdAt: new Date()
         });
 
@@ -315,6 +352,23 @@ router.get('/detox/successList', async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ success: false, list: [] });
+    }
+});
+
+// GET /api/game/detox/admin/logs - 관리자 대시보드에서 볼 모든 로그
+router.get('/detox/admin/logs', async (req, res) => {
+    try {
+        const db = getDB();
+        const logs = await db.collection('game_detox_logs')
+            .find({})
+            .sort({ createdAt: -1 })
+            .limit(300) // 최근 300건만 노출
+            .toArray();
+
+        res.json({ success: true, logs });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: '서버 에러' });
     }
 });
 

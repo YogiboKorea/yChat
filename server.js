@@ -142,6 +142,76 @@ app.post('/api/event/detox-reward', async (req, res) => {
   }
 });
 
+// ========== [김포 매장] 이벤트매장 적립금 3,000원 (별도 컬렉션) ==========
+app.get('/api/event/gimpo-reward/status', async (req, res) => {
+  const { memberId } = req.query;
+  if (!memberId || typeof memberId !== 'string' || memberId.startsWith('guest_')) {
+    return res.status(400).json({ success: false, message: '유효하지 않은 회원 ID입니다.' });
+  }
+  try {
+    const { getDB } = require("./config/db");
+    const db = getDB();
+    const alreadyParticipated = await db.collection('gimpo_event_point').findOne({ memberId });
+    return res.json({ success: true, alreadyDone: !!alreadyParticipated });
+  } catch (err) {
+    console.error('[김포이벤트] 상태 조회 오류:', err);
+    return res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+  }
+});
+
+app.post('/api/event/gimpo-reward', async (req, res) => {
+  const { memberId } = req.body;
+  if (!memberId || typeof memberId !== 'string' || memberId.startsWith('guest_')) {
+    return res.status(400).json({ success: false, message: '로그인 후 참여 가능한 이벤트입니다.' });
+  }
+
+  const amount = 3000;
+
+  try {
+    const { getDB } = require("./config/db");
+    const db = getDB();
+    const collection = db.collection('gimpo_event_point');
+
+    const alreadyParticipated = await collection.findOne({ memberId });
+    if (alreadyParticipated) {
+      return res.status(400).json({ success: false, message: '이미 적립 혜택을 받으셨습니다.', alreadyDone: true });
+    }
+
+    const { apiRequest } = require("./config/cafe24Api");
+    const CAFE24_MALLID = process.env.CAFE24_MALLID || 'yogibo';
+
+    const payload = {
+      shop_no: 1,
+      request: {
+        member_id: memberId,
+        order_id: null,
+        amount: amount,
+        type: 'increase',
+        reason: '김포 매장 이벤트 3,000원 적립금 지급'
+      }
+    };
+
+    await apiRequest(
+      'POST',
+      `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/points`,
+      payload
+    );
+
+    const nowKST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+    await collection.insertOne({ memberId, amount, participatedAt: nowKST });
+
+    console.log(`[김포이벤트] ${memberId} 적립금 ${amount}원 지급 완료`);
+    return res.json({ success: true, message: '🎉 3,000원 적립금이 지급되었습니다!' });
+
+  } catch (err) {
+    console.error('[김포이벤트] 포인트 지급 오류:', err);
+    if (err.code === 11000) {
+      return res.status(400).json({ success: false, message: '이미 혜택을 받으셨습니다.', alreadyDone: true });
+    }
+    return res.status(500).json({ success: false, message: '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.' });
+  }
+});
+
 // ★ 서버 실행 로직
 (async function initialize() {
   try {
@@ -183,6 +253,13 @@ app.post('/api/event/detox-reward', async (req, res) => {
       { unique: true, background: true }
     );
     console.log("✅ 디톡스 이벤트 중복방지 유니크 인덱스 설정 완료");
+
+    // 김포 이벤트 중복 방지 인덱스
+    await db.collection("gimpo_event_point").createIndex(
+      { memberId: 1 },
+      { unique: true, background: true }
+    );
+    console.log("✅ 김포 이벤트 중복방지 유니크 인덱스 설정 완료");
 
     // 5. 스케줄러 실행
     // 기존 전체 매출 집계 스케줄러 비활성화 (Cafe24 503 우회 목적 - on-demand로 전환)

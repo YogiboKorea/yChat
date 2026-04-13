@@ -385,4 +385,235 @@ router.get('/detox/admin/logs', async (req, res) => {
     }
 });
 
+// ============================================================
+// 김포 매장 전용 라우트 (별도 DB 컬렉션: game_gimpo_users, game_gimpo_logs)
+// ============================================================
+
+// GET /api/game/gimpo/config
+router.get('/gimpo/config', async (req, res) => {
+    try {
+        const db = getDB();
+        const config = await db.collection('game_gimpo_config').findOne({ type: 'success_criteria' });
+        if (config) {
+            res.json({ success: true, minTime: config.minTime, maxTime: config.maxTime });
+        } else {
+            res.json({ success: true, minTime: 10000, maxTime: 11000 });
+        }
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: '서버 에러' });
+    }
+});
+
+// GET /api/game/gimpo/status
+router.get('/gimpo/status', async (req, res) => {
+    try {
+        const { memberId, guestId } = req.query;
+        const db = getDB();
+        const userId = memberId || guestId;
+        if (!userId) return res.status(400).json({ success: false, error: 'userId is required' });
+
+        const user = await db.collection('game_gimpo_users').findOne({ userId });
+        let hearts = 0, hasReceivedCoupon = false, hasReceivedOnlineCoupon = false;
+        let completedMissions = [], downloadedCoupons = [];
+
+        if (user) {
+            hearts = user.hearts;
+            hasReceivedCoupon = user.hasReceivedCoupon || false;
+            hasReceivedOnlineCoupon = user.hasReceivedOnlineCoupon || false;
+            completedMissions = user.completedMissions || [];
+            downloadedCoupons = user.downloadedCoupons || [];
+
+            if (memberId && completedMissions.length === 0 && hearts > 2) {
+                hearts = 2;
+                await db.collection('game_gimpo_users').updateOne({ userId }, { $set: { hearts: 2, isMember: true, updatedAt: new Date() } });
+            } else if (memberId && !user.isMember) {
+                await db.collection('game_gimpo_users').updateOne({ userId }, { $set: { isMember: true, updatedAt: new Date() } });
+            }
+        } else {
+            hearts = memberId ? 2 : 1;
+            await db.collection('game_gimpo_users').insertOne({
+                userId, isMember: !!memberId, hearts,
+                hasReceivedCoupon: false, hasReceivedOnlineCoupon: false,
+                completedMissions: [], downloadedCoupons: [],
+                createdAt: new Date(), updatedAt: new Date()
+            });
+        }
+        res.json({ success: true, hearts, hasReceivedCoupon, hasReceivedOnlineCoupon, completedMissions, downloadedCoupons });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: '서버 에러' });
+    }
+});
+
+// POST /api/game/gimpo/mission
+router.post('/gimpo/mission', async (req, res) => {
+    try {
+        const { memberId, missionIdx, reward } = req.body;
+        const db = getDB();
+        if (!memberId) return res.status(400).json({ success: false, error: '회원만 미션을 이용할 수 있습니다.' });
+
+        const user = await db.collection('game_gimpo_users').findOne({ userId: memberId });
+        if (user && user.completedMissions && user.completedMissions.includes(missionIdx)) {
+            return res.json({ success: false, error: '이미 완료한 미션입니다.', alreadyDone: true, hearts: user.hearts });
+        }
+
+        const updated = await db.collection('game_gimpo_users').findOneAndUpdate(
+            { userId: memberId },
+            { $addToSet: { completedMissions: missionIdx }, $inc: { hearts: reward }, $set: { updatedAt: new Date() } },
+            { returnDocument: 'after', upsert: true }
+        );
+        const newHearts = updated ? Math.min(updated.hearts, 5) : 2;
+        res.json({ success: true, hearts: newHearts, completedMissions: updated ? updated.completedMissions : [missionIdx] });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: '서버 에러' });
+    }
+});
+
+// POST /api/game/gimpo/play
+router.post('/gimpo/play', async (req, res) => {
+    try {
+        const { memberId, guestId } = req.body;
+        const db = getDB();
+        const userId = memberId || guestId;
+        if (!userId) return res.status(400).json({ success: false, error: 'userId is required' });
+
+        const user = await db.collection('game_gimpo_users').findOne({ userId });
+        if (!user || user.hearts <= 0) return res.json({ success: false, error: 'lack_of_hearts', hearts: 0 });
+
+        const updated = await db.collection('game_gimpo_users').findOneAndUpdate(
+            { userId }, { $inc: { hearts: -1 }, $set: { updatedAt: new Date() } }, { returnDocument: 'after' }
+        );
+        res.json({ success: true, hearts: updated ? Math.max(updated.hearts, 0) : 0 });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: '서버 에러' });
+    }
+});
+
+// POST /api/game/gimpo/success
+router.post('/gimpo/success', async (req, res) => {
+    try {
+        const { memberId, guestId, recordTime } = req.body;
+        const db = getDB();
+        const userId = memberId || guestId;
+        if (!userId) return res.status(400).json({ success: false, error: 'userId is required' });
+
+        await db.collection('game_gimpo_logs').insertOne({
+            userId, isMember: !!memberId, result: 'success', recordTime: recordTime || null, createdAt: new Date()
+        });
+
+        const user = await db.collection('game_gimpo_users').findOne({ userId });
+        let hearts = 0, hasReceivedCoupon = false, hasReceivedOnlineCoupon = false;
+        if (user) {
+            hearts = user.hearts;
+            hasReceivedCoupon = user.hasReceivedCoupon || false;
+            hasReceivedOnlineCoupon = user.hasReceivedOnlineCoupon || false;
+        }
+        res.json({ success: true, hearts, hasReceivedCoupon, hasReceivedOnlineCoupon });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: '서버 에러' });
+    }
+});
+
+// POST /api/game/gimpo/fail
+router.post('/gimpo/fail', async (req, res) => {
+    try {
+        const { memberId, guestId, recordTime } = req.body;
+        const db = getDB();
+        const userId = memberId || guestId;
+        if (!userId) return res.status(400).json({ success: false, error: 'userId is required' });
+
+        await db.collection('game_gimpo_logs').insertOne({
+            userId, isMember: !!memberId, result: 'fail', recordTime: recordTime || null, createdAt: new Date()
+        });
+
+        const updated = await db.collection('game_gimpo_users').findOneAndUpdate(
+            { userId }, { $set: { updatedAt: new Date() } }, { returnDocument: 'after' }
+        );
+        res.json({ success: true, hearts: updated ? Math.max(updated.hearts, 0) : 0 });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: '서버 에러' });
+    }
+});
+
+// POST /api/game/gimpo/claim - 김포 매장 직원 확인 (type: 'offline' | 'snack')
+router.post('/gimpo/claim', async (req, res) => {
+    try {
+        const { memberId, guestId, type } = req.body;
+        const db = getDB();
+        const userId = memberId || guestId;
+        if (!userId) return res.status(400).json({ success: false, error: 'userId is required' });
+
+        const user = await db.collection('game_gimpo_users').findOne({ userId });
+        if (user && user.hasReceivedCoupon) {
+            return res.json({ success: false, error: 'already_claimed', type });
+        }
+
+        await db.collection('game_gimpo_users').findOneAndUpdate(
+            { userId },
+            { $set: { hasReceivedCoupon: true, hearts: 0, claimType: type || 'offline', updatedAt: new Date() } },
+            { returnDocument: 'after' }
+        );
+
+        // 로그 기록
+        await db.collection('game_gimpo_logs').insertOne({
+            userId, isMember: !!memberId, result: 'claim', claimType: type || 'offline', createdAt: new Date()
+        });
+
+        res.json({ success: true, hearts: 0, hasReceivedCoupon: true });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: '서버 에러' });
+    }
+});
+
+// GET /api/game/gimpo/successList
+router.get('/gimpo/successList', async (req, res) => {
+    try {
+        const db = getDB();
+        const logs = await db.collection('game_gimpo_logs')
+            .find({ isMember: true, result: 'success' })
+            .sort({ createdAt: -1 }).limit(100).toArray();
+
+        const seen = new Set();
+        const uniqueList = [];
+        for (const log of logs) {
+            if (!seen.has(log.userId)) {
+                seen.add(log.userId);
+                const id = log.userId;
+                const masked = id.length > 3 ? id.slice(0, 3) + '***' : id + '***';
+                uniqueList.push(masked);
+            }
+            if (uniqueList.length >= 50) break;
+        }
+        res.json({ success: true, list: uniqueList });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, list: [] });
+    }
+});
+
+// GET /api/game/gimpo/admin/logs
+router.get('/gimpo/admin/logs', async (req, res) => {
+    try {
+        const { date } = req.query;
+        const db = getDB();
+        const query = { isMember: true };
+        if (date) {
+            const startOfDay = new Date(`${date}T00:00:00+09:00`);
+            const endOfDay = new Date(`${date}T23:59:59.999+09:00`);
+            query.createdAt = { $gte: startOfDay, $lte: endOfDay };
+        }
+        const logs = await db.collection('game_gimpo_logs').find(query).sort({ createdAt: -1 }).toArray();
+        res.json({ success: true, logs });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: '서버 에러' });
+    }
+});
+
 module.exports = router;

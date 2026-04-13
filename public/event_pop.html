@@ -5,7 +5,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>10초 디톡스 게임</title>
+    <title>김포 매장 10초 디톡스 이벤트</title>
     <style>
         * {
             box-sizing: border-box;
@@ -1344,24 +1344,19 @@
 
 
 
-    <!-- 온라인 쿠폰 모달 -->
-    <div id="online-reward-modal"
+    <!-- 김포 기본 간식 직원 확인 모달 -->
+    <div id="snack-modal"
         style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); z-index: 200; justify-content: center; align-items: center;">
         <div
             style="background: white; border-radius: 20px; width: 85%; max-width: 320px; padding: 30px 20px; text-align: center; position: relative; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
-            <div onclick="closeOnlineRewardModal()"
+            <div onclick="closeSnackModal()"
                 style="position: absolute; top: 15px; right: 20px; font-size: 24px; font-weight: bold; color: #999; cursor: pointer;">
                 ✕</div>
-            <div style="font-size: 40px; margin-bottom: 10px;">🎁</div>
-            <h3 style="color: #333; margin-bottom: 15px; font-size: 20px; font-weight: 900;">온라인 참여 감사 선물</h3>
-            <div
-                style="background: #f0fbfc; border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 2px solid #4bc8d8;">
-                <p style="font-size: 16px; color: #4bc8d8; line-height: 1.6; font-weight: bold; margin: 0;">
-                    게임 준비 화면에서<br>숨겨진 선물을 찾아보세요 🎉
-                </p>
-            </div>
-            <button onclick="closeOnlineRewardModal()"
-                style="background: #4bc8d8; color: white; border: none; border-radius: 30px; padding: 15px 0; width: 100%; font-size: 16px; font-weight: bold; cursor: pointer;">확인</button>
+            <div style="font-size: 40px; margin-bottom: 10px;">🍪</div>
+            <h3 style="color: #333; margin-bottom: 15px; font-size: 20px; font-weight: 900;">기본 간식 지급</h3>
+            <p style="font-size: 14px; color: #e84887; margin-bottom: 20px; font-weight: bold;">매장 직원이 직접 눌러요</p>
+            <button onclick="confirmSnack()"
+                style="background: #e84887; color: white; border: none; border-radius: 30px; padding: 15px 0; width: 100%; font-size: 16px; font-weight: bold; cursor: pointer;">직원 확인</button>
         </div>
     </div>
 
@@ -1404,7 +1399,7 @@
                 return;
             }
 
-            fetch(`${API_BASE_URL}/api/event/detox-reward`, {
+            fetch(`${API_BASE_URL}/api/event/gimpo-reward`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ memberId })
@@ -1494,7 +1489,7 @@
             const modal = document.getElementById('myeongjeon-modal');
             modal.style.display = 'flex';
 
-            fetch(`${API_BASE_URL}/api/game/detox/successList`)
+            fetch(`${API_BASE_URL}/api/game/gimpo/successList`)
                 .then(r => r.json())
                 .then(data => {
                     const list = (data.list && data.list.length > 0) ? data.list : MYEONGJEON_DUMMY;
@@ -1543,7 +1538,7 @@
 
             // 회원인 경우 DB에 미션 완료 기록
             if (memberId) {
-                fetch(`${API_BASE_URL}/api/game/detox/mission`, {
+                fetch(`${API_BASE_URL}/api/game/gimpo/mission`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ memberId, missionIdx: idx, reward })
@@ -1630,7 +1625,7 @@
 
         document.addEventListener('DOMContentLoaded', function () {
             // 성공 초수(config) 우선 가져오기
-            fetch(`${API_BASE_URL}/api/game/detox/config`)
+            fetch(`${API_BASE_URL}/api/game/gimpo/config`)
                 .then(r => r.json())
                 .then(data => {
                     if (data.success) {
@@ -1716,7 +1711,7 @@
         function fetchGameStatus() {
             const mId = memberId || '';
             const gId = STATE.guestId || '';
-            fetch(`${API_BASE_URL}/api/game/detox/status?memberId=${mId}&guestId=${gId}`)
+            fetch(`${API_BASE_URL}/api/game/gimpo/status?memberId=${mId}&guestId=${gId}`)
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) {
@@ -1915,7 +1910,7 @@
                 CAFE24API.getMemberID(function (res) {
                     memberId = res ? res : null;
                     STATE.guestId = getFinalId();
-                    fetch(`${API_BASE_URL}/api/game/detox/status?memberId=${memberId || ''}&guestId=${STATE.guestId || ''}`)
+                    fetch(`${API_BASE_URL}/api/game/gimpo/status?memberId=${memberId || ''}&guestId=${STATE.guestId || ''}`)
                         .then(r => r.json())
                         .then(data => {
                             if (data.success) {
@@ -1953,7 +1948,7 @@
                     return;
                 }
 
-                fetch(`${API_BASE_URL}/api/game/detox/play`, {
+                fetch(`${API_BASE_URL}/api/game/gimpo/play`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -2010,7 +2005,7 @@
                     }
 
                     // 항상 최신 게임 상태 동기화 후 진행
-                    fetch(`${API_BASE_URL}/api/game/detox/status?memberId=${memberId || ''}&guestId=${STATE.guestId || ''}`)
+                    fetch(`${API_BASE_URL}/api/game/gimpo/status?memberId=${memberId || ''}&guestId=${STATE.guestId || ''}`)
                         .then(r => r.json())
                         .then(data => {
                             if (data.success) {
@@ -2171,7 +2166,7 @@
             clearDistractors();
 
             const isSuccess = finalTime >= STATE.config.minTime && finalTime <= STATE.config.maxTime;
-            const endpoint = isSuccess ? '/api/game/detox/success' : '/api/game/detox/fail';
+            const endpoint = isSuccess ? '/api/game/gimpo/success' : '/api/game/gimpo/fail';
 
             fetch(`${API_BASE_URL}${endpoint}`, {
                 method: 'POST',
@@ -2216,15 +2211,9 @@
                 resultScreen.classList.add('success');
                 banner.src = 'http://yogibo.kr/game/성공_텍스트.png';
                 charImg.src = d.success;
-                textBox.innerText = '축하합니다~\n요기보에 누울 자격 획득!';
-
                 failExtraUi.style.display = 'none';
 
-                if (STATE.currentLives > 0) {
-                    textBox.innerHTML = '축하합니다~<br>요기보에 누울 자격 획득!<br><span style="font-size:13px; font-weight:normal; color:rgba(255,255,255,0.85);">남은 재도전 기회: <strong style="color:#ffe082;">' + STATE.currentLives + '번</strong></span>';
-                } else {
-                    textBox.innerHTML = '축하합니다~<br>요기보에 누울 자격 획득!';
-                }
+                textBox.innerHTML = '축하합니다~<br>김포 매장 전용 혜택!';
 
                 if (!memberId) {
                     const loginUrl = getLoginUrlWithReturn({ action: 'claim_success' });
@@ -2232,19 +2221,14 @@
                     <img src="http://yogibo.kr/game/선물증정_회원가입.png" class="btn-result" onclick="location.href='${loginUrl}'" style="cursor:pointer;">
                     `;
                 } else {
-                    if (STATE.hasReceivedCoupon || STATE.hasReceivedOnlineCoupon) {
+                    if (STATE.hasReceivedCoupon) {
+                        // 이미 혜택 수령 완료
                         let retryBtn = STATE.currentLives > 0 ? `<button class="btn-result" style="background:#4bc8d8; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:18px; font-weight:bold; cursor:pointer;" onclick="retryGame()">게임 더 할게요</button>` : '';
-                        if (retryBtn) {
-                            btnWrapper.innerHTML = retryBtn;
-                        } else {
-                            btnWrapper.innerHTML = `<button class="btn-result" style="background:#4bc8d8; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:18px; font-weight:bold; cursor:pointer;" onclick="goHome()">메인으로 돌아가기</button>`;
-                        }
+                        btnWrapper.innerHTML = retryBtn || `<button class="btn-result" style="background:#4bc8d8; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:18px; font-weight:bold; cursor:pointer;" onclick="goHome()">메인으로 돌아가기</button>`;
                     } else {
-                        const offlineBtn = `<img src="http://yogibo.kr/game/매장참여고객.png" class="btn-result" onclick="openOfflineRewardModal()" style="cursor:pointer;">`;
-                        const onlineBtn = `<img src="http://yogibo.kr/game/온라인참여고객.png" class="btn-result" onclick="openOnlineRewardModal()" style="cursor:pointer;">`;
+                        // 성공 시: 적립금 3,000원 + 직원 확인
                         btnWrapper.innerHTML = `
-                        ${offlineBtn}
-                        ${onlineBtn}
+                        <button class="btn-result" style="background:#e84887; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:16px; font-weight:bold; cursor:pointer;" onclick="openOfflineRewardModal()">🎁 매장 5,000원 즉시 할인 쿠폰 받기</button>
                         `;
                     }
                 }
@@ -2257,23 +2241,22 @@
 
                 if (!memberId) {
                     failExtraUi.style.display = 'flex';
-                    if (STATE.currentLives === 0) {
-                        btnWrapper.innerHTML = `
-                        <img src="http://yogibo.kr/game/재도전_회원가입s.png" class="btn-result" onclick="location.href='${getLoginUrlWithReturn()}'">
-                        `;
-                    } else {
-                        btnWrapper.innerHTML = `
-                        <img src="http://yogibo.kr/game/재도전_회원가입s.png" class="btn-result" onclick="location.href='${getLoginUrlWithReturn()}'">
-                        `;
-                    }
+                    btnWrapper.innerHTML = `
+                    <img src="http://yogibo.kr/game/재도전_회원가입s.png" class="btn-result" onclick="location.href='${getLoginUrlWithReturn()}'" style="cursor:pointer;">
+                    `;
                 } else {
                     failExtraUi.style.display = 'none';
-                    let retryBtn = STATE.currentLives > 0 ? `<button class="btn-result" style="background:#4bc8d8; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:18px; font-weight:bold; cursor:pointer;" onclick="retryGame()">게임 더 할게요</button>` : '';
-                    btnWrapper.innerHTML = `
-                    ${retryBtn}
-                    `;
-                    if (!retryBtn) {
-                        btnWrapper.innerHTML = `<button class="btn-result" style="background:#4bc8d8; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:18px; font-weight:bold; cursor:pointer;" onclick="goHome()">메인으로 돌아가기</button>`;
+                    if (STATE.currentLives > 0) {
+                        // 재도전 기회 있음: 게임 다시 + 기본 간식
+                        btnWrapper.innerHTML = `
+                        <button class="btn-result" style="background:#4bc8d8; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:18px; font-weight:bold; cursor:pointer;" onclick="retryGame()">🎮 게임 다시할래요</button>
+                        <button class="btn-result" style="background:#e84887; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:15px; font-weight:bold; cursor:pointer;" onclick="openSnackModal()">🍪 그냥 기본 간식 받을래요</button>
+                        `;
+                    } else {
+                        // 재도전 기회 없음: 기본 간식만
+                        btnWrapper.innerHTML = `
+                        <button class="btn-result" style="background:#e84887; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:15px; font-weight:bold; cursor:pointer;" onclick="openSnackModal()">🍪 아쉬운 마음을 담아 기본 간식</button>
+                        `;
                     }
                 }
             }
@@ -2304,67 +2287,44 @@
         function openRewardModal() { openOfflineRewardModal(); } // 하위 호환
         function closeRewardModal() { document.getElementById('reward-modal').style.display = 'none'; }
 
-        // 온라인 보상 모달
-        function openOnlineRewardModal() { document.getElementById('online-reward-modal').style.display = 'flex'; }
-        function closeOnlineRewardModal() { document.getElementById('online-reward-modal').style.display = 'none'; }
+        // 온라인 보상 모달 (김포에서는 미사용)
+        function openOnlineRewardModal() { }
+        function closeOnlineRewardModal() { }
 
-        function confirmEmployee() {
-            if (confirm('매장 직원에게 이 화면을 보여주세요. (직원 확인 시 상품이 지급되며, 남은 게임 기회는 소진됩니다.)')) {
-                fetch(`${API_BASE_URL}/api/game/detox/claim`, {
+        // 기본 간식 모달
+        function openSnackModal() { document.getElementById('snack-modal').style.display = 'flex'; }
+        function closeSnackModal() { document.getElementById('snack-modal').style.display = 'none'; }
+
+        function confirmSnack() {
+            if (confirm('매장 직원에게 이 화면을 보여주세요. (직원 확인 시 간식이 지급됩니다.)')) {
+                fetch(`${API_BASE_URL}/api/game/gimpo/claim`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ memberId: memberId || null, guestId: STATE.guestId, type: 'offline' })
+                    body: JSON.stringify({ memberId: memberId || null, guestId: STATE.guestId, type: 'snack' })
                 })
                     .then(res => res.json())
                     .then(data => {
-                        closeRewardModal();
+                        closeSnackModal();
                         if (data.success) {
                             STATE.hasReceivedCoupon = true;
                             STATE.currentLives = 0;
                             renderLives();
-                            alert('상품 지급 확인이 완료되었습니다.');
-                            if (document.getElementById('retry-count-num')) {
-                                document.getElementById('retry-count-num').innerText = '0';
-                            }
-                            const isSuccess = document.getElementById('screen-result').classList.contains('success');
-                            showResult(isSuccess, 0);
+                            alert('기본 간식 지급 확인이 완료되었습니다.');
+                            showResult(false, 0);
                         } else if (data.error === 'already_claimed') {
-                            alert('이미 오프라인 혜택을 수령하셨습니다.');
+                            alert('이미 간식을 수령하셨습니다.');
                         } else {
                             alert('처리에 실패하였습니다.');
                         }
                     })
                     .catch(() => {
-                        closeRewardModal();
+                        closeSnackModal();
                         alert('서버 오류가 발생했습니다.');
                     });
             }
         }
 
-        function confirmOnlineCoupon() {
-            fetch(`${API_BASE_URL}/api/game/detox/claim`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ memberId: memberId || null, guestId: STATE.guestId, type: 'online' })
-            })
-                .then(res => res.json())
-                .then(data => {
-                    closeOnlineRewardModal();
-                    if (data.success) {
-                        STATE.hasReceivedOnlineCoupon = true;
-                        alert('온라인 쿠폰이 발급됩니다. 쿠폰 페이지로 이동합니다.');
-                        downloadCoupon20();
-                    } else if (data.error === 'already_claimed') {
-                        alert('이미 온라인 쿠폰을 수령하셨습니다.');
-                    } else {
-                        alert('처리에 실패하였습니다.');
-                    }
-                })
-                .catch(() => {
-                    closeOnlineRewardModal();
-                    alert('서버 오류가 발생했습니다.');
-                });
-        }
+        function confirmOnlineCoupon() { } // 김포에서는 미사용
     </script>
 </body>
 

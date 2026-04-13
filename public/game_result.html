@@ -116,13 +116,57 @@
             background: #f8d7da;
             color: #721c24;
         }
+
+        .tab-bar {
+            display: flex;
+            gap: 0;
+            margin-bottom: 25px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 12px 0;
+            text-align: center;
+            font-weight: bold;
+            font-size: 15px;
+            cursor: pointer;
+            border: 2px solid #ddd;
+            background: #f8f9fa;
+            color: #888;
+            transition: all 0.2s;
+        }
+
+        .tab-btn:first-child {
+            border-radius: 8px 0 0 8px;
+        }
+
+        .tab-btn:last-child {
+            border-radius: 0 8px 8px 0;
+        }
+
+        .tab-btn.active {
+            background: #4bc8d8;
+            color: white;
+            border-color: #4bc8d8;
+        }
+
+        .tab-btn.active-gimpo {
+            background: #e84887;
+            color: white;
+            border-color: #e84887;
+        }
     </style>
 </head>
 
 <body>
 
     <div class="container">
-        <h1>🎮 10초 디톡스 게임 관리자</h1>
+        <h1 id="page-title">🎮 10초 디톡스 게임 관리자</h1>
+
+        <div class="tab-bar">
+            <div class="tab-btn active" id="tab-detox" onclick="switchTab('detox')">🎮 디톡스 (기존)</div>
+            <div class="tab-btn" id="tab-gimpo" onclick="switchTab('gimpo')">🏪 김포 매장</div>
+        </div>
 
         <div class="config-panel">
             <div class="config-title">⚙️ 성공 통과 기준(초) 설정</div>
@@ -166,9 +210,22 @@
     <script>
         // 현재 포트 및 도메인 자동 인식
         const API_BASE_URL = 'https://port-0-ychat-lzgmwhc4d9883c97.sel4.cloudtype.app';
+        let currentTab = 'detox'; // 'detox' or 'gimpo'
+
+        function getApiPrefix() {
+            return currentTab === 'gimpo' ? '/api/game/gimpo' : '/api/game/detox';
+        }
+
+        function switchTab(tab) {
+            currentTab = tab;
+            document.getElementById('tab-detox').className = 'tab-btn' + (tab === 'detox' ? ' active' : '');
+            document.getElementById('tab-gimpo').className = 'tab-btn' + (tab === 'gimpo' ? ' active-gimpo' : '');
+            document.getElementById('page-title').innerText = tab === 'gimpo' ? '🏪 김포 매장 이벤트 관리자' : '🎮 10초 디톡스 게임 관리자';
+            loadConfig();
+            loadLogs();
+        }
 
         document.addEventListener('DOMContentLoaded', () => {
-            // 오늘 날짜로 기본 세팅 (KST)
             const today = new Date();
             const year = today.getFullYear();
             const month = String(today.getMonth() + 1).padStart(2, '0');
@@ -197,7 +254,6 @@
             return (sec * 1000) + (cc * 10);
         }
 
-        // 안전한 JSON 파싱 헬퍼
         async function fetchSafeJson(response) {
             const text = await response.text();
             if (!text) throw new Error("서버에서 빈 응답이 왔습니다. 시스템이 재시작 중(배포 중)일 수 있습니다.");
@@ -206,7 +262,7 @@
         }
 
         function loadConfig() {
-            fetch(`${API_BASE_URL}/api/game/detox/config`)
+            fetch(`${API_BASE_URL}${getApiPrefix()}/config`)
                 .then(r => fetchSafeJson(r))
                 .then(data => {
                     if (data.success) {
@@ -235,7 +291,7 @@
 
             const payload = { minTime: minMs, maxTime: maxMs };
 
-            fetch(`${API_BASE_URL}/api/game/detox/config`, {
+            fetch(`${API_BASE_URL}${getApiPrefix()}/config`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -247,7 +303,6 @@
                         msg.innerText = '✅ 성공 기준이 실시간으로 반영되었습니다!';
                         setTimeout(() => msg.innerText = '', 3000);
                         
-                        // 다시 원래 포맷으로 세팅
                         document.getElementById('min-sec').value = msToTimeStr(minMs);
                         document.getElementById('max-sec').value = msToTimeStr(maxMs);
                     }
@@ -259,7 +314,7 @@
             const dateVal = document.getElementById('log-date').value;
             const queryParam = dateVal ? `?date=${dateVal}` : '';
 
-            fetch(`${API_BASE_URL}/api/game/detox/admin/logs${queryParam}`)
+            fetch(`${API_BASE_URL}${getApiPrefix()}/admin/logs${queryParam}`)
                 .then(r => fetchSafeJson(r))
                 .then(data => {
                     if (data.success) {
@@ -271,29 +326,34 @@
                         }
 
                         data.logs.forEach(log => {
-                            // 한번 더 확실하게 프론트엔드에서도 guest 제외 (과거 잘못 저장된 데이터 방지)
                             if (log.userId && log.userId.startsWith('guest_')) return;
 
                             const tr = document.createElement('tr');
-
                             const d = new Date(log.createdAt);
                             const dateStr = d.toLocaleString('ko-KR');
 
                             const isSuccess = log.result === 'success';
-                            const badgeHtml = isSuccess ? '<span class="badge badge-success">성공</span>' : '<span class="badge badge-fail">실패</span>';
+                            const isClaim = log.result === 'claim';
+                            let badgeHtml;
+                            if (isClaim) {
+                                const claimLabel = log.claimType === 'snack' ? '간식지급' : '직원확인';
+                                badgeHtml = `<span class="badge" style="background:#fff3cd;color:#856404;">${claimLabel}</span>`;
+                            } else {
+                                badgeHtml = isSuccess ? '<span class="badge badge-success">성공</span>' : '<span class="badge badge-fail">실패</span>';
+                            }
 
                             let timeStr = '-';
                             if (log.recordTime) {
                                 timeStr = msToTimeStr(log.recordTime) + ' 초';
                             } else {
-                                timeStr = '(기록 없음)'; // 이전 구버전 데이터
+                                timeStr = isClaim ? '-' : '(기록 없음)';
                             }
 
                             tr.innerHTML = `
                             <td>${dateStr}</td>
                             <td>${log.userId}</td>
                             <td>${badgeHtml}</td>
-                            <td><strong style="color: ${isSuccess ? '#155724' : '#721c24'}">${timeStr}</strong></td>
+                            <td><strong style="color: ${isSuccess ? '#155724' : isClaim ? '#856404' : '#721c24'}">${timeStr}</strong></td>
                         `;
                             tbody.appendChild(tr);
                         });

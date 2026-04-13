@@ -405,6 +405,23 @@ router.get('/gimpo/config', async (req, res) => {
     }
 });
 
+// POST /api/game/gimpo/config
+router.post('/gimpo/config', async (req, res) => {
+    try {
+        const { minTime, maxTime } = req.body;
+        const db = getDB();
+        await db.collection('game_gimpo_config').updateOne(
+            { type: 'success_criteria' },
+            { $set: { minTime: parseInt(minTime), maxTime: parseInt(maxTime), updatedAt: new Date() } },
+            { upsert: true }
+        );
+        res.json({ success: true, minTime, maxTime });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: '서버 에러' });
+    }
+});
+
 // GET /api/game/gimpo/status
 router.get('/gimpo/status', async (req, res) => {
     try {

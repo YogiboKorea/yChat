@@ -20,20 +20,21 @@
 
         html,
         body {
+            width: 100%;
             height: 100vh;
             height: 100dvh;
             height: calc(var(--vh, 1vh) * 100);
             overflow: hidden;
-        }
-
-        body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            margin: 0;
+            padding: 0;
             background-color: #e9ecef;
         }
 
         #app {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
             width: 100%;
             min-width: 320px;
             max-width: 440px;
@@ -41,19 +42,17 @@
             height: 100dvh;
             height: calc(var(--vh, 1vh) * 100);
             max-height: 850px;
-            position: relative;
             background-color: #fdf5e6;
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            margin: 0 auto;
             box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
+            z-index: 99990;
         }
 
         @media (min-width: 401px) {
             #app {
                 border-radius: 20px;
-                height: 100vh;
             }
         }
 
@@ -821,7 +820,7 @@
             width: 100%;
             height: 100%;
             background: rgba(0, 0, 0, 0.6);
-            z-index: 100;
+            z-index: 100000;
             justify-content: center;
             align-items: center;
         }
@@ -1327,36 +1326,32 @@
         </div>
     </div>
 
-    <div id="reward-modal"
-        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); z-index: 200; justify-content: center; align-items: center;">
+    <div id="success-reward-modal"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); z-index: 100000; justify-content: center; align-items: center;">
         <div
-            style="background: white; border-radius: 20px; width: 85%; max-width: 320px; padding: 30px 20px; text-align: center; position: relative; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
-            <div onclick="closeRewardModal()"
+            style="background: white; border-radius: 20px; width: 85%; max-width: 320px; padding: 30px 20px 20px; text-align: center; position: relative; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+            <div onclick="closeSuccessRewardModal()"
                 style="position: absolute; top: 15px; right: 20px; font-size: 24px; font-weight: bold; color: #999; cursor: pointer;">
                 ✕</div>
-            <div style="font-size: 40px; margin-bottom: 10px;">🏪</div>
-            <h3 style="color: #333; margin-bottom: 15px; font-size: 20px; font-weight: 900;">매장 5,000원 즉시 할인 쿠폰</h3>
-            <p style="font-size: 14px; color: #e84887; margin-bottom: 20px; font-weight: bold;">매장 직원이 직접 눌러요</p>
-            <button onclick="confirmEmployee()"
-                style="background: #e84887; color: white; border: none; border-radius: 30px; padding: 15px 0; width: 100%; font-size: 16px; font-weight: bold; cursor: pointer;">직원 확인</button>
+            <img src="http://yogibo.kr/game/성공보상.png" style="width: 100%; max-width: 200px; margin-bottom: 20px;" alt="성공보상">
+            <h3 style="color: #333; margin-bottom: 8px; font-size: 18px; font-weight: 900;">가챠권 / 5000원 즉시 할인권 받기</h3>
+            <p style="font-size: 14px; color: #e84887; margin-bottom: 20px; font-weight: bold;">성공 보상</p>
+            <img src="http://yogibo.kr/game/스태프가직접눌러요.png" onclick="confirmSuccessReward()" style="width: 100%; max-width: 240px; cursor: pointer;" alt="스태프 확인">
         </div>
     </div>
 
-
-
-    <!-- 김포 기본 간식 직원 확인 모달 -->
-    <div id="snack-modal"
-        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); z-index: 200; justify-content: center; align-items: center;">
+    <!-- 실패 보상 모달 -->
+    <div id="fail-reward-modal"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); z-index: 100000; justify-content: center; align-items: center;">
         <div
-            style="background: white; border-radius: 20px; width: 85%; max-width: 320px; padding: 30px 20px; text-align: center; position: relative; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
-            <div onclick="closeSnackModal()"
+            style="background: white; border-radius: 20px; width: 85%; max-width: 320px; padding: 30px 20px 20px; text-align: center; position: relative; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+            <div onclick="closeFailRewardModal()"
                 style="position: absolute; top: 15px; right: 20px; font-size: 24px; font-weight: bold; color: #999; cursor: pointer;">
                 ✕</div>
-            <div style="font-size: 40px; margin-bottom: 10px;">🍪</div>
-            <h3 style="color: #333; margin-bottom: 15px; font-size: 20px; font-weight: 900;">기본 간식 지급</h3>
-            <p style="font-size: 14px; color: #e84887; margin-bottom: 20px; font-weight: bold;">매장 직원이 직접 눌러요</p>
-            <button onclick="confirmSnack()"
-                style="background: #e84887; color: white; border: none; border-radius: 30px; padding: 15px 0; width: 100%; font-size: 16px; font-weight: bold; cursor: pointer;">직원 확인</button>
+            <img src="http://yogibo.kr/game/실패보상.png" style="width: 100%; max-width: 200px; margin-bottom: 20px;" alt="실패보상">
+            <h3 style="color: #333; margin-bottom: 8px; font-size: 18px; font-weight: 900;">기본 간식 또는 실패 보상</h3>
+            <p style="font-size: 14px; color: #e84887; margin-bottom: 20px; font-weight: bold;">요기보가 참여 선물을 준비했어요.</p>
+            <img src="http://yogibo.kr/game/스태프가직접눌러요.png" onclick="confirmFailReward()" style="width: 100%; max-width: 240px; cursor: pointer;" alt="스태프 확인">
         </div>
     </div>
 
@@ -1575,8 +1570,11 @@
             setTimeout(() => {
                 closeMissionModal();
                 if (STATE.currentLives >= STATE.maxLives) {
-                    alert('하트가 모두 충전되었습니다!');
+                    alert('하트가 모두 충전되었습니다!\\n원활한 진행을 위해 메인 화면으로 이동합니다.');
+                } else {
+                    alert('미션에 참여해주셔서 감사합니다!\\n메인 화면으로 이동합니다.');
                 }
+                goHome(); // 강제 메인 이동으로 서버 상태 갱신 유도
             }, 800);
         }
 
@@ -2223,12 +2221,12 @@
                 } else {
                     if (STATE.hasReceivedCoupon) {
                         // 이미 혜택 수령 완료
-                        let retryBtn = STATE.currentLives > 0 ? `<button class="btn-result" style="background:#4bc8d8; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:18px; font-weight:bold; cursor:pointer;" onclick="retryGame()">게임 더 할게요</button>` : '';
-                        btnWrapper.innerHTML = retryBtn || `<button class="btn-result" style="background:#4bc8d8; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:18px; font-weight:bold; cursor:pointer;" onclick="goHome()">메인으로 돌아가기</button>`;
+                        let retryBtn = STATE.currentLives > 0 ? `<button class="btn-result" style="background:#4bc8d8; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:18px; font-weight:bold; cursor:pointer;" onclick="goHome()">🎮 메인으로 가서 다시하기</button>` : '';
+                        btnWrapper.innerHTML = retryBtn || `<button class="btn-result" style="background:#888; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:18px; font-weight:bold; cursor:pointer;" onclick="goHome()">메인으로 돌아가기</button>`;
                     } else {
-                        // 성공 시: 적립금 3,000원 + 직원 확인
+                        // 성공 시: 성공 보상
                         btnWrapper.innerHTML = `
-                        <button class="btn-result" style="background:#e84887; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:16px; font-weight:bold; cursor:pointer;" onclick="openOfflineRewardModal()">🎁 매장 5,000원 즉시 할인 쿠폰 받기</button>
+                        <button class="btn-result" style="background:#e84887; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:16px; font-weight:bold; cursor:pointer;" onclick="openSuccessRewardModal()">🎁 성공보상 받기</button>
                         `;
                     }
                 }
@@ -2246,16 +2244,20 @@
                     `;
                 } else {
                     failExtraUi.style.display = 'none';
-                    if (STATE.currentLives > 0) {
-                        // 재도전 기회 있음: 게임 다시 + 기본 간식
+                    if (STATE.hasReceivedCoupon) {
+                        // 이미 간식이나 혜택을 받은 상태
+                        let retryBtn = STATE.currentLives > 0 ? `<button class="btn-result" style="background:#4bc8d8; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:18px; font-weight:bold; cursor:pointer;" onclick="goHome()">🎮 메인으로 가서 다시하기</button>` : '';
+                        btnWrapper.innerHTML = retryBtn || `<button class="btn-result" style="background:#888; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:18px; font-weight:bold; cursor:pointer;" onclick="goHome()">이벤트 참여 종료 (메인으로)</button>`;
+                    } else if (STATE.currentLives > 0) {
+                        // 재도전 기회 있음
                         btnWrapper.innerHTML = `
-                        <button class="btn-result" style="background:#4bc8d8; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:18px; font-weight:bold; cursor:pointer;" onclick="retryGame()">🎮 게임 다시할래요</button>
-                        <button class="btn-result" style="background:#e84887; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:15px; font-weight:bold; cursor:pointer;" onclick="openSnackModal()">🍪 그냥 기본 간식 받을래요</button>
+                        <button class="btn-result" style="background:#4bc8d8; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:18px; font-weight:bold; cursor:pointer; margin-bottom:10px;" onclick="goHome()">🎮 메인으로 가서 다시하기</button>
+                        <button class="btn-result" style="background:#e84887; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:15px; font-weight:bold; cursor:pointer;" onclick="openFailRewardModal()">🎁 실패보상 받기</button>
                         `;
                     } else {
-                        // 재도전 기회 없음: 기본 간식만
+                        // 재도전 기회 없음
                         btnWrapper.innerHTML = `
-                        <button class="btn-result" style="background:#e84887; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:15px; font-weight:bold; cursor:pointer;" onclick="openSnackModal()">🍪 아쉬운 마음을 담아 기본 간식</button>
+                        <button class="btn-result" style="background:#e84887; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:15px; font-weight:bold; cursor:pointer;" onclick="openFailRewardModal()">🎁 실패보상 받기</button>
                         `;
                     }
                 }
@@ -2282,49 +2284,71 @@
         function openModal() { document.getElementById('info-modal').style.display = 'flex'; }
         function closeModal() { document.getElementById('info-modal').style.display = 'none'; }
 
-        // 오프라인 보상 모달
-        function openOfflineRewardModal() { document.getElementById('reward-modal').style.display = 'flex'; }
-        function openRewardModal() { openOfflineRewardModal(); } // 하위 호환
-        function closeRewardModal() { document.getElementById('reward-modal').style.display = 'none'; }
+        // 성공 보상 모달
+        function openSuccessRewardModal() { document.getElementById('success-reward-modal').style.display = 'flex'; }
+        function closeSuccessRewardModal() { document.getElementById('success-reward-modal').style.display = 'none'; }
 
-        // 온라인 보상 모달 (김포에서는 미사용)
-        function openOnlineRewardModal() { }
-        function closeOnlineRewardModal() { }
+        // 실패 보상 모달
+        function openFailRewardModal() { document.getElementById('fail-reward-modal').style.display = 'flex'; }
+        function closeFailRewardModal() { document.getElementById('fail-reward-modal').style.display = 'none'; }
 
-        // 기본 간식 모달
-        function openSnackModal() { document.getElementById('snack-modal').style.display = 'flex'; }
-        function closeSnackModal() { document.getElementById('snack-modal').style.display = 'none'; }
-
-        function confirmSnack() {
-            if (confirm('매장 직원에게 이 화면을 보여주세요. (직원 확인 시 간식이 지급됩니다.)')) {
+        // 성공 시: 혜택 확인
+        function confirmSuccessReward() {
+            if (confirm('스태프가 직접 누르는 버튼입니다. (확인 시 혜택이 지급되며, 이후 추가 보상은 없습니다.)')) {
                 fetch(`${API_BASE_URL}/api/game/gimpo/claim`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ memberId: memberId || null, guestId: STATE.guestId, type: 'snack' })
+                    body: JSON.stringify({ memberId: memberId || null, guestId: STATE.guestId, type: 'success_reward' })
                 })
                     .then(res => res.json())
                     .then(data => {
-                        closeSnackModal();
+                        closeSuccessRewardModal();
                         if (data.success) {
                             STATE.hasReceivedCoupon = true;
-                            STATE.currentLives = 0;
                             renderLives();
-                            alert('기본 간식 지급 확인이 완료되었습니다.');
-                            showResult(false, 0);
+                            alert('성공 보상 확인이 완료되었습니다.');
+                            showResult(true, 0);
                         } else if (data.error === 'already_claimed') {
-                            alert('이미 간식을 수령하셨습니다.');
+                            alert('이미 혜택을 수령하셨습니다.');
                         } else {
                             alert('처리에 실패하였습니다.');
                         }
                     })
                     .catch(() => {
-                        closeSnackModal();
+                        closeSuccessRewardModal();
                         alert('서버 오류가 발생했습니다.');
                     });
             }
         }
 
-        function confirmOnlineCoupon() { } // 김포에서는 미사용
+        // 실패 시: 혜택 확인
+        function confirmFailReward() {
+            if (confirm('스태프가 직접 누르는 버튼입니다. (확인 시 혜택이 지급되며, 이후 추가 보상은 없습니다.)')) {
+                fetch(`${API_BASE_URL}/api/game/gimpo/claim`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ memberId: memberId || null, guestId: STATE.guestId, type: 'fail_reward' })
+                })
+                    .then(res => res.json())
+                    .then(data => {
+                        closeFailRewardModal();
+                        if (data.success) {
+                            STATE.hasReceivedCoupon = true;
+                            renderLives();
+                            alert('실패 보상 확인이 완료되었습니다.');
+                            showResult(false, 0);
+                        } else if (data.error === 'already_claimed') {
+                            alert('이미 혜택을 수령하셨습니다.');
+                        } else {
+                            alert('처리에 실패하였습니다.');
+                        }
+                    })
+                    .catch(() => {
+                        closeFailRewardModal();
+                        alert('서버 오류가 발생했습니다.');
+                    });
+            }
+        }
     </script>
 </body>
 

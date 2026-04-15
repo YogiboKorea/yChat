@@ -20,40 +20,39 @@
 
         html,
         body {
+            width: 100%;
             height: 100vh;
             height: 100dvh;
             height: calc(var(--vh, 1vh) * 100);
             overflow: hidden;
-        }
-
-        body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            margin: 0;
+            padding: 0;
             background-color: #e9ecef;
         }
 
         #app {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
             width: 100%;
             min-width: 320px;
-            max-width: 440px;
+            max-width: 500px;
             height: 100vh;
             height: 100dvh;
             height: calc(var(--vh, 1vh) * 100);
             max-height: 850px;
-            position: relative;
             background-color: #fdf5e6;
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            margin: 0 auto;
             box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
+            z-index: 99990;
         }
 
         @media (min-width: 401px) {
             #app {
                 border-radius: 20px;
-                height: 100vh;
             }
         }
 
@@ -678,6 +677,34 @@
             padding: 20px 15px;
         }
 
+        .result-home-btn {
+            position: absolute;
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1.5px solid rgba(255, 255, 255, 0.5);
+            border-radius: 25px;
+            padding: 8px 22px;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .result-home-btn:active {
+            transform: translateX(-50%) scale(0.95);
+            background: rgba(255, 255, 255, 0.4);
+        }
+
         #screen-result.success {
             background: url('http://yogibo.kr/game/실패_bg.png') no-repeat;
             background-size: cover;
@@ -1289,6 +1316,8 @@
 
         <div id="screen-result" class="screen">
 
+            <div class="result-home-btn" onclick="goHome()">🏠 홈 화면 가기</div>
+
             <img id="result-banner" class="result-banner" src="" alt="타이틀 배너">
 
             <div class="result-char-wrapper">
@@ -1338,7 +1367,8 @@
             <h3 style="color: #333; margin-bottom: 15px; font-size: 20px; font-weight: 900;">매장 5,000원 즉시 할인 쿠폰</h3>
             <p style="font-size: 14px; color: #e84887; margin-bottom: 20px; font-weight: bold;">매장 직원이 직접 눌러요</p>
             <button onclick="confirmEmployee()"
-                style="background: #e84887; color: white; border: none; border-radius: 30px; padding: 15px 0; width: 100%; font-size: 16px; font-weight: bold; cursor: pointer;">직원 확인</button>
+                style="background: #e84887; color: white; border: none; border-radius: 30px; padding: 15px 0; width: 100%; font-size: 16px; font-weight: bold; cursor: pointer;">직원
+                확인</button>
         </div>
     </div>
 
@@ -1580,8 +1610,11 @@
             setTimeout(() => {
                 closeMissionModal();
                 if (STATE.currentLives >= STATE.maxLives) {
-                    alert('하트가 모두 충전되었습니다!');
+                    alert('하트가 모두 충전되었습니다!\\n원활한 진행을 위해 메인 화면으로 이동합니다.');
+                } else {
+                    alert('미션에 참여해주셔서 감사합니다!\\n메인 화면으로 이동합니다.');
                 }
+                goHome(); // 강제 메인 이동으로 서버 상태 갱신 유도
             }, 800);
         }
 
@@ -1844,6 +1877,29 @@
             STATE.history = []; STATE.selectedChar = null;
             document.querySelectorAll('.char-label, .character-card').forEach(el => el.classList.remove('active'));
             switchScreen('intro');
+
+            // 홈 복귀 시 Cafe24 회원 ID 재확인 + 게임 상태 동기화 (안전 장치)
+            if (typeof CAFE24API !== 'undefined') {
+                try {
+                    CAFE24API.getMemberID(function (res) {
+                        const newId = res ? res : null;
+                        console.log('🏠 [홈 복귀] 회원 ID 재확인:', newId || '비회원(게스트)');
+                        if (newId !== memberId) {
+                            console.log('⚠️ [홈 복귀] 상태 변경 감지:', memberId, '->', newId);
+                            memberId = newId;
+                        }
+                        STATE.guestId = getFinalId();
+                        fetchGameStatus();
+                    });
+                } catch (e) {
+                    console.error('🏠 [홈 복귀] Cafe24 API 오류:', e);
+                    STATE.guestId = getFinalId();
+                    fetchGameStatus();
+                }
+            } else {
+                STATE.guestId = getFinalId();
+                fetchGameStatus();
+            }
         }
 
         function selectCharacter(charKey) {
@@ -2233,7 +2289,7 @@
                     `;
                 } else {
                     if (STATE.hasReceivedCoupon || STATE.hasReceivedOnlineCoupon) {
-                        let retryBtn = STATE.currentLives > 0 ? `<button class="btn-result" style="background:#4bc8d8; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:18px; font-weight:bold; cursor:pointer;" onclick="retryGame()">게임 더 할게요</button>` : '';
+                        let retryBtn = STATE.currentLives > 0 ? `<button class="btn-result" style="background:#4bc8d8; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:18px; font-weight:bold; cursor:pointer;" onclick="goHome()">🎮 메인으로 가서 다시하기</button>` : '';
                         if (retryBtn) {
                             btnWrapper.innerHTML = retryBtn;
                         } else {
@@ -2268,7 +2324,7 @@
                     }
                 } else {
                     failExtraUi.style.display = 'none';
-                    let retryBtn = STATE.currentLives > 0 ? `<button class="btn-result" style="background:#4bc8d8; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:18px; font-weight:bold; cursor:pointer;" onclick="retryGame()">게임 더 할게요</button>` : '';
+                    let retryBtn = STATE.currentLives > 0 ? `<button class="btn-result" style="background:#4bc8d8; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:18px; font-weight:bold; cursor:pointer;" onclick="goHome()">🎮 메인으로 가서 다시하기</button>` : '';
                     btnWrapper.innerHTML = `
                     ${retryBtn}
                     `;

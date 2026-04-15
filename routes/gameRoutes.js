@@ -570,9 +570,10 @@ router.post('/gimpo/claim', async (req, res) => {
             return res.json({ success: false, error: 'already_claimed', type });
         }
 
+        // hearts 초기화 제거. 게임 더하기만 될 수 있게 유지
         await db.collection('game_gimpo_users').findOneAndUpdate(
             { userId },
-            { $set: { hasReceivedCoupon: true, hearts: 0, claimType: type || 'offline', updatedAt: new Date() } },
+            { $set: { hasReceivedCoupon: true, claimType: type || 'offline', updatedAt: new Date() } },
             { returnDocument: 'after' }
         );
 
@@ -581,7 +582,7 @@ router.post('/gimpo/claim', async (req, res) => {
             userId, isMember: !!memberId, result: 'claim', claimType: type || 'offline', createdAt: new Date()
         });
 
-        res.json({ success: true, hearts: 0, hasReceivedCoupon: true });
+        res.json({ success: true, hasReceivedCoupon: true });
     } catch (err) {
         console.error(err);
         res.status(500).json({ success: false, error: '서버 에러' });

@@ -367,13 +367,24 @@
             }
 
             const missions = [];
+            let hasUncheckedText = false;
             for(let i=1; i<=5; i++) {
+                const isChecked = document.getElementById(`miss-enable-${i}`).checked;
+                const textVal = document.getElementById(`miss-text-${i}`).value.trim();
+                if (!isChecked && textVal) {
+                    hasUncheckedText = true;
+                }
                 missions.push({
-                    enabled: document.getElementById(`miss-enable-${i}`).checked,
-                    text: document.getElementById(`miss-text-${i}`).value.trim(),
+                    enabled: isChecked,
+                    text: textVal,
                     url: document.getElementById(`miss-url-${i}`).value.trim(),
                     reward: parseInt(document.getElementById(`miss-reward-${i}`).value) || 1
                 });
+            }
+
+            if (hasUncheckedText) {
+                const confirmCheck = confirm('내용이 입력된 칸 중에 체크박스(☐)가 선택되지 않은 항목이 있습니다.\n체크되지 않은 미션은 실제 게임 화면에 나타나지 않습니다.\n\n이대로 저장하시겠습니까? (화면에 띄우려면 취소 후 체크해주세요)');
+                if (!confirmCheck) return;
             }
 
             const payload = { minTime: minMs, maxTime: maxMs, baseHearts, missions };

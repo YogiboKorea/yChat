@@ -1527,20 +1527,16 @@
             if (!container) return;
             container.innerHTML = '';
             MISSIONS.forEach((m, idx) => {
-                const isDone = STATE.completedMissions.includes(idx);
-                // 👉 수정한 부분: 이모지 없이 '참여완료' 텍스트만 렌더링되게 변경
-                const rewardHtml = isDone
-                    ? `<span class="mission-reward">참여완료</span>`
-                    : `<span class="mission-reward"><img src="http://yogibo.kr/game/피라미드_on.png"> +${m.reward}</span>`;
+                const rewardHtml = `<span class="mission-reward"><img src="http://yogibo.kr/game/피라미드_on.png"> +${m.reward}</span>`;
                 
                 // 미션 1 (idx === 0) 이고 카카오 공유하기인 경우 처리
                 const isKakaoAction = (idx === 0) || (m.url && m.url.includes('kakaoshare'));
-                const clickAction = !isDone ? `onclick="event.preventDefault(); doMission('${m.url}', ${m.reward}, ${idx});"` : `onclick="event.preventDefault();"`;
+                const clickAction = `onclick="event.preventDefault(); doMission('${m.url}', ${m.reward}, ${idx});"`;
                 const hrefAttr = isKakaoAction ? `href="#"` : `href="${m.url}" target="_blank"`;
 
                 container.innerHTML += `
                     <a ${hrefAttr} style="text-decoration: none; color: inherit; display: block;" ${isKakaoAction ? clickAction : ''}>
-                        <div class="mission-btn ${isDone ? 'done' : ''}" id="mission-btn-${idx}" ${(!isKakaoAction && !isDone) ? `onclick="doMission('${m.url}', ${m.reward}, ${idx})"` : ''}>
+                        <div class="mission-btn" id="mission-btn-${idx}" ${!isKakaoAction ? `onclick="doMission('${m.url}', ${m.reward}, ${idx})"` : ''}>
                             <span>${m.label}</span>
                             ${rewardHtml}
                         </div>
@@ -1615,9 +1611,6 @@
         }
 
         function doMission(url, reward, idx) {
-            // 이미 완료한 미션은 무시
-            if (STATE.completedMissions.includes(idx)) return;
-
             const btn = document.getElementById('mission-btn-' + idx);
             
             const isKakaoAction = (idx === 0) || (url && url.includes('kakaoshare'));
@@ -1634,26 +1627,17 @@
                 })
                     .then(res => res.json())
                     .then(data => {
-                        if (data.alreadyDone) return; // 이미 완료된 미션
                         if (data.success) {
                             STATE.completedMissions = data.completedMissions || STATE.completedMissions;
                             STATE.currentLives = Math.min(STATE.maxLives, data.hearts);
                             renderLives();
-                            if (btn) {
-                                btn.classList.add('done');
-                                btn.onclick = null;
-                                // 👉 수정한 부분: 클릭 후 이모지 없이 텍스트만 '참여완료'로 변경
-                                btn.querySelector('.mission-reward').innerHTML = '참여완료';
-                            }
                         }
                     })
                     .catch(() => {
-                        // 서버 오류 시에도 세션 기반 비활성화
-                        if (btn) btn.classList.add('done');
+                        // 서버 오류 시 무시
                     });
             } else {
-                // 비회원은 세션 기반으로만 차단
-                if (btn) btn.classList.add('done');
+                // 비회원 무한 참여
                 STATE.currentLives = Math.min(STATE.maxLives, STATE.currentLives + reward);
                 renderLives();
             }

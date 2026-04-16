@@ -8,10 +8,10 @@ router.get('/detox/config', async (req, res) => {
         const db = getDB();
         const config = await db.collection('game_detox_config').findOne({ type: 'success_criteria' });
         if (config) {
-            res.json({ success: true, minTime: config.minTime, maxTime: config.maxTime });
+            res.json({ success: true, minTime: config.minTime, maxTime: config.maxTime, missions: config.missions || [], baseHearts: config.baseHearts !== undefined ? config.baseHearts : 2 });
         } else {
             // 기본값
-            res.json({ success: true, minTime: 10000, maxTime: 11000 });
+            res.json({ success: true, minTime: 10000, maxTime: 11000, missions: [], baseHearts: 2 });
         }
     } catch (err) {
         console.error(err);
@@ -22,15 +22,21 @@ router.get('/detox/config', async (req, res) => {
 // POST /api/game/detox/config - 관리자가 성공 범위를 수정
 router.post('/detox/config', async (req, res) => {
     try {
-        const { minTime, maxTime } = req.body;
+        const { minTime, maxTime, baseHearts, missions } = req.body;
         const db = getDB();
         
         await db.collection('game_detox_config').updateOne(
             { type: 'success_criteria' },
-            { $set: { minTime: parseInt(minTime), maxTime: parseInt(maxTime), updatedAt: new Date() } },
+            { $set: { 
+                minTime: parseInt(minTime), 
+                maxTime: parseInt(maxTime), 
+                baseHearts: parseInt(baseHearts) || 2, 
+                missions: missions || [], 
+                updatedAt: new Date() 
+            } },
             { upsert: true }
         );
-        res.json({ success: true, minTime, maxTime });
+        res.json({ success: true, minTime, maxTime, baseHearts, missions });
     } catch (err) {
         console.error(err);
         res.status(500).json({ success: false, error: '서버 에러' });
@@ -49,6 +55,8 @@ router.get('/detox/status', async (req, res) => {
         }
 
         const user = await db.collection('game_detox_users').findOne({ userId });
+        const config = await db.collection('game_detox_config').findOne({ type: 'success_criteria' });
+        const baseHeartsForMember = (config && config.baseHearts !== undefined) ? config.baseHearts : 2;
 
         let hearts = 0;
         let hasReceivedCoupon = false;
@@ -63,14 +71,14 @@ router.get('/detox/status', async (req, res) => {
             completedMissions = user.completedMissions || [];
             downloadedCoupons = user.downloadedCoupons || [];
 
-            // ✅ 회원인데 미션 없이 hearts > 2인 경우 (과거 잘못 초기화된 데이터 보정)
+            // ✅ 회원인데 미션 없이 hearts > baseHeartsForMember인 경우 (과거 잘못 초기화된 데이터 보정)
             // 미션으로 하트를 추가한 적 없는(completedMissions가 비어있는) 회원이
-            // 2개를 초과하는 hearts를 가진 경우 2개로 재조정
-            if (memberId && completedMissions.length === 0 && hearts > 2) {
-                hearts = 2;
+            // baseHeartsForMember개를 초과하는 hearts를 가진 경우 baseHeartsForMember개로 재조정
+            if (memberId && completedMissions.length === 0 && hearts > baseHeartsForMember) {
+                hearts = baseHeartsForMember;
                 await db.collection('game_detox_users').updateOne(
                     { userId },
-                    { $set: { hearts: 2, isMember: true, updatedAt: new Date() } }
+                    { $set: { hearts: baseHeartsForMember, isMember: true, updatedAt: new Date() } }
                 );
             } else if (memberId && !user.isMember) {
                 // 비회원 → 회원 전환 감지: isMember 플래그 업데이트
@@ -80,8 +88,8 @@ router.get('/detox/status', async (req, res) => {
                 );
             }
         } else {
-            // ✅ 초기 수치 설정: 회원 2개, 비회원 1개
-            hearts = memberId ? 2 : 1;
+            // ✅ 초기 수치 설정: 회원 설정값, 비회원 1개
+            hearts = memberId ? baseHeartsForMember : 1;
             await db.collection('game_detox_users').insertOne({
                 userId,
                 isMember: !!memberId,
@@ -145,13 +153,10 @@ router.post('/detox/mission', async (req, res) => {
 
         const userId = memberId;
 
-        // 이미 완료한 미션인지 확인
+        // 미션 완료 시 중복 참여(무한참여) 가능하도록 이미 완료한 미션 체크를 제거합니다.
         const user = await db.collection('game_detox_users').findOne({ userId });
-        if (user && user.completedMissions && user.completedMissions.includes(missionIdx)) {
-            return res.json({ success: false, error: '이미 완료한 미션입니다.', alreadyDone: true, hearts: user.hearts });
-        }
 
-        // 미션 완료 기록 및 하트 증가
+        // 미션 완료 기록 및 하트 증가 (배열 비대화를 막기 위해 addToSet 사용하되 계속 하트는 증가)
         const updated = await db.collection('game_detox_users').findOneAndUpdate(
             { userId },
             {
@@ -162,8 +167,8 @@ router.post('/detox/mission', async (req, res) => {
             { returnDocument: 'after', upsert: true }
         );
 
-        // ✅ 최대 하트 수는 5개로 유지하되, 예외 발생 시 기본값을 5에서 2로 변경
-        const newHearts = updated ? Math.min(updated.hearts, 5) : 2;
+        // ✅ 최대 하트 수는 무한으로 적립 가능하도록 변경
+        const newHearts = updated ? updated.hearts : (user ? user.hearts + reward : reward);
 
         res.json({ success: true, hearts: newHearts, completedMissions: updated ? updated.completedMissions : [missionIdx] });
     } catch (err) {
@@ -395,9 +400,9 @@ router.get('/gimpo/config', async (req, res) => {
         const db = getDB();
         const config = await db.collection('game_gimpo_config').findOne({ type: 'success_criteria' });
         if (config) {
-            res.json({ success: true, minTime: config.minTime, maxTime: config.maxTime });
+            res.json({ success: true, minTime: config.minTime, maxTime: config.maxTime, missions: config.missions || [], baseHearts: config.baseHearts !== undefined ? config.baseHearts : 2 });
         } else {
-            res.json({ success: true, minTime: 10000, maxTime: 11000 });
+            res.json({ success: true, minTime: 10000, maxTime: 11000, missions: [], baseHearts: 2 });
         }
     } catch (err) {
         console.error(err);
@@ -408,14 +413,20 @@ router.get('/gimpo/config', async (req, res) => {
 // POST /api/game/gimpo/config
 router.post('/gimpo/config', async (req, res) => {
     try {
-        const { minTime, maxTime } = req.body;
+        const { minTime, maxTime, baseHearts, missions } = req.body;
         const db = getDB();
         await db.collection('game_gimpo_config').updateOne(
             { type: 'success_criteria' },
-            { $set: { minTime: parseInt(minTime), maxTime: parseInt(maxTime), updatedAt: new Date() } },
+            { $set: { 
+                minTime: parseInt(minTime), 
+                maxTime: parseInt(maxTime), 
+                baseHearts: parseInt(baseHearts) || 2, 
+                missions: missions || [], 
+                updatedAt: new Date() 
+            } },
             { upsert: true }
         );
-        res.json({ success: true, minTime, maxTime });
+        res.json({ success: true, minTime, maxTime, baseHearts, missions });
     } catch (err) {
         console.error(err);
         res.status(500).json({ success: false, error: '서버 에러' });
@@ -431,6 +442,9 @@ router.get('/gimpo/status', async (req, res) => {
         if (!userId) return res.status(400).json({ success: false, error: 'userId is required' });
 
         const user = await db.collection('game_gimpo_users').findOne({ userId });
+        const config = await db.collection('game_gimpo_config').findOne({ type: 'success_criteria' });
+        const baseHeartsForMember = (config && config.baseHearts !== undefined) ? config.baseHearts : 2;
+        
         let hearts = 0, hasReceivedCoupon = false, hasReceivedOnlineCoupon = false;
         let completedMissions = [], downloadedCoupons = [];
 
@@ -441,14 +455,14 @@ router.get('/gimpo/status', async (req, res) => {
             completedMissions = user.completedMissions || [];
             downloadedCoupons = user.downloadedCoupons || [];
 
-            if (memberId && completedMissions.length === 0 && hearts > 2) {
-                hearts = 2;
-                await db.collection('game_gimpo_users').updateOne({ userId }, { $set: { hearts: 2, isMember: true, updatedAt: new Date() } });
+            if (memberId && completedMissions.length === 0 && hearts > baseHeartsForMember) {
+                hearts = baseHeartsForMember;
+                await db.collection('game_gimpo_users').updateOne({ userId }, { $set: { hearts: baseHeartsForMember, isMember: true, updatedAt: new Date() } });
             } else if (memberId && !user.isMember) {
                 await db.collection('game_gimpo_users').updateOne({ userId }, { $set: { isMember: true, updatedAt: new Date() } });
             }
         } else {
-            hearts = memberId ? 2 : 1;
+            hearts = memberId ? baseHeartsForMember : 1;
             await db.collection('game_gimpo_users').insertOne({
                 userId, isMember: !!memberId, hearts,
                 hasReceivedCoupon: false, hasReceivedOnlineCoupon: false,
@@ -471,16 +485,14 @@ router.post('/gimpo/mission', async (req, res) => {
         if (!memberId) return res.status(400).json({ success: false, error: '회원만 미션을 이용할 수 있습니다.' });
 
         const user = await db.collection('game_gimpo_users').findOne({ userId: memberId });
-        if (user && user.completedMissions && user.completedMissions.includes(missionIdx)) {
-            return res.json({ success: false, error: '이미 완료한 미션입니다.', alreadyDone: true, hearts: user.hearts });
-        }
+        // 무한 참여 가능하도록 이미 완료한 미션 에러 발생 제거
 
         const updated = await db.collection('game_gimpo_users').findOneAndUpdate(
             { userId: memberId },
             { $addToSet: { completedMissions: missionIdx }, $inc: { hearts: reward }, $set: { updatedAt: new Date() } },
             { returnDocument: 'after', upsert: true }
         );
-        const newHearts = updated ? Math.min(updated.hearts, 5) : 2;
+        const newHearts = updated ? updated.hearts : (user ? user.hearts + reward : reward);
         res.json({ success: true, hearts: newHearts, completedMissions: updated ? updated.completedMissions : [missionIdx] });
     } catch (err) {
         console.error(err);

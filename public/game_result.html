@@ -169,15 +169,70 @@
         </div>
 
         <div class="config-panel">
-            <div class="config-title">⚙️ 성공 통과 기준(초) 설정</div>
+            <div class="config-title">⚙️ 게임 통과 기준 및 설정</div>
             <div class="input-group">
                 <label>최소 시간(Sec): </label>
                 <input type="text" id="min-sec" placeholder="10:00" style="width: 110px;">
                 <label>~ 최대 시간(Sec): </label>
                 <input type="text" id="max-sec" placeholder="10:30" style="width: 110px;">
             </div>
-            <button class="btn-save" onclick="saveConfig()">현재 기준 저장하기</button>
-            <span id="config-msg" style="margin-left: 15px; color: #155724; font-size: 14px; font-weight: bold;"></span>
+            
+            <div class="input-group" style="margin-top: 15px;">
+                <label style="font-weight: bold; color: #4bc8d8;">기본 목숨(개): </label>
+                <input type="number" id="base-hearts" value="2" min="1" max="100" style="width: 80px; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                <span style="font-size:13px; color:#666;">(회원 접속 시 부여되는 기본 하트 개수)</span>
+            </div>
+
+            <hr style="border: 0; border-top: 1px dashed #ccc; margin: 25px 0;">
+
+            <div class="config-title">🎯 미션 설정 (최대 5개, 체크된 미션만 활성화)</div>
+            <div id="mission-list">
+                <div class="mission-row" style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+                    <label style="font-weight:bold;">1</label>
+                    <input type="checkbox" id="miss-enable-1" style="width: 18px; height: 18px;">
+                    <input type="text" id="miss-text-1" placeholder="미션 텍스트 (예: 카카오 플친 추가시)" style="flex:2; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                    <input type="text" id="miss-url-1" placeholder="이동할 링크 URL" style="flex:3; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                    <label style="font-size:14px;">보상 (+):</label>
+                    <input type="number" id="miss-reward-1" value="1" min="1" style="width: 50px; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                </div>
+                <div class="mission-row" style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+                    <label style="font-weight:bold;">2</label>
+                    <input type="checkbox" id="miss-enable-2" style="width: 18px; height: 18px;">
+                    <input type="text" id="miss-text-2" placeholder="미션 텍스트" style="flex:2; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                    <input type="text" id="miss-url-2" placeholder="이동할 링크 URL" style="flex:3; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                    <label style="font-size:14px;">보상 (+):</label>
+                    <input type="number" id="miss-reward-2" value="1" min="1" style="width: 50px; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                </div>
+                <div class="mission-row" style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+                    <label style="font-weight:bold;">3</label>
+                    <input type="checkbox" id="miss-enable-3" style="width: 18px; height: 18px;">
+                    <input type="text" id="miss-text-3" placeholder="미션 텍스트" style="flex:2; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                    <input type="text" id="miss-url-3" placeholder="이동할 링크 URL" style="flex:3; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                    <label style="font-size:14px;">보상 (+):</label>
+                    <input type="number" id="miss-reward-3" value="1" min="1" style="width: 50px; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                </div>
+                <div class="mission-row" style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+                    <label style="font-weight:bold;">4</label>
+                    <input type="checkbox" id="miss-enable-4" style="width: 18px; height: 18px;">
+                    <input type="text" id="miss-text-4" placeholder="미션 텍스트" style="flex:2; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                    <input type="text" id="miss-url-4" placeholder="이동할 링크 URL" style="flex:3; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                    <label style="font-size:14px;">보상 (+):</label>
+                    <input type="number" id="miss-reward-4" value="1" min="1" style="width: 50px; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                </div>
+                <div class="mission-row" style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+                    <label style="font-weight:bold;">5</label>
+                    <input type="checkbox" id="miss-enable-5" style="width: 18px; height: 18px;">
+                    <input type="text" id="miss-text-5" placeholder="미션 텍스트" style="flex:2; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                    <input type="text" id="miss-url-5" placeholder="이동할 링크 URL" style="flex:3; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                    <label style="font-size:14px;">보상 (+):</label>
+                    <input type="number" id="miss-reward-5" value="1" min="1" style="width: 50px; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                </div>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <button class="btn-save" onclick="saveConfig()">현재 설정값 저장하기</button>
+                <span id="config-msg" style="margin-left: 15px; color: #155724; font-size: 14px; font-weight: bold;"></span>
+            </div>
         </div>
 
         <div>
@@ -268,6 +323,27 @@
                     if (data.success) {
                         document.getElementById('min-sec').value = msToTimeStr(data.minTime);
                         document.getElementById('max-sec').value = msToTimeStr(data.maxTime);
+                        document.getElementById('base-hearts').value = data.baseHearts !== undefined ? data.baseHearts : 2;
+                        
+                        // 설정 초기화
+                        for(let i=1; i<=5; i++) {
+                            document.getElementById(`miss-enable-${i}`).checked = false;
+                            document.getElementById(`miss-text-${i}`).value = '';
+                            document.getElementById(`miss-url-${i}`).value = '';
+                            document.getElementById(`miss-reward-${i}`).value = 1;
+                        }
+
+                        // 미션 값 할당
+                        if (data.missions && data.missions.length > 0) {
+                            data.missions.forEach((m, idx) => {
+                                const i = idx + 1;
+                                if (i > 5) return;
+                                document.getElementById(`miss-enable-${i}`).checked = true;
+                                document.getElementById(`miss-text-${i}`).value = m.text || '';
+                                document.getElementById(`miss-url-${i}`).value = m.url || '';
+                                document.getElementById(`miss-reward-${i}`).value = m.reward || 1;
+                            });
+                        }
                     }
                 })
                 .catch(err => console.error('Config Error:', err));
@@ -276,6 +352,7 @@
         function saveConfig() {
             const minStr = document.getElementById('min-sec').value.trim();
             const maxStr = document.getElementById('max-sec').value.trim();
+            const baseHearts = parseInt(document.getElementById('base-hearts').value) || 2;
             
             const minMs = timeStrToMs(minStr);
             const maxMs = timeStrToMs(maxStr);
@@ -289,7 +366,18 @@
                 return;
             }
 
-            const payload = { minTime: minMs, maxTime: maxMs };
+            const missions = [];
+            for(let i=1; i<=5; i++) {
+                if (document.getElementById(`miss-enable-${i}`).checked) {
+                    missions.push({
+                        text: document.getElementById(`miss-text-${i}`).value.trim(),
+                        url: document.getElementById(`miss-url-${i}`).value.trim(),
+                        reward: parseInt(document.getElementById(`miss-reward-${i}`).value) || 1
+                    });
+                }
+            }
+
+            const payload = { minTime: minMs, maxTime: maxMs, baseHearts, missions };
 
             fetch(`${API_BASE_URL}${getApiPrefix()}/config`, {
                 method: 'POST',
@@ -300,7 +388,7 @@
                 .then(data => {
                     if (data.success) {
                         const msg = document.getElementById('config-msg');
-                        msg.innerText = '✅ 성공 기준이 실시간으로 반영되었습니다!';
+                        msg.innerText = '✅ 설정이 실시간으로 반영되었습니다!';
                         setTimeout(() => msg.innerText = '', 3000);
                         
                         document.getElementById('min-sec').value = msToTimeStr(minMs);

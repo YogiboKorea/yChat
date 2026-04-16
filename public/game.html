@@ -1707,7 +1707,10 @@
                         
                         const kakaoMission = { label: "카카오톡 친구에게 공유하기", url: "kakaoshare", reward: 1 };
                         if (data.missions && data.missions.length > 0) {
-                            MISSIONS = [kakaoMission, ...data.missions.map(m => ({ label: m.text, url: m.url, reward: m.reward || 1 }))];
+                            const activeAdminMissions = data.missions
+                                .filter(m => m.enabled !== false && m.text && m.text.trim() !== '')
+                                .map(m => ({ label: m.text, url: m.url, reward: m.reward || 1 }));
+                            MISSIONS = [kakaoMission, ...activeAdminMissions];
                         } else {
                             MISSIONS = [kakaoMission];
                         }

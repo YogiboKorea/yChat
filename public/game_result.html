@@ -338,7 +338,7 @@
                             data.missions.forEach((m, idx) => {
                                 const i = idx + 1;
                                 if (i > 5) return;
-                                document.getElementById(`miss-enable-${i}`).checked = true;
+                                document.getElementById(`miss-enable-${i}`).checked = m.enabled !== undefined ? m.enabled : true;
                                 document.getElementById(`miss-text-${i}`).value = m.text || '';
                                 document.getElementById(`miss-url-${i}`).value = m.url || '';
                                 document.getElementById(`miss-reward-${i}`).value = m.reward || 1;
@@ -368,13 +368,12 @@
 
             const missions = [];
             for(let i=1; i<=5; i++) {
-                if (document.getElementById(`miss-enable-${i}`).checked) {
-                    missions.push({
-                        text: document.getElementById(`miss-text-${i}`).value.trim(),
-                        url: document.getElementById(`miss-url-${i}`).value.trim(),
-                        reward: parseInt(document.getElementById(`miss-reward-${i}`).value) || 1
-                    });
-                }
+                missions.push({
+                    enabled: document.getElementById(`miss-enable-${i}`).checked,
+                    text: document.getElementById(`miss-text-${i}`).value.trim(),
+                    url: document.getElementById(`miss-url-${i}`).value.trim(),
+                    reward: parseInt(document.getElementById(`miss-reward-${i}`).value) || 1
+                });
             }
 
             const payload = { minTime: minMs, maxTime: maxMs, baseHearts, missions };

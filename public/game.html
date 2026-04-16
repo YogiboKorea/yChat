@@ -1516,10 +1516,7 @@
 
         // --- 미션(충전) 설정 ---
         let MISSIONS = [
-            { label: "공식몰 프로모션 확인하기", url: "https://yogibo.kr/event/event.html", reward: 1 },
-            { label: "인스타그램 계정 방문하기", url: "https://www.instagram.com/yogibokorea/", reward: 1 },
-            { label: "어썸피플 캠페인 확인하기", url: "https://yogibo.kr/why/awesomepeople.html", reward: 1 },
-            { label: "요기보 맥스 상품 만나보기", url: "https://yogibo.kr/product/detail.html?product_no=39&cate_no=858", reward: 1 }
+            { label: "카카오톡 친구에게 공유하기", url: "kakaoshare", reward: 1 }
         ];
 
         function renderMissions() {
@@ -1707,8 +1704,12 @@
                     if (data.success) {
                         STATE.config.minTime = data.minTime;
                         STATE.config.maxTime = data.maxTime;
+                        
+                        const kakaoMission = { label: "카카오톡 친구에게 공유하기", url: "kakaoshare", reward: 1 };
                         if (data.missions && data.missions.length > 0) {
-                            MISSIONS = data.missions.map(m => ({ label: m.text, url: m.url, reward: m.reward || 1 }));
+                            MISSIONS = [kakaoMission, ...data.missions.map(m => ({ label: m.text, url: m.url, reward: m.reward || 1 }))];
+                        } else {
+                            MISSIONS = [kakaoMission];
                         }
                     }
                 })

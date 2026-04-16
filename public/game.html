@@ -1431,47 +1431,73 @@
         </div>
     </div>
 
-    <script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js" integrity="sha384-TiCmbV6AUnzr700sEik0102yZ2SIt1T8a52kHkG1e4y8Ffv15hR0nI4E3v1fOEop" crossorigin="anonymous"></script>
+    <script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js"></script>
     <script>
         // 카카오 SDK 초기화
         const KAKAO_JS_KEY = '36f6c0f03cdd941bf5afd25f98f8092f';
-        if (typeof Kakao !== 'undefined') {
-            try {
-                if (!Kakao.isInitialized()) { Kakao.init(KAKAO_JS_KEY); }
-            } catch(e) {}
+        
+        function initKakao() {
+            if (typeof Kakao !== 'undefined') {
+                try {
+                    if (!Kakao.isInitialized()) { Kakao.init(KAKAO_JS_KEY); }
+                } catch(e) {}
+            }
         }
+        initKakao();
 
         function executeKakaoShare() {
-            try {
-                const kakaoModule = typeof Kakao.Share !== 'undefined' ? Kakao.Share : Kakao.Link;
-                if (!kakaoModule) {
-                    alert('카카오톡 공유 기능을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.');
-                    return;
-                }
-
-                kakaoModule.sendDefault({
-                    objectType: 'feed',
-                    content: {
-                        title: '도파민 10초 디톡스',
-                        imageUrl: 'https://yogibo.kr/game/%EC%8B%9C%EC%9E%91%EB%B0%B0%EA%B2%BD2.png',
-                        link: {
-                            mobileWebUrl: window.location.href,
-                            webUrl: window.location.href,
-                        },
-                    },
-                    buttons: [
-                        {
-                            title: '입장하기',
+            const doShare = () => {
+                try {
+                    const kakaoModule = typeof Kakao.Share !== 'undefined' ? Kakao.Share : (typeof Kakao.Link !== 'undefined' ? Kakao.Link : null);
+                    if (!kakaoModule) {
+                        alert('카카오톡 공유 기능을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.');
+                        return;
+                    }
+                    kakaoModule.sendDefault({
+                        objectType: 'feed',
+                        content: {
+                            title: '도파민 10초 디톡스',
+                            imageUrl: 'https://yogibo.kr/game/%EC%8B%9C%EC%9E%91%EB%B0%B0%EA%B2%BD2.png',
                             link: {
                                 mobileWebUrl: window.location.href,
                                 webUrl: window.location.href,
                             },
                         },
-                    ]
-                });
-            } catch (e) {
-                console.error('카카오 공유 실패', e);
-                alert('카카오 공유 중 오류가 발생했습니다.');
+                        buttons: [
+                            {
+                                title: '입장하기',
+                                link: {
+                                    mobileWebUrl: window.location.href,
+                                    webUrl: window.location.href,
+                                },
+                            },
+                        ]
+                    });
+                } catch (e) {
+                    console.error('카카오 공유 실패', e);
+                    alert('카카오 공유 중 오류가 발생했습니다.');
+                }
+            };
+
+            const isKakaoLoadedAndValid = typeof Kakao !== 'undefined' && (typeof Kakao.Share !== 'undefined' || typeof Kakao.Link !== 'undefined');
+
+            if (!isKakaoLoadedAndValid) {
+                // 카카오 SDK가 없거나 망가졌을 때 동적으로 강제 로드
+                var script = document.createElement('script');
+                script.src = 'https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js';
+                // 기존 window.Kakao 덮어쓰기를 위해 강제 삭제 시도 (가능한 경우)
+                try { delete window.Kakao; } catch(e){}
+                
+                script.onload = function() {
+                    initKakao();
+                    setTimeout(doShare, 100);
+                };
+                script.onerror = function() {
+                    alert('카카오톡 공유 모듈을 로드하지 못했습니다. (네트워크/광고차단앱)');
+                };
+                document.head.appendChild(script);
+            } else {
+                doShare();
             }
         }
 

@@ -1521,17 +1521,28 @@
                 
                 // 미션 1 (idx === 0) 이고 카카오 공유하기인 경우 처리
                 const isKakaoAction = (idx === 0) || (m.url && m.url.includes('kakaoshare'));
+                // 카카오가 아닌 미션이 이미 완료되었는지 확인
+                const isAlreadyDone = !isKakaoAction && STATE.completedMissions.includes(idx);
                 const clickAction = `onclick="event.preventDefault(); doMission('${m.url}', ${m.reward}, ${idx});"`;
-                const hrefAttr = isKakaoAction ? `href="#"` : `href="${m.url}" target="_blank"`;
+                const hrefAttr = isKakaoAction ? `href="#"` : (isAlreadyDone ? `href="#"` : `href="${m.url}" target="_blank"`);
 
-                container.innerHTML += `
-                    <a ${hrefAttr} style="text-decoration: none; color: inherit; display: block;" ${isKakaoAction ? clickAction : ''}>
-                        <div class="mission-btn" id="mission-btn-${idx}" ${!isKakaoAction ? `onclick="doMission('${m.url}', ${m.reward}, ${idx})"` : ''}>
+                if (isAlreadyDone) {
+                    container.innerHTML += `
+                        <div class="mission-btn done" id="mission-btn-${idx}">
                             <span>${m.label}</span>
-                            ${rewardHtml}
+                            <span class="mission-reward" style="color:#888;">참여완료 ✔</span>
                         </div>
-                    </a>
-                `;
+                    `;
+                } else {
+                    container.innerHTML += `
+                        <a ${hrefAttr} style="text-decoration: none; color: inherit; display: block;" ${isKakaoAction ? clickAction : ''}>
+                            <div class="mission-btn" id="mission-btn-${idx}" ${!isKakaoAction ? `onclick="doMission('${m.url}', ${m.reward}, ${idx})"` : ''}>
+                                <span>${m.label}</span>
+                                ${rewardHtml}
+                            </div>
+                        </a>
+                    `;
+                }
             });
         }
 
@@ -1604,6 +1615,13 @@
             const btn = document.getElementById('mission-btn-' + idx);
 
             const isKakaoAction = (idx === 0) || (url && url.includes('kakaoshare'));
+
+            // 카카오가 아닌 미션은 중복 참여 차단
+            if (!isKakaoAction && STATE.completedMissions.includes(idx)) {
+                alert('이미 참여 완료한 미션입니다.');
+                return;
+            }
+
             if (isKakaoAction) {
                 executeKakaoShare();
             }
@@ -1621,6 +1639,8 @@
                             STATE.completedMissions = data.completedMissions || STATE.completedMissions;
                             STATE.currentLives = Math.min(STATE.maxLives, data.hearts);
                             renderLives();
+                        } else if (data.error === 'already_completed') {
+                            alert('이미 참여 완료한 미션입니다.');
                         }
                     })
                     .catch(() => {
@@ -1637,12 +1657,14 @@
             // 잠깐 후에 모달 닫기
             setTimeout(() => {
                 closeMissionModal();
-                if (STATE.currentLives >= STATE.maxLives) {
-                    alert('하트가 모두 충전되었습니다!\\n원활한 진행을 위해 메인 화면으로 이동합니다.');
-                } else {
-                    alert('미션에 참여해주셔서 감사합니다!\\n메인 화면으로 이동합니다.');
+                if (!isKakaoAction) {
+                    if (STATE.currentLives >= STATE.maxLives) {
+                        alert('하트가 모두 충전되었습니다!\\n원활한 진행을 위해 메인 화면으로 이동합니다.');
+                    } else {
+                        alert('미션에 참여해주셔서 감사합니다!\\n메인 화면으로 이동합니다.');
+                    }
+                    goHome(); // 강제 메인 이동으로 서버 상태 갱신 유도
                 }
-                goHome(); // 강제 메인 이동으로 서버 상태 갱신 유도
             }, 800);
         }
 

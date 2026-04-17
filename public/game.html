@@ -1187,6 +1187,59 @@
             color: rgba(255, 210, 100, 0.65);
             font-weight: 600;
         }
+
+        /* --- 하트 옆 말풍선 --- */
+        .lives-speech-bubble {
+            background: #fff;
+            border-radius: 20px;
+            padding: 5px 12px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #e84887;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+            cursor: pointer;
+            position: relative;
+            margin-left: 6px;
+            animation: pulse-bubble 2s ease-in-out infinite;
+        }
+        .lives-speech-bubble::before {
+            content: '';
+            position: absolute;
+            left: -6px;
+            top: 50%;
+            transform: translateY(-50%);
+            border: 5px solid transparent;
+            border-right-color: #fff;
+        }
+        @keyframes pulse-bubble {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        /* --- 결과 텍스트 버튼 --- */
+        .btn-result-text {
+            width: 85%;
+            max-width: 280px;
+            padding: 14px 16px;
+            border: none;
+            border-radius: 30px;
+            font-size: 15px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: transform 0.1s;
+            text-align: center;
+            line-height: 1.3;
+        }
+        .btn-result-text:active { transform: scale(0.95); }
+        .btn-result-text.offline {
+            background: #e84887;
+            color: #fff;
+        }
+        .btn-result-text.online {
+            background: #4bc8d8;
+            color: #fff;
+        }
     </style>
 
 
@@ -1560,17 +1613,28 @@
                 
                 // 미션 1 (idx === 0) 이고 카카오 공유하기인 경우 처리
                 const isKakaoAction = (idx === 0) || (m.url && m.url.includes('kakaoshare'));
+                // 카카오가 아닌 미션이 이미 완료되었는지 확인
+                const isAlreadyDone = !isKakaoAction && STATE.completedMissions.includes(idx);
                 const clickAction = `onclick="event.preventDefault(); doMission('${m.url}', ${m.reward}, ${idx});"`;
-                const hrefAttr = isKakaoAction ? `href="#"` : `href="${m.url}" target="_blank"`;
+                const hrefAttr = isKakaoAction ? `href="#"` : (isAlreadyDone ? `href="#"` : `href="${m.url}" target="_blank"`);
 
-                container.innerHTML += `
-                    <a ${hrefAttr} style="text-decoration: none; color: inherit; display: block;" ${isKakaoAction ? clickAction : ''}>
-                        <div class="mission-btn" id="mission-btn-${idx}" ${!isKakaoAction ? `onclick="doMission('${m.url}', ${m.reward}, ${idx})"` : ''}>
+                if (isAlreadyDone) {
+                    container.innerHTML += `
+                        <div class="mission-btn done" id="mission-btn-${idx}">
                             <span>${m.label}</span>
-                            ${rewardHtml}
+                            <span class="mission-reward" style="color:#888;">참여완료 ✔</span>
                         </div>
-                    </a>
-                `;
+                    `;
+                } else {
+                    container.innerHTML += `
+                        <a ${hrefAttr} style="text-decoration: none; color: inherit; display: block;" ${isKakaoAction ? clickAction : ''}>
+                            <div class="mission-btn" id="mission-btn-${idx}" ${!isKakaoAction ? `onclick="doMission('${m.url}', ${m.reward}, ${idx})"` : ''}>
+                                <span>${m.label}</span>
+                                ${rewardHtml}
+                            </div>
+                        </a>
+                    `;
+                }
             });
         }
 
@@ -1643,6 +1707,13 @@
             const btn = document.getElementById('mission-btn-' + idx);
             
             const isKakaoAction = (idx === 0) || (url && url.includes('kakaoshare'));
+
+            // 카카오가 아닌 미션은 중복 참여 차단
+            if (!isKakaoAction && STATE.completedMissions.includes(idx)) {
+                alert('이미 참여 완료한 미션입니다.');
+                return;
+            }
+
             if (isKakaoAction) {
                 executeKakaoShare();
             }
@@ -1660,6 +1731,8 @@
                             STATE.completedMissions = data.completedMissions || STATE.completedMissions;
                             STATE.currentLives = Math.min(STATE.maxLives, data.hearts);
                             renderLives();
+                        } else if (data.error === 'already_completed') {
+                            alert('이미 참여 완료한 미션입니다.');
                         }
                     })
                     .catch(() => {
@@ -1676,12 +1749,14 @@
             // 잠깐 후에 모달 닫기
             setTimeout(() => {
                 closeMissionModal();
-                if (STATE.currentLives >= STATE.maxLives) {
-                    alert('하트가 모두 충전되었습니다!\\n원활한 진행을 위해 메인 화면으로 이동합니다.');
-                } else {
-                    alert('미션에 참여해주셔서 감사합니다!\\n메인 화면으로 이동합니다.');
+                if (!isKakaoAction) {
+                    if (STATE.currentLives >= STATE.maxLives) {
+                        alert('하트가 모두 충전되었습니다!\\n원활한 진행을 위해 메인 화면으로 이동합니다.');
+                    } else {
+                        alert('미션에 참여해주셔서 감사합니다!\\n메인 화면으로 이동합니다.');
+                    }
+                    goHome(); // 강제 메인 이동으로 서버 상태 갱신 유도
                 }
-                goHome(); // 강제 메인 이동으로 서버 상태 갱신 유도
             }, 800);
         }
 
@@ -1909,6 +1984,10 @@
                 const heartImg = isOn ? 'http://yogibo.kr/game/피라미드_on.png' : 'http://yogibo.kr/game/피라미드_off.png';
                 livesDisplay.innerHTML += `<img src="${heartImg}" class="life-icon">`;
             }
+            // 말풍선: 회원이면 미션모달, 비회원이면 로그인 유도
+            const bubbleAction = memberId ? 'openMissionModal()' : `location.href='${getLoginUrlWithReturn()}'`;
+            const bubbleText = memberId ? '미션참여로 기회얻기 →' : '회원가입하고 기회얻기 →';
+            livesDisplay.innerHTML += `<div class="lives-speech-bubble" onclick="${bubbleAction}">${bubbleText}</div>`;
         }
         function addLife() {
             if (!memberId) {
@@ -2381,14 +2460,13 @@
             const retryCountNum = document.getElementById('retry-count-num');
 
             resultScreen.classList.remove('success', 'fail');
+            failExtraUi.style.display = 'none';
 
             if (isSuccess) {
+                // ===== 성공 =====
                 resultScreen.classList.add('success');
                 banner.src = 'http://yogibo.kr/game/성공_텍스트.png';
                 charImg.src = d.success;
-                textBox.innerText = '축하합니다~\n요기보에 누울 자격 획득!';
-
-                failExtraUi.style.display = 'none';
 
                 if (STATE.currentLives > 0) {
                     textBox.innerHTML = '축하합니다~<br>요기보에 누울 자격 획득!<br><span style="font-size:13px; font-weight:normal; color:rgba(255,255,255,0.85);">남은 재도전 기회: <strong style="color:#ffe082;">' + STATE.currentLives + '번</strong></span>';
@@ -2397,28 +2475,31 @@
                 }
 
                 if (!memberId) {
+                    // --- 비로그인 + 성공 ---
                     const loginUrl = getLoginUrlWithReturn({ action: 'claim_success' });
                     btnWrapper.innerHTML = `
-                    <img src="http://yogibo.kr/game/선물증정_회원가입.png" class="btn-result" onclick="location.href='${loginUrl}'" style="cursor:pointer;">
+                        <button class="btn-result-text offline" onclick="location.href='${loginUrl}'">🏪 매장이세요?<br>회원가입 하고 오프라인 전용 혜택 받기<br>(5,000원 즉시 할인권)</button>
+                        <button class="btn-result-text online" onclick="location.href='${loginUrl}'">🌐 온라인이세요?<br>회원가입 하고 게임 더 하기</button>
                     `;
                 } else {
-                    if (STATE.hasReceivedCoupon || STATE.hasReceivedOnlineCoupon) {
-                        let retryBtn = STATE.currentLives > 0 ? `<button class="btn-result" style="background:#4bc8d8; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:18px; font-weight:bold; cursor:pointer;" onclick="goHome()">🎮 메인으로 가서 다시하기</button>` : '';
-                        if (retryBtn) {
-                            btnWrapper.innerHTML = retryBtn;
-                        } else {
-                            btnWrapper.innerHTML = `<button class="btn-result" style="background:#4bc8d8; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:18px; font-weight:bold; cursor:pointer;" onclick="goHome()">메인으로 돌아가기</button>`;
-                        }
+                    // --- 로그인 + 성공 ---
+                    if (STATE.hasReceivedCoupon && STATE.hasReceivedOnlineCoupon) {
+                        // 이미 둘 다 수령한 경우
+                        btnWrapper.innerHTML = STATE.currentLives > 0
+                            ? `<button class="btn-result-text online" onclick="goHome()">🎮 메인으로 가서 다시하기</button>`
+                            : `<button class="btn-result-text online" onclick="goHome()">메인으로 돌아가기</button>`;
                     } else {
-                        const offlineBtn = `<img src="http://yogibo.kr/game/매장참여고객.png" class="btn-result" onclick="openOfflineRewardModal()" style="cursor:pointer;">`;
-                        const onlineBtn = `<img src="http://yogibo.kr/game/온라인참여고객.png" class="btn-result" onclick="openOnlineRewardModal()" style="cursor:pointer;">`;
-                        btnWrapper.innerHTML = `
-                        ${offlineBtn}
-                        ${onlineBtn}
-                        `;
+                        const offlineBtn = STATE.hasReceivedCoupon
+                            ? ''
+                            : `<button class="btn-result-text offline" onclick="openOfflineRewardModal()">🏪 매장이세요?<br>오프라인 전용 혜택 받기 (5,000원 즉시 할인권)</button>`;
+                        const onlineBtn = STATE.hasReceivedOnlineCoupon
+                            ? `<button class="btn-result-text online" onclick="goHome()">🎮 게임 더 하기</button>`
+                            : `<button class="btn-result-text online" onclick="openOnlineRewardModal()">🌐 온라인이세요?<br>게임 더 하기, 숨겨진 혜택을 찾아보세요</button>`;
+                        btnWrapper.innerHTML = offlineBtn + onlineBtn;
                     }
                 }
             } else {
+                // ===== 실패 =====
                 resultScreen.classList.add('fail');
                 banner.src = 'http://yogibo.kr/game/실패_텍스트.png';
                 charImg.src = d.fail;
@@ -2426,25 +2507,20 @@
                 retryCountNum.innerText = STATE.currentLives;
 
                 if (!memberId) {
+                    // --- 비로그인 + 실패 ---
                     failExtraUi.style.display = 'flex';
-                    if (STATE.currentLives === 0) {
-                        btnWrapper.innerHTML = `
-                        <img src="http://yogibo.kr/game/재도전_회원가입s.png" class="btn-result" onclick="location.href='${getLoginUrlWithReturn()}'">
-                        `;
-                    } else {
-                        btnWrapper.innerHTML = `
-                        <img src="http://yogibo.kr/game/재도전_회원가입s.png" class="btn-result" onclick="location.href='${getLoginUrlWithReturn()}'">
-                        `;
-                    }
-                } else {
-                    failExtraUi.style.display = 'none';
-                    let retryBtn = STATE.currentLives > 0 ? `<button class="btn-result" style="background:#4bc8d8; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:18px; font-weight:bold; cursor:pointer;" onclick="goHome()">🎮 메인으로 가서 다시하기</button>` : '';
+                    const loginUrl = getLoginUrlWithReturn();
                     btnWrapper.innerHTML = `
-                    ${retryBtn}
+                        <button class="btn-result-text offline" onclick="location.href='${loginUrl}'">🏪 매장이세요?<br>회원가입하고 재도전 기회 받기</button>
+                        <button class="btn-result-text online" onclick="location.href='${loginUrl}'">🌐 온라인이세요?<br>회원가입하고 재도전 기회 받기</button>
                     `;
-                    if (!retryBtn) {
-                        btnWrapper.innerHTML = `<button class="btn-result" style="background:#4bc8d8; color:#fff; border:none; padding:15px 0; border-radius:30px; font-size:18px; font-weight:bold; cursor:pointer;" onclick="goHome()">메인으로 돌아가기</button>`;
-                    }
+                } else {
+                    // --- 로그인 + 실패 ---
+                    failExtraUi.style.display = 'none';
+                    btnWrapper.innerHTML = `
+                        <button class="btn-result-text offline" onclick="goHome()">🏪 매장이세요?<br>재도전하고 매장할인 혜택 받기</button>
+                        <button class="btn-result-text online" onclick="goHome()">🌐 온라인이세요?<br>재도전하고 숨겨진 혜택을 찾아보세요</button>
+                    `;
                 }
             }
 

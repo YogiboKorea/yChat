@@ -152,11 +152,14 @@ router.post('/detox/mission', async (req, res) => {
         }
 
         const userId = memberId;
-
-        // 미션 완료 시 중복 참여(무한참여) 가능하도록 이미 완료한 미션 체크를 제거합니다.
         const user = await db.collection('game_detox_users').findOne({ userId });
 
-        // 미션 완료 기록 및 하트 증가 (배열 비대화를 막기 위해 addToSet 사용하되 계속 하트는 증가)
+        // 카카오 공유(idx 0)가 아닌 미션은 중복 참여 불가
+        if (missionIdx !== 0 && user && user.completedMissions && user.completedMissions.includes(missionIdx)) {
+            return res.json({ success: false, error: 'already_completed', message: '이미 참여 완료한 미션입니다.', completedMissions: user.completedMissions });
+        }
+
+        // 미션 완료 기록 및 하트 증가
         const updated = await db.collection('game_detox_users').findOneAndUpdate(
             { userId },
             {
@@ -167,7 +170,6 @@ router.post('/detox/mission', async (req, res) => {
             { returnDocument: 'after', upsert: true }
         );
 
-        // ✅ 최대 하트 수는 무한으로 적립 가능하도록 변경
         const newHearts = updated ? updated.hearts : (user ? user.hearts + reward : reward);
 
         res.json({ success: true, hearts: newHearts, completedMissions: updated ? updated.completedMissions : [missionIdx] });
@@ -485,7 +487,11 @@ router.post('/gimpo/mission', async (req, res) => {
         if (!memberId) return res.status(400).json({ success: false, error: '회원만 미션을 이용할 수 있습니다.' });
 
         const user = await db.collection('game_gimpo_users').findOne({ userId: memberId });
-        // 무한 참여 가능하도록 이미 완료한 미션 에러 발생 제거
+
+        // 카카오 공유(idx 0)가 아닌 미션은 중복 참여 불가
+        if (missionIdx !== 0 && user && user.completedMissions && user.completedMissions.includes(missionIdx)) {
+            return res.json({ success: false, error: 'already_completed', message: '이미 참여 완료한 미션입니다.', completedMissions: user.completedMissions });
+        }
 
         const updated = await db.collection('game_gimpo_users').findOneAndUpdate(
             { userId: memberId },

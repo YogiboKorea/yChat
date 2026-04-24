@@ -1681,9 +1681,18 @@
             const modal = document.getElementById('myeongjeon-modal');
             modal.style.display = 'flex';
 
-            fetch(`${API_BASE_URL}/api/game/detox/successList`)
+            const mId = typeof memberId !== 'undefined' && memberId ? memberId : '';
+
+            fetch(`${API_BASE_URL}/api/game/detox/successList?memberId=${mId}`)
                 .then(r => r.json())
                 .then(data => {
+                    const subtitle = document.querySelector('#myeongjeon-modal .myeongjeon-subtitle');
+                    if (data.myCount && data.myCount > 0) {
+                        subtitle.innerHTML = `현재까지 <span style="color:#ffd060;">${data.myCount}</span>번 성공! 현재순위 <span style="color:#ffd060;">${data.myRank}</span>위 🏆`;
+                    } else {
+                        subtitle.innerHTML = '도파민 10초 디톡스 성공';
+                    }
+
                     const list = (data.list && data.list.length > 0) ? data.list : MYEONGJEON_DUMMY;
                     renderMyeongjeonTicker(list, data.totalSuccessCount);
                 })

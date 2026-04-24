@@ -333,29 +333,41 @@ router.post('/detox/fail', async (req, res) => {
 // GET /api/game/detox/successList - 성공자 목록 (명전)
 router.get('/detox/successList', async (req, res) => {
     try {
+        const { memberId } = req.query;
         const db = getDB();
 
         // 1. 총 성공 횟수
         const totalSuccessCount = await db.collection('game_detox_logs').countDocuments({ isMember: true, result: 'success' });
 
-        // 2. 유별자 별 성공 횟수 집계 (최근 성공 기준 내림차순, 최대 50명)
+        // 2. 유별자 별 성공 횟수 집계 (최근 성공 기준 내림차순)
         const aggregateLogs = await db.collection('game_detox_logs').aggregate([
             { $match: { isMember: true, result: 'success' } },
             { $group: { _id: "$userId", count: { $sum: 1 }, latestSuccess: { $max: "$createdAt" } } },
-            { $sort: { count: -1, latestSuccess: -1 } },
-            { $limit: 50 }
+            { $sort: { count: -1, latestSuccess: -1 } }
         ]).toArray();
 
-        const list = aggregateLogs.map(log => {
+        let myCount = 0;
+        let myRank = null;
+        if (memberId) {
+            const myIndex = aggregateLogs.findIndex(log => log._id === memberId);
+            if (myIndex !== -1) {
+                myRank = myIndex + 1;
+                myCount = aggregateLogs[myIndex].count;
+            }
+        }
+
+        const top50 = aggregateLogs.slice(0, 50);
+
+        const list = top50.map(log => {
             const id = log._id;
             const masked = id.length > 3 ? id.slice(0, 3) + '***' : id + '***';
             return { id: masked, count: log.count };
         });
 
-        res.json({ success: true, list, totalSuccessCount });
+        res.json({ success: true, list, totalSuccessCount, myCount, myRank });
     } catch (err) {
         console.error(err);
-        res.status(500).json({ success: false, list: [], totalSuccessCount: 0 });
+        res.status(500).json({ success: false, list: [], totalSuccessCount: 0, myCount: 0, myRank: null });
     }
 });
 
@@ -607,6 +619,7 @@ router.post('/gimpo/claim', async (req, res) => {
 // GET /api/game/gimpo/successList
 router.get('/gimpo/successList', async (req, res) => {
     try {
+        const { memberId } = req.query;
         const db = getDB();
 
         const totalSuccessCount = await db.collection('game_gimpo_logs').countDocuments({ isMember: true, result: 'success' });
@@ -614,20 +627,31 @@ router.get('/gimpo/successList', async (req, res) => {
         const aggregateLogs = await db.collection('game_gimpo_logs').aggregate([
             { $match: { isMember: true, result: 'success' } },
             { $group: { _id: "$userId", count: { $sum: 1 }, latestSuccess: { $max: "$createdAt" } } },
-            { $sort: { count: -1, latestSuccess: -1 } },
-            { $limit: 50 }
+            { $sort: { count: -1, latestSuccess: -1 } }
         ]).toArray();
 
-        const list = aggregateLogs.map(log => {
+        let myCount = 0;
+        let myRank = null;
+        if (memberId) {
+            const myIndex = aggregateLogs.findIndex(log => log._id === memberId);
+            if (myIndex !== -1) {
+                myRank = myIndex + 1;
+                myCount = aggregateLogs[myIndex].count;
+            }
+        }
+
+        const top50 = aggregateLogs.slice(0, 50);
+
+        const list = top50.map(log => {
             const id = log._id;
             const masked = id.length > 3 ? id.slice(0, 3) + '***' : id + '***';
             return { id: masked, count: log.count };
         });
 
-        res.json({ success: true, list, totalSuccessCount });
+        res.json({ success: true, list, totalSuccessCount, myCount, myRank });
     } catch (err) {
         console.error(err);
-        res.status(500).json({ success: false, list: [], totalSuccessCount: 0 });
+        res.status(500).json({ success: false, list: [], totalSuccessCount: 0, myCount: 0, myRank: null });
     }
 });
 

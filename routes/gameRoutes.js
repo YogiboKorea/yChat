@@ -103,6 +103,14 @@ router.get('/detox/status', async (req, res) => {
             });
         }
 
+        // 3000원 적립금(선물상자) 수령 여부 확인하여 쿠폰 상태 반영
+        if (memberId) {
+            const rewardLog = await db.collection('detox_event_point_onOff').findOne({ memberId });
+            if (rewardLog) {
+                hasReceivedCoupon = true;
+            }
+        }
+
         res.json({ success: true, hearts, hasReceivedCoupon, hasReceivedOnlineCoupon, completedMissions, downloadedCoupons });
     } catch (err) {
         console.error(err);
@@ -480,6 +488,14 @@ router.get('/gimpo/status', async (req, res) => {
                 completedMissions: [], downloadedCoupons: [],
                 createdAt: new Date(), updatedAt: new Date()
             });
+        }
+
+        // 3000원 적립금(선물상자) 수령 여부 확인하여 쿠폰 상태 반영
+        if (memberId) {
+            const rewardLog = await db.collection('gimpo_event_point').findOne({ memberId });
+            if (rewardLog) {
+                hasReceivedCoupon = true;
+            }
         }
         res.json({ success: true, hearts, hasReceivedCoupon, hasReceivedOnlineCoupon, completedMissions, downloadedCoupons });
     } catch (err) {

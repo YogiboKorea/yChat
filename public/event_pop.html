@@ -1564,7 +1564,7 @@
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) {
-                        alert(data.message || "🎉 3,000원 적립금이 지급되었습니다.");
+                        alert(data.message || "🎉숨겨진 혜택을 찾으셨네요! 바로 사용 가능한 공식몰 적립금 3,000원 지급 완료!");
                         STATE.hasReceivedCoupon = true;
                         const c1 = document.getElementById('member-coupon-1');
                         if (c1) c1.style.display = 'none';
@@ -1601,26 +1601,28 @@
         function renderMissions() {
             const container = document.getElementById('mission-list-container');
             if (!container) return;
-            container.innerHTML = '';
+            
+            let normalHtml = '';
+            let kakaoHtml = '';
+
             MISSIONS.forEach((m, idx) => {
                 const rewardHtml = `<span class="mission-reward"><img src="http://yogibo.kr/game/피라미드_on.png"> +${m.reward}</span>`;
 
-                // 미션 1 (idx === 0) 이고 카카오 공유하기인 경우 처리
                 const isKakaoAction = (idx === 0) || (m.url && m.url.includes('kakaoshare'));
-                // 카카오가 아닌 미션이 이미 완료되었는지 확인
                 const isAlreadyDone = !isKakaoAction && STATE.completedMissions.includes(idx);
                 const clickAction = `onclick="event.preventDefault(); doMission('${m.url}', ${m.reward}, ${idx});"`;
                 const hrefAttr = isKakaoAction ? `href="#"` : (isAlreadyDone ? `href="#"` : `href="${m.url}" target="_blank"`);
 
+                let itemHtml = '';
                 if (isAlreadyDone) {
-                    container.innerHTML += `
+                    itemHtml = `
                         <div class="mission-btn done" id="mission-btn-${idx}">
                             <span>${m.label}</span>
                             <span class="mission-reward" style="color:#888;">참여완료 ✔</span>
                         </div>
                     `;
                 } else {
-                    container.innerHTML += `
+                    itemHtml = `
                         <a ${hrefAttr} style="text-decoration: none; color: inherit; display: block;" ${isKakaoAction ? clickAction : ''}>
                             <div class="mission-btn" id="mission-btn-${idx}" ${!isKakaoAction ? `onclick="doMission('${m.url}', ${m.reward}, ${idx})"` : ''}>
                                 <span>${m.label}</span>
@@ -1629,7 +1631,15 @@
                         </a>
                     `;
                 }
+
+                if (isKakaoAction) {
+                    kakaoHtml += itemHtml;
+                } else {
+                    normalHtml += itemHtml;
+                }
             });
+
+            container.innerHTML = normalHtml + kakaoHtml;
         }
 
         function openMissionModal() {

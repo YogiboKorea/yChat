@@ -155,6 +155,58 @@
             color: white;
             border-color: #e84887;
         }
+
+        .filter-bar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 7px 16px;
+            border-radius: 20px;
+            border: 2px solid #ddd;
+            background: #f8f9fa;
+            color: #888;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .filter-btn.active {
+            background: #4bc8d8;
+            color: white;
+            border-color: #4bc8d8;
+        }
+
+        .filter-btn.active-fail {
+            background: #e84887;
+            color: white;
+            border-color: #e84887;
+        }
+
+        .filter-btn.active-claim {
+            background: #f0a500;
+            color: white;
+            border-color: #f0a500;
+        }
+
+        .badge-gacha {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .badge-snack {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .badge-claim-default {
+            background: #e2e3e5;
+            color: #383d41;
+        }
     </style>
 </head>
 
@@ -244,6 +296,12 @@
                     <button class="btn-save" style="background-color:#888; padding: 8px 15px;" onclick="loadLogs()">조회 / 새로고침</button>
                 </div>
             </div>
+            <div class="filter-bar" id="filter-bar" style="display:none;">
+                <button class="filter-btn active" id="filter-all" onclick="setFilter('all')">📋 전체</button>
+                <button class="filter-btn" id="filter-success" onclick="setFilter('success')">✅ 성공</button>
+                <button class="filter-btn" id="filter-fail" onclick="setFilter('fail')">❌ 실패</button>
+                <button class="filter-btn" id="filter-claim" onclick="setFilter('claim')">🎁 상품수령</button>
+            </div>
             <table>
                 <thead>
                     <tr>
@@ -281,10 +339,11 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            const today = new Date();
-            const year = today.getFullYear();
-            const month = String(today.getMonth() + 1).padStart(2, '0');
-            const day = String(today.getDate()).padStart(2, '0');
+            // KST 기준 오늘 날짜 설정
+            const todayKST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+            const year = todayKST.getFullYear();
+            const month = String(todayKST.getMonth() + 1).padStart(2, '0');
+            const day = String(todayKST.getDate()).padStart(2, '0');
             document.getElementById('log-date').value = `${year}-${month}-${day}`;
             
             loadConfig();
@@ -408,6 +467,80 @@
                 .catch(err => alert('오류 발생: ' + err.message));
         }
 
+        let allLogs = []; // 현재 로드된 전체 로그 저장
+        let currentFilter = 'all';
+
+        function setFilter(type) {
+            currentFilter = type;
+            // 버튼 스타일 업데이트
+            document.querySelectorAll('.filter-btn').forEach(btn => btn.className = 'filter-btn');
+            if (type === 'all') {
+                document.getElementById('filter-all').classList.add('active');
+            } else if (type === 'success') {
+                document.getElementById('filter-success').classList.add('active');
+            } else if (type === 'fail') {
+                document.getElementById('filter-fail').classList.add('active-fail');
+            } else if (type === 'claim') {
+                document.getElementById('filter-claim').classList.add('active-claim');
+            }
+            renderLogs(allLogs);
+        }
+
+        function renderLogs(logs) {
+            const tbody = document.getElementById('log-table-body');
+            tbody.innerHTML = '';
+
+            // 필터 적용
+            const filtered = logs.filter(log => {
+                if (currentFilter === 'all') return true;
+                if (currentFilter === 'claim') return log.result === 'claim';
+                return log.result === currentFilter;
+            });
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">해당 조건의 로그가 없습니다.</td></tr>';
+                return;
+            }
+
+            filtered.forEach(log => {
+                if (log.userId && log.userId.startsWith('guest_')) return;
+
+                const tr = document.createElement('tr');
+                const d = new Date(log.createdAt);
+                const dateStr = d.toLocaleString('ko-KR');
+
+                const isSuccess = log.result === 'success';
+                const isClaim = log.result === 'claim';
+                let badgeHtml;
+                if (isClaim) {
+                    if (log.claimType === 'gacha') {
+                        badgeHtml = `<span class="badge badge-gacha">✅ 성공 가챠수령</span>`;
+                    } else if (log.claimType === 'snack') {
+                        badgeHtml = `<span class="badge badge-snack">🍬 실패 간식수령</span>`;
+                    } else {
+                        badgeHtml = `<span class="badge badge-claim-default">📋 직원확인</span>`;
+                    }
+                } else {
+                    badgeHtml = isSuccess ? '<span class="badge badge-success">✅ 성공</span>' : '<span class="badge badge-fail">❌ 실패</span>';
+                }
+
+                let timeStr = '-';
+                if (log.recordTime) {
+                    timeStr = msToTimeStr(log.recordTime) + ' 초';
+                } else {
+                    timeStr = isClaim ? '-' : '(기록 없음)';
+                }
+
+                tr.innerHTML = `
+                <td>${dateStr}</td>
+                <td>${log.userId}</td>
+                <td>${badgeHtml}</td>
+                <td><strong style="color: ${isSuccess ? '#155724' : isClaim ? '#856404' : '#721c24'}">${timeStr}</strong></td>
+            `;
+                tbody.appendChild(tr);
+            });
+        }
+
         function loadLogs() {
             const dateVal = document.getElementById('log-date').value;
             const queryParam = dateVal ? `?date=${dateVal}` : '';
@@ -416,45 +549,11 @@
                 .then(r => fetchSafeJson(r))
                 .then(data => {
                     if (data.success) {
-                        const tbody = document.getElementById('log-table-body');
-                        tbody.innerHTML = '';
-                        if (!data.logs || data.logs.length === 0) {
-                            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">참여 로그가 없습니다.</td></tr>';
-                            return;
-                        }
-
-                        data.logs.forEach(log => {
-                            if (log.userId && log.userId.startsWith('guest_')) return;
-
-                            const tr = document.createElement('tr');
-                            const d = new Date(log.createdAt);
-                            const dateStr = d.toLocaleString('ko-KR');
-
-                            const isSuccess = log.result === 'success';
-                            const isClaim = log.result === 'claim';
-                            let badgeHtml;
-                            if (isClaim) {
-                                const claimLabel = log.claimType === 'snack' ? '간식지급' : '직원확인';
-                                badgeHtml = `<span class="badge" style="background:#fff3cd;color:#856404;">${claimLabel}</span>`;
-                            } else {
-                                badgeHtml = isSuccess ? '<span class="badge badge-success">성공</span>' : '<span class="badge badge-fail">실패</span>';
-                            }
-
-                            let timeStr = '-';
-                            if (log.recordTime) {
-                                timeStr = msToTimeStr(log.recordTime) + ' 초';
-                            } else {
-                                timeStr = isClaim ? '-' : '(기록 없음)';
-                            }
-
-                            tr.innerHTML = `
-                            <td>${dateStr}</td>
-                            <td>${log.userId}</td>
-                            <td>${badgeHtml}</td>
-                            <td><strong style="color: ${isSuccess ? '#155724' : isClaim ? '#856404' : '#721c24'}">${timeStr}</strong></td>
-                        `;
-                            tbody.appendChild(tr);
-                        });
+                        allLogs = (data.logs || []).filter(log => !log.userId || !log.userId.startsWith('guest_'));
+                        // 필터 바 표시
+                        document.getElementById('filter-bar').style.display = 'flex';
+                        // 현재 필터로 렌더
+                        renderLogs(allLogs);
                     }
                 })
                 .catch(err => {

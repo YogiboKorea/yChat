@@ -606,7 +606,8 @@ router.post('/gimpo/fail', async (req, res) => {
     }
 });
 
-// POST /api/game/gimpo/claim - 김포 매장 직원 확인 (type: 'offline' | 'snack')
+// POST /api/game/gimpo/claim - 김포 매장 직원 확인 (type: 'gacha' | 'snack' | 'offline')
+// gacha: 성공 가챠 수령 / snack: 실패 간식 수령 / offline: 기타 직원 확인
 router.post('/gimpo/claim', async (req, res) => {
     try {
         const { memberId, guestId, type } = req.body;
@@ -619,16 +620,18 @@ router.post('/gimpo/claim', async (req, res) => {
             return res.json({ success: false, error: 'already_claimed', type });
         }
 
-        // hearts 초기화 제거. 게임 더하기만 될 수 있게 유지
+        // claimType 정규화: gacha(성공가챠) / snack(실패간식) / offline(기타)
+        const normalizedType = ['gacha', 'snack', 'offline'].includes(type) ? type : 'offline';
+
         await db.collection('game_gimpo_users').findOneAndUpdate(
             { userId },
-            { $set: { hasReceivedCoupon: true, claimType: type || 'offline', updatedAt: new Date() } },
+            { $set: { hasReceivedCoupon: true, claimType: normalizedType, updatedAt: new Date() } },
             { returnDocument: 'after' }
         );
 
         // 로그 기록
         await db.collection('game_gimpo_logs').insertOne({
-            userId, isMember: !!memberId, result: 'claim', claimType: type || 'offline', createdAt: new Date()
+            userId, isMember: !!memberId, result: 'claim', claimType: normalizedType, createdAt: new Date()
         });
 
         res.json({ success: true, hasReceivedCoupon: true });

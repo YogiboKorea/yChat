@@ -2558,7 +2558,7 @@
                 fetch(`${API_BASE_URL}/api/game/gimpo/claim`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ memberId: memberId || null, guestId: STATE.guestId, type: 'success_reward' })
+                    body: JSON.stringify({ memberId: memberId || null, guestId: STATE.guestId, type: 'gacha' })
                 })
                     .then(res => res.json())
                     .then(data => {
@@ -2587,7 +2587,7 @@
                 fetch(`${API_BASE_URL}/api/game/gimpo/claim`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ memberId: memberId || null, guestId: STATE.guestId, type: 'fail_reward' })
+                    body: JSON.stringify({ memberId: memberId || null, guestId: STATE.guestId, type: 'snack' })
                 })
                     .then(res => res.json())
                     .then(data => {

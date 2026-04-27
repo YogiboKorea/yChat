@@ -24,16 +24,18 @@ router.post('/detox/config', async (req, res) => {
     try {
         const { minTime, maxTime, baseHearts, missions } = req.body;
         const db = getDB();
-        
+
         await db.collection('game_detox_config').updateOne(
             { type: 'success_criteria' },
-            { $set: { 
-                minTime: parseInt(minTime), 
-                maxTime: parseInt(maxTime), 
-                baseHearts: parseInt(baseHearts) || 2, 
-                missions: missions || [], 
-                updatedAt: new Date() 
-            } },
+            {
+                $set: {
+                    minTime: parseInt(minTime),
+                    maxTime: parseInt(maxTime),
+                    baseHearts: parseInt(baseHearts) || 2,
+                    missions: missions || [],
+                    updatedAt: new Date()
+                }
+            },
             { upsert: true }
         );
         res.json({ success: true, minTime, maxTime, baseHearts, missions });
@@ -385,10 +387,10 @@ router.get('/detox/admin/logs', async (req, res) => {
     try {
         const { date } = req.query;
         const db = getDB();
-        
+
         // 1. 비회원 제외 (회원만)
         const query = { isMember: true };
-        
+
         // 2. 날짜별 필터 추가 (파라미터가 있을 경우)
         if (date) {
             // 한국 시간(KST) 기준으로 하루의 시작과 끝 설정
@@ -437,13 +439,15 @@ router.post('/gimpo/config', async (req, res) => {
         const db = getDB();
         await db.collection('game_gimpo_config').updateOne(
             { type: 'success_criteria' },
-            { $set: { 
-                minTime: parseInt(minTime), 
-                maxTime: parseInt(maxTime), 
-                baseHearts: parseInt(baseHearts) || 2, 
-                missions: missions || [], 
-                updatedAt: new Date() 
-            } },
+            {
+                $set: {
+                    minTime: parseInt(minTime),
+                    maxTime: parseInt(maxTime),
+                    baseHearts: parseInt(baseHearts) || 2,
+                    missions: missions || [],
+                    updatedAt: new Date()
+                }
+            },
             { upsert: true }
         );
         res.json({ success: true, minTime, maxTime, baseHearts, missions });
@@ -464,7 +468,7 @@ router.get('/gimpo/status', async (req, res) => {
         const user = await db.collection('game_gimpo_users').findOne({ userId });
         const config = await db.collection('game_gimpo_config').findOne({ type: 'success_criteria' });
         const baseHeartsForMember = (config && config.baseHearts !== undefined) ? config.baseHearts : 2;
-        
+
         let hearts = 0, hasReceivedCoupon = false, hasReceivedOnlineCoupon = false;
         let completedMissions = [], downloadedCoupons = [];
 

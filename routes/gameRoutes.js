@@ -385,24 +385,21 @@ router.get('/detox/successList', async (req, res) => {
 // GET /api/game/detox/admin/logs - 관리자 대시보드에서 볼 모든 로그
 router.get('/detox/admin/logs', async (req, res) => {
     try {
-        const { date } = req.query;
+        const { date, startDate, endDate } = req.query;
         const db = getDB();
 
-        // 1. 비회원 제외 (회원만)
         const query = { isMember: true };
 
-        // 2. 날짜별 필터 추가 (파라미터가 있을 경우)
-        if (date) {
-            // 한국 시간(KST) 기준으로 하루의 시작과 끝 설정
-            const startOfDay = new Date(`${date}T00:00:00+09:00`);
-            const endOfDay = new Date(`${date}T23:59:59.999+09:00`);
-            query.createdAt = { $gte: startOfDay, $lte: endOfDay };
+        // 날짜 범위 필터
+        if (startDate || endDate || date) {
+            const start = new Date(`${startDate || date}T00:00:00+09:00`);
+            const end = new Date(`${endDate || date}T23:59:59.999+09:00`);
+            query.createdAt = { $gte: start, $lte: end };
         }
 
         const logs = await db.collection('game_detox_logs')
             .find(query)
             .sort({ createdAt: -1 })
-            // 날짜별 조회일 경우 300건 한정을 제외하고 전체 출력 제한 없음
             .toArray();
 
         res.json({ success: true, logs });
@@ -683,14 +680,17 @@ router.get('/gimpo/successList', async (req, res) => {
 // GET /api/game/gimpo/admin/logs
 router.get('/gimpo/admin/logs', async (req, res) => {
     try {
-        const { date } = req.query;
+        const { date, startDate, endDate } = req.query;
         const db = getDB();
         const query = { isMember: true };
-        if (date) {
-            const startOfDay = new Date(`${date}T00:00:00+09:00`);
-            const endOfDay = new Date(`${date}T23:59:59.999+09:00`);
-            query.createdAt = { $gte: startOfDay, $lte: endOfDay };
+
+        // 날짜 범위 필터
+        if (startDate || endDate || date) {
+            const start = new Date(`${startDate || date}T00:00:00+09:00`);
+            const end = new Date(`${endDate || date}T23:59:59.999+09:00`);
+            query.createdAt = { $gte: start, $lte: end };
         }
+
         const logs = await db.collection('game_gimpo_logs').find(query).sort({ createdAt: -1 }).toArray();
         res.json({ success: true, logs });
     } catch (err) {

@@ -290,9 +290,11 @@
         <div>
             <div style="display:flex; justify-content:space-between; align-items:flex-end;">
                 <h3 style="margin-bottom: 10px;">📋 회원 참여자 로그</h3>
-                <div style="margin-bottom: 10px; display:flex; gap:10px; align-items:center;">
-                    <label style="font-weight:bold; color:#555;">날짜검색: </label>
-                    <input type="date" id="log-date" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;" onchange="loadLogs()">
+                <div style="margin-bottom: 10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                    <label style="font-weight:bold; color:#555;">기간검색: </label>
+                    <input type="date" id="log-date-start" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                    <span style="color:#888; font-weight:bold;">~</span>
+                    <input type="date" id="log-date-end" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
                     <button class="btn-save" style="background-color:#888; padding: 8px 15px;" onclick="loadLogs()">조회 / 새로고침</button>
                 </div>
             </div>
@@ -344,7 +346,9 @@
             const year = todayKST.getFullYear();
             const month = String(todayKST.getMonth() + 1).padStart(2, '0');
             const day = String(todayKST.getDate()).padStart(2, '0');
-            document.getElementById('log-date').value = `${year}-${month}-${day}`;
+            const todayStr = `${year}-${month}-${day}`;
+            document.getElementById('log-date-start').value = todayStr;
+            document.getElementById('log-date-end').value = todayStr;
             
             loadConfig();
             loadLogs();
@@ -542,8 +546,19 @@
         }
 
         function loadLogs() {
-            const dateVal = document.getElementById('log-date').value;
-            const queryParam = dateVal ? `?date=${dateVal}` : '';
+            const startVal = document.getElementById('log-date-start').value;
+            const endVal = document.getElementById('log-date-end').value;
+
+            if (!startVal || !endVal) {
+                alert('시작일과 종료일을 모두 선택해주세요.');
+                return;
+            }
+            if (startVal > endVal) {
+                alert('시작일이 종료일보다 클 수 없습니다.');
+                return;
+            }
+
+            const queryParam = `?startDate=${startVal}&endDate=${endVal}`;
 
             fetch(`${API_BASE_URL}${getApiPrefix()}/admin/logs${queryParam}`)
                 .then(r => fetchSafeJson(r))

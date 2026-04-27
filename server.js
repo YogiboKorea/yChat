@@ -23,7 +23,8 @@ const app = express();
 const allowedOrigins = [
   'https://yogibo.kr', 
   'http://skin-skin123.yogibo.cafe24.com', 
-  'https://skin-skin123.yogibo.cafe24.com'
+  'https://skin-skin123.yogibo.cafe24.com',
+  'https://port-0-ychat-lzgmwhc4d9883c97.sel4.cloudtype.app'
 ];
 app.use(cors({
   origin: function (origin, callback) {

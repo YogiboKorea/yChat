@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>도파민 10초 디톡스 게임</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Pretendard', sans-serif;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background-color: #222;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* 1080 x 1920 픽셀 고정 사이즈 (세로형 디스플레이) */
+        #app {
+            position: relative;
+            width: 1080px;
+            height: 1920px;
+            background-color: #fdf5e6;
+            overflow: hidden;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+            transform-origin: center center;
+        }
+
+        .screen {
+            display: none;
+            width: 1080px;
+            height: 1920px;
+            position: absolute;
+            top: 0;
+            left: 0;
+            overflow: hidden;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        /* --- [0] 인트로 --- */
+        #screen-intro {
+            background-image: url('http://yogibo.kr/game/시작배경2.png');
+            cursor: pointer;
+            background-size: cover;
+            background-position: center bottom;
+        }
+
+        /* --- [1] 캐릭터 선택 --- */
+        #screen-select {
+            background-image: url('http://yogibo.kr/game/캐릭터선택화면.png');
+            background-size: cover;
+            background-position: center bottom;
+        }
+
+        .select-top-section {
+            position: absolute;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 30px;
+            width: 1000px;
+        }
+
+        .select-logo {
+            width: 200px;
+            height: 200px;
+            object-fit: contain;
+        }
+
+        .select-title-box {
+            background-color: rgba(255, 255, 255, 0.55);
+            border-radius: 25px;
+            padding: 25px 60px;
+            text-align: center;
+            font-weight: bold;
+            color: #333;
+            font-size: 42px;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.05);
+            border: 5px solid #fff;
+        }
+
+        .label-row {
+            position: absolute;
+            top: 580px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 24px;
+            width: 1000px;
+            justify-content: center;
+        }
+
+        .char-label {
+            background-color: #ffffff;
+            border-radius: 50px;
+            padding: 30px 0;
+            text-align: center;
+            font-weight: 900;
+            color: #71737D;
+            font-size: 40px;
+            box-shadow: 0 6px 0 #dcdcdc;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.15s ease;
+            width: 310px;
+        }
+
+        .char-label.active {
+            background-color: #3bc8d8;
+            color: #ffffff;
+            box-shadow: 0 6px 0 #28a0ad;
+            transform: translateY(-3px);
+        }
+
+        .character-list {
+            position: absolute;
+            top: 540px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 24px;
+            width: 1000px;
+            justify-content: center;
+            align-items: flex-end;
+            height: 720px;
+        }
+
+        .character-card {
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            cursor: pointer;
+            position: relative;
+            width: 310px;
+            height: 720px;
+        }
+
+        .character-card img {
+            max-width: 100%;
+            max-height: 100%;
+            width: 400px;
+            object-fit: contain;
+            transition: filter 0.2s;
+        }
+
+        @keyframes wiggle {
+
+            0%,
+            100% {
+                transform: rotate(0deg);
+            }
+
+            25% {
+                transform: rotate(-2deg);
+            }
+
+            50% {
+                transform: rotate(2deg);
+            }
+
+            75% {
+                transform: rotate(-2deg);
+            }
+        }
+
+        .character-card.active img {
+            filter: brightness(1.05);
+            animation: wiggle 0.9s ease-in-out infinite;
+            transform-origin: bottom center;
+        }
+
+        .select-bottom {
+            position: absolute;
+            bottom: 400px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .btn-select-complete {
+            cursor: pointer;
+            width: 500px;
+            transition: transform 0.1s;
+            object-fit: contain;
+        }
+
+        .btn-select-complete:active {
+            transform: translateY(5px);
+        }
+
+        /* --- [2] 대기 & [3] 게임 공통 --- */
+        #screen-confirm,
+        #screen-game {
+            background-image: url('http://yogibo.kr/game/캐릭터선택완료.png');
+            background-size: cover;
+            background-position: center bottom;
+        }
+
+        .ui-top {
+            position: absolute;
+            top: 200px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+        }
+
+        .char-display-wrapper {
+            position: absolute;
+            top: 650px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 800px;
+            height: 800px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+        }
+
+        .char-display-wrapper img {
+            max-height: 100%;
+            max-width: 100%;
+            width: 800px;
+            object-fit: contain;
+            transform-origin: bottom center;
+        }
+
+        #screen-game .char-display-wrapper img {
+            transform: scale(1.1);
+            transition: transform 0.2s;
+        }
+
+        #screen-game .char-display-wrapper.animating img {
+            transform: scale(1.2);
+        }
+
+        .ui-bottom {
+            position: absolute;
+            bottom: 200px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+        }
+
+        .speech-bubble {
+            background: white;
+            border-radius: 30px;
+            padding: 40px 60px;
+            text-align: center;
+            font-weight: bold;
+            color: #333;
+            font-size: 42px;
+            line-height: 1.5;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+            max-width: 800px;
+        }
+
+        .timer-box {
+            text-align: center;
+            z-index: 10;
+        }
+
+        .timer-label {
+            color: #4A3b32;
+            font-size: 50px;
+            font-weight: 900;
+            margin-bottom: 10px;
+        }
+
+        .timer-text {
+            color: #FA6D58;
+            font-size: 200px;
+            font-weight: 900;
+            line-height: 1.1;
+            -webkit-text-stroke: 8px #FFFFFF;
+            paint-order: stroke fill;
+        }
+
+        .start-action-wrapper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 30px;
+        }
+
+        .btn-info-circle {
+            cursor: pointer;
+            width: 120px;
+            height: 120px;
+            object-fit: contain;
+        }
+
+        .btn-game-start {
+            cursor: pointer;
+            width: 480px;
+            object-fit: contain;
+        }
+
+        .action-btn-wrapper {
+            position: relative;
+            z-index: 30;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+        }
+
+        .btn-touch {
+            cursor: pointer;
+            width: 520px;
+            display: none;
+            user-select: none;
+            object-fit: contain;
+        }
+
+        .btn-touch.pressing {
+            filter: brightness(0.85);
+        }
+
+        #touch-point-bar {
+            position: absolute;
+            top: 0px;
+            width: 220px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            animation: bounce-point 0.6s infinite alternate ease-in-out;
+            z-index: 10;
+            display: none;
+            object-fit: contain;
+        }
+
+        #touch-point-bar.show {
+            display: block;
+            opacity: 1;
+        }
+
+        @keyframes bounce-point {
+            from {
+                transform: translateY(0px);
+            }
+
+            to {
+                transform: translateY(-25px);
+            }
+        }
+
+        /* --- [4] 결과 화면 --- */
+        #screen-result.success {
+            background: url('http://yogibo.kr/game/성공_bg.png') no-repeat;
+            background-size: cover;
+            background-position: center bottom;
+        }
+
+        #screen-result.fail {
+            background: url('http://yogibo.kr/game/실패_bg.png') no-repeat;
+            background-size: cover;
+            background-position: center bottom;
+        }
+
+        .result-banner {
+            position: absolute;
+            top: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 500px;
+            object-fit: contain;
+        }
+
+        .result-char-wrapper {
+            position: absolute;
+            top: 380px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 700px;
+            height: 800px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .result-char-wrapper img {
+            max-height: 100%;
+            max-width: 100%;
+            object-fit: contain;
+            width: 800px;
+        }
+
+        .result-text-box {
+            position: absolute;
+            top: 1230px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            font-size: 52px;
+            font-weight: bold;
+            line-height: 1.4;
+            color: #fff;
+            width: 100%;
+            text-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .result-buttons {
+            position: absolute;
+            bottom: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 30px;
+        }
+
+        .btn-result-text {
+            width: 700px;
+            padding: 35px 30px;
+            border: none;
+            border-radius: 80px;
+            font-size: 42px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: transform 0.1s;
+            text-align: center;
+            line-height: 1.3;
+            background: #fff;
+            color: #333;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn-result-text:active {
+            transform: scale(0.97);
+        }
+
+        .btn-result-text.retry {
+            background: #4bc8d8;
+            color: #fff;
+        }
+
+        .btn-result-text.home {
+            background: #e84887;
+            color: #fff;
+        }
+
+        /* 방해요소 */
+        .distractor-item {
+            position: absolute;
+            pointer-events: none;
+        }
+
+        .cloud-left {
+            top: 200px;
+            left: -400px;
+            width: 450px;
+            opacity: 0;
+            transition: all 2.5s;
+            z-index: 20;
+        }
+
+        .cloud-left.show {
+            opacity: 0.95;
+            left: -2px;
+        }
+
+        .cloud-right {
+            top: 250px;
+            right: -400px;
+            width: 450px;
+            opacity: 0;
+            transition: all 2.5s;
+            z-index: 20;
+        }
+
+        .cloud-right.show {
+            opacity: 0.95;
+            right: -2px;
+        }
+
+        .msg-box {
+            top: -300px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.92);
+            border-radius: 36px;
+            padding: 35px 45px;
+            display: flex;
+            align-items: center;
+            transition: top 0.8s;
+            z-index: 25;
+            width: 800px;
+        }
+
+        .msg-box.show {
+            top: 350px;
+        }
+
+        .msg-icon {
+            width: 100px;
+            height: 100px;
+            margin-right: 30px;
+            flex-shrink: 0;
+        }
+
+        .msg-icon img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .msg-content {
+            flex: 1;
+        }
+
+        .msg-name {
+            font-weight: 800;
+            font-size: 40px;
+            margin-bottom: 8px;
+        }
+
+        .msg-text {
+            font-size: 34px;
+            color: #555;
+        }
+
+        .call-box {
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.92) 0%, rgba(0, 0, 0, 0.6) 50%, rgba(0, 0, 0, 0) 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            padding-bottom: 200px;
+            opacity: 0;
+            transition: opacity 0.8s;
+            z-index: 25;
+            pointer-events: none;
+        }
+
+        .call-box.show {
+            opacity: 1;
+        }
+
+        .call-title {
+            color: #fff;
+            font-size: 100px;
+            font-weight: 900;
+            margin-bottom: 60px;
+            text-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+
+        .call-img-bar {
+            width: 600px;
+        }
+
+        /* 게임 방법 모달 */
+        #info-modal {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 1080px;
+            height: 1920px;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 99999;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 40px;
+            width: 850px;
+            text-align: center;
+            overflow: hidden;
+            padding-bottom: 50px;
+        }
+
+        .modal-header-bg {
+            padding: 60px 40px 30px;
+        }
+
+        .modal-title {
+            font-size: 56px;
+            font-weight: 900;
+            margin-bottom: 16px;
+        }
+
+        .modal-subtitle {
+            font-size: 38px;
+            color: #333;
+            line-height: 1.4;
+        }
+
+        .modal-body-box {
+            background: #fff2e3;
+            border-radius: 30px;
+            margin: 0 50px 40px;
+            padding: 40px;
+            text-align: left;
+        }
+
+        .modal-body-box p {
+            font-size: 36px;
+            line-height: 1.7;
+            margin-bottom: 14px;
+        }
+
+        .btn-modal-confirm {
+            cursor: pointer;
+            width: 300px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <!-- 인트로 -->
+        <div id="screen-intro" class="screen active" onclick="switchScreen('select')"></div>
+
+        <!-- 캐릭터 선택 -->
+        <div id="screen-select" class="screen">
+            <div class="select-top-section">
+                <img src="http://yogibo.kr/web/img/icon/logo3_on.png" alt="yogibo" class="select-logo">
+                <div class="select-title-box">✅ 함께할 메이트를 골라주세요!</div>
+            </div>
+
+            <div class="label-row">
+                <div class="char-label" data-char="trax" onclick="selectCharacter('trax')">티렉스</div>
+                <div class="char-label" data-char="uniq" onclick="selectCharacter('uniq')">유니콘</div>
+                <div class="char-label" data-char="fox" onclick="selectCharacter('fox')">팍스</div>
+            </div>
+            <div class="character-list">
+                <div class="character-card" data-char="trax" onclick="selectCharacter('trax')">
+                    <img src="http://yogibo.kr/game/trax.png" alt="티렉스">
+                </div>
+                <div class="character-card" data-char="uniq" onclick="selectCharacter('uniq')">
+                    <img src="http://yogibo.kr/game/uni.png" alt="유니콘">
+                </div>
+                <div class="character-card" data-char="fox" onclick="selectCharacter('fox')">
+                    <img src="http://yogibo.kr/game/fox.png" alt="팍스">
+                </div>
+            </div>
+            <div class="select-bottom">
+                <img src="http://yogibo.kr/game/선택완료버튼.png" class="btn-select-complete" onclick="confirmCharacter()"
+                    alt="선택 완료">
+            </div>
+        </div>
+
+        <!-- 게임 대기 (선택 완료) -->
+        <div id="screen-confirm" class="screen">
+            <div class="ui-top">
+                <div class="speech-bubble">
+                    <span id="confirm-char-name">내 메이트 : </span><br>도파민 10초 디톡스 시작해볼까요?
+                </div>
+            </div>
+
+            <div class="char-display-wrapper">
+                <img id="confirm-char-img" src="" alt="대기캐릭터">
+            </div>
+
+            <div class="ui-bottom">
+                <div class="start-action-wrapper">
+                    <img src="http://yogibo.kr/game/게임설명무름표.png" class="btn-info-circle"
+                        onclick="document.getElementById('info-modal').style.display='flex';" alt="설명">
+                    <img src="http://yogibo.kr/game/시작하기버튼.png" class="btn-game-start" onclick="startGameUI()"
+                        alt="시작하기">
+                </div>
+            </div>
+        </div>
+
+        <!-- 게임 -->
+        <div id="screen-game" class="screen">
+            <img src="http://yogibo.kr/game/cloud_right_icon.png" class="distractor-item cloud-left"
+                id="dist-cloud-left" alt="">
+            <img src="http://yogibo.kr/game/cloud_left_icon.png" class="distractor-item cloud-right"
+                id="dist-cloud-right" alt="">
+            <div class="distractor-item msg-box" id="dist-msg">
+                <div class="msg-icon"><img src="http://yogibo.kr/game/sns_logo.png" alt="sns"></div>
+                <div class="msg-content">
+                    <div class="msg-name" id="msg-name">X</div>
+                    <div class="msg-text" id="msg-text">뭐해?</div>
+                </div>
+            </div>
+            <div class="distractor-item call-box" id="dist-call">
+                <div class="call-title" id="call-title-text">엄마💕</div>
+                <img src="http://yogibo.kr/game/push_phone.png" class="call-img-bar" alt="밀어서 통화하기">
+            </div>
+
+            <div class="ui-top">
+                <div class="timer-box">
+                    <div class="timer-label">타이머</div>
+                    <div class="timer-text" id="timer-text">00:00</div>
+                </div>
+            </div>
+
+            <div class="char-display-wrapper">
+                <img id="game-char-img" src="" alt="게임캐릭터">
+            </div>
+
+            <div class="ui-bottom">
+                <div class="action-btn-wrapper">
+                    <img src="http://yogibo.kr/game/point_bar.png" id="touch-point-bar" alt="누르고 있으세요">
+                    <img src="http://yogibo.kr/game/press.png" class="btn-touch" id="btn-touch" alt="터치">
+                </div>
+            </div>
+        </div>
+
+        <!-- 결과 -->
+        <div id="screen-result" class="screen">
+            <img id="result-banner" class="result-banner" src="" alt="결과타이틀">
+
+            <div class="result-char-wrapper">
+                <img id="result-char-img" src="" alt="결과 캐릭터">
+            </div>
+
+            <div id="result-text-box" class="result-text-box"></div>
+
+            <div class="result-buttons">
+                <button class="btn-result-text retry" onclick="switchScreen('select')">🔄 다른 캐릭터로 재도전</button>
+                <button class="btn-result-text home" onclick="switchScreen('intro')">🏠 처음으로 돌아가기</button>
+            </div>
+        </div>
+
+        <!-- 게임 방법 모달 -->
+        <div id="info-modal">
+            <div class="modal-content">
+                <div class="modal-header-bg">
+                    <div class="modal-title">🎮 게임 방법</div>
+                    <div class="modal-subtitle">10초간의 완벽한 휴식!</div>
+                </div>
+                <div class="modal-body-box">
+                    <p><strong>1. START:</strong> 아래 버튼을 누르면 시작됩니다.</p>
+                    <p><strong>2. HOLD:</strong> 10초가 될 때까지 손가락을 떼지 마세요.</p>
+                    <p><strong>3. KEEP:</strong> 중간에 나오는 방해를 무시하세요!</p>
+                </div>
+                <img src="http://yogibo.kr/game/확인_버튼.png" class="btn-modal-confirm"
+                    onclick="document.getElementById('info-modal').style.display='none';" alt="확인">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* 화면 크기에 따라 자동 스케일링 (작은 화면 미리보기용) */
+        function adjustScale() {
+            const app = document.getElementById('app');
+            const scaleX = window.innerWidth / 1080;
+            const scaleY = window.innerHeight / 1920;
+            const scale = Math.min(scaleX, scaleY, 1);
+            app.style.transform = `scale(${scale})`;
+        }
+        window.addEventListener('resize', adjustScale);
+        window.addEventListener('load', adjustScale);
+
+        const CHARACTERS = {
+            trax: {
+                name: '티렉스', img: 'http://yogibo.kr/game/티렉스.png', start: 'http://yogibo.kr/game/티렉스_시작.png',
+                frames: Array.from({ length: 10 }, (_, i) => `http://yogibo.kr/game/티렉스_${String(i + 1).padStart(2, '0')}.png`),
+                success: 'http://yogibo.kr/game/티렉스성공.png', fail: 'http://yogibo.kr/game/티렉스실패.png'
+            },
+            uniq: {
+                name: '유니콘', img: 'http://yogibo.kr/game/유니콘.png', start: 'http://yogibo.kr/game/유니콘_시작.png',
+                frames: Array.from({ length: 10 }, (_, i) => `http://yogibo.kr/game/유니콘_${String(i + 1).padStart(2, '0')}.png`),
+                success: 'http://yogibo.kr/game/유니콘성공.png', fail: 'http://yogibo.kr/game/유니콘실패.png'
+            },
+            fox: {
+                name: '팍스', img: 'http://yogibo.kr/game/팍스.png', start: 'http://yogibo.kr/game/팍스_시작.png',
+                frames: Array.from({ length: 10 }, (_, i) => `http://yogibo.kr/game/팍스_${String(i + 1).padStart(2, '0')}.png`),
+                success: 'http://yogibo.kr/game/팍스성공.png', fail: 'http://yogibo.kr/game/팍스실패.png'
+            }
+        };
+
+        let selectedChar = null;
+
+        function switchScreen(id) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById('screen-' + id).classList.add('active');
+            if (id === 'intro') {
+                selectedChar = null;
+                document.querySelectorAll('.char-label, .character-card').forEach(el => el.classList.remove('active'));
+            }
+        }
+
+        function selectCharacter(key) {
+            selectedChar = key;
+            document.querySelectorAll('.char-label').forEach(l => l.classList.remove('active'));
+            document.querySelector(`.char-label[data-char="${key}"]`).classList.add('active');
+
+            document.querySelectorAll('.character-card').forEach(c => c.classList.remove('active'));
+            document.querySelector(`.character-card[data-char="${key}"]`).classList.add('active');
+        }
+
+        function confirmCharacter() {
+            if (!selectedChar) {
+                alert('캐릭터를 먼저 선택해주세요!');
+                return;
+            }
+            const d = CHARACTERS[selectedChar];
+            document.getElementById('confirm-char-name').innerText = `내 캐릭터 : ${d.name}`;
+            document.getElementById('confirm-char-img').src = d.img;
+
+            [d.start, ...d.frames, d.success, d.fail].forEach(src => {
+                const img = new Image(); img.src = src;
+            });
+
+            switchScreen('confirm');
+        }
+
+        function startGameUI() {
+            document.getElementById('timer-text').innerText = '00:00';
+            document.getElementById('game-char-img').src = CHARACTERS[selectedChar].start;
+            document.getElementById('btn-touch').style.display = 'block';
+            document.getElementById('touch-point-bar').classList.add('show');
+            switchScreen('game');
+        }
+
+        /* --- 게임 로직 --- */
+        let isPressing = false;
+        let startTime = 0;
+        let timerReqId;
+        let frameInterval;
+        let distractorTimeouts = [];
+
+        function updateTimer() {
+            if (!isPressing) return;
+            const elapsed = Date.now() - startTime;
+
+            const ms = elapsed;
+            const text = `${String(Math.floor(ms / 1000)).padStart(2, '0')}:${String(Math.floor((ms % 1000) / 10)).padStart(2, '0')}`;
+            document.getElementById('timer-text').innerText = text;
+
+            if (elapsed > 12000) {
+                endGame(elapsed);
+                return;
+            }
+            timerReqId = requestAnimationFrame(updateTimer);
+        }
+
+        function handlePressStart(e) {
+            e.preventDefault(); e.stopPropagation();
+            if (isPressing) return;
+            isPressing = true;
+            startTime = Date.now();
+
+            // 참여 카운터 → DB 기록
+            fetch('/api/game/mk/play', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ result: 'start' })
+            }).catch(() => {});
+
+            document.getElementById('touch-point-bar').classList.remove('show');
+            document.getElementById('btn-touch').classList.add('pressing');
+            document.querySelector('#screen-game .char-display-wrapper').classList.add('animating');
+
+            triggerDistractors();
+            startAnimation();
+            timerReqId = requestAnimationFrame(updateTimer);
+        }
+
+        function handlePressEnd(e) {
+            if (!isPressing) return;
+            e.preventDefault(); e.stopPropagation();
+            endGame(Date.now() - startTime);
+        }
+
+        function startAnimation() {
+            const frames = CHARACTERS[selectedChar].frames;
+            let currentFrame = 0;
+            document.getElementById('game-char-img').src = frames[0];
+            currentFrame++;
+
+            frameInterval = setInterval(() => {
+                if (currentFrame < frames.length) {
+                    document.getElementById('game-char-img').src = frames[currentFrame];
+                    currentFrame++;
+                }
+            }, 1000);
+        }
+
+        function endGame(finalTime) {
+            isPressing = false;
+            cancelAnimationFrame(timerReqId);
+            clearInterval(frameInterval);
+
+            document.getElementById('btn-touch').classList.remove('pressing');
+            document.querySelector('#screen-game .char-display-wrapper').classList.remove('animating');
+            document.getElementById('btn-touch').style.display = 'none';
+
+            distractorTimeouts.forEach(clearTimeout);
+            document.querySelectorAll('.distractor-item').forEach(el => el.classList.remove('show'));
+
+            const isSuccess = (finalTime >= 10000 && finalTime <= 11000);
+
+            // 성공/실패 → DB 기록
+            fetch('/api/game/mk/play', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ result: isSuccess ? 'success' : 'fail', recordTime: finalTime })
+            }).catch(() => {});
+
+            showResult(isSuccess);
+        }
+
+        function showResult(isSuccess) {
+            const d = CHARACTERS[selectedChar];
+            const scr = document.getElementById('screen-result');
+            const banner = document.getElementById('result-banner');
+            const charImg = document.getElementById('result-char-img');
+            const textBox = document.getElementById('result-text-box');
+
+            scr.classList.remove('success', 'fail');
+
+            if (isSuccess) {
+                scr.classList.add('success');
+                banner.src = 'http://yogibo.kr/game/성공_텍스트.png';
+                charImg.src = d.success;
+                textBox.innerHTML = '축하합니다!<br>정확히 10초를 맞추셨습니다.';
+            } else {
+                scr.classList.add('fail');
+                banner.src = 'http://yogibo.kr/game/실패_텍스트.png';
+                charImg.src = d.fail;
+                textBox.innerHTML = '아쉬워요...<br>도파민 디톡스에 실패했어요.';
+            }
+
+            switchScreen('result');
+        }
+
+        /* --- 방해요소 --- */
+        const msgs = [
+            { name: '모르는 번호', text: '[국제발신] 해외결제 승인완료' },
+            { name: '친구', text: '야 지금 뭐해 ㅋㅋㅋ' }
+        ];
+
+        function triggerDistractors() {
+            const types = ['cloud', 'msg', 'call'].sort(() => 0.5 - Math.random());
+            const times = [2000, 5000, 8000];
+
+            types.forEach((type, index) => {
+                const t = times[index] + (Math.random() * 1000 - 500);
+                distractorTimeouts.push(setTimeout(() => {
+                    if (type === 'cloud') {
+                        document.getElementById('dist-cloud-left').classList.add('show');
+                        document.getElementById('dist-cloud-right').classList.add('show');
+                        distractorTimeouts.push(setTimeout(() => {
+                            document.getElementById('dist-cloud-left').classList.remove('show');
+                            document.getElementById('dist-cloud-right').classList.remove('show');
+                        }, 3500));
+                    } else if (type === 'msg') {
+                        const m = msgs[Math.floor(Math.random() * msgs.length)];
+                        document.getElementById('msg-name').innerText = m.name;
+                        document.getElementById('msg-text').innerText = m.text;
+                        const el = document.getElementById('dist-msg');
+                        el.classList.add('show');
+                        distractorTimeouts.push(setTimeout(() => el.classList.remove('show'), 2500));
+                    } else {
+                        const el = document.getElementById('dist-call');
+                        el.classList.add('show');
+                        distractorTimeouts.push(setTimeout(() => el.classList.remove('show'), 3000));
+                    }
+                }, t));
+            });
+        }
+
+        /* --- 이벤트 등록 --- */
+        const btnTouch = document.getElementById('btn-touch');
+        btnTouch.addEventListener('touchstart', handlePressStart, { passive: false });
+        btnTouch.addEventListener('mousedown', handlePressStart);
+
+        document.addEventListener('touchend', (e) => { if (isPressing) { e.preventDefault(); handlePressEnd(e); } }, { passive: false });
+        document.addEventListener('mouseup', (e) => { if (isPressing) handlePressEnd(e); });
+        document.addEventListener('touchcancel', (e) => { if (isPressing) handlePressEnd(e); });
+
+    </script>
+</body>
+
+</html>

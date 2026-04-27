@@ -1959,6 +1959,9 @@
                     if (STATE.pendingAction === 'claim_success') {
                         STATE.pendingAction = null;
                         showResult(true, 10000); // Trigger success screen
+                    } else if (STATE.currentScreen === 'result') {
+                        const isSuccess = document.getElementById('screen-result').classList.contains('success');
+                        showResult(isSuccess, isSuccess ? 10000 : 0);
                     }
                 })
                 .catch(err => {
@@ -1967,6 +1970,9 @@
                     if (STATE.pendingAction === 'claim_success') {
                         STATE.pendingAction = null;
                         showResult(true, 10000);
+                    } else if (STATE.currentScreen === 'result') {
+                        const isSuccess = document.getElementById('screen-result').classList.contains('success');
+                        showResult(isSuccess, isSuccess ? 10000 : 0);
                     }
                 });
         }

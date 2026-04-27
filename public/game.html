@@ -1469,7 +1469,7 @@
                     게임 준비 화면에서<br>숨겨진 선물을 찾아보세요 🎉
                 </p>
             </div>
-            <button onclick="closeOnlineRewardModal()"
+            <button onclick="closeOnlineRewardModal(); goHome();"
                 style="background: #4bc8d8; color: white; border: none; border-radius: 30px; padding: 15px 0; width: 100%; font-size: 16px; font-weight: bold; cursor: pointer;">확인</button>
         </div>
     </div>
@@ -1626,7 +1626,7 @@
         function renderMissions() {
             const container = document.getElementById('mission-list-container');
             if (!container) return;
-            
+
             let normalHtml = '';
             let kakaoHtml = '';
 
@@ -1985,6 +1985,9 @@
                     if (STATE.pendingAction === 'claim_success') {
                         STATE.pendingAction = null;
                         showResult(true, 10000); // Trigger success screen
+                    } else if (STATE.currentScreen === 'result') {
+                        const isSuccess = document.getElementById('screen-result').classList.contains('success');
+                        showResult(isSuccess, isSuccess ? 10000 : 0);
                     }
                 })
                 .catch(err => {
@@ -1993,6 +1996,9 @@
                     if (STATE.pendingAction === 'claim_success') {
                         STATE.pendingAction = null;
                         showResult(true, 10000);
+                    } else if (STATE.currentScreen === 'result') {
+                        const isSuccess = document.getElementById('screen-result').classList.contains('success');
+                        showResult(isSuccess, isSuccess ? 10000 : 0);
                     }
                 });
         }
@@ -2528,24 +2534,20 @@
                     // --- 비로그인 + 성공 ---
                     const loginUrl = getLoginUrlWithReturn({ action: 'claim_success' });
                     btnWrapper.innerHTML = `
-                        <button class="btn-result-text offline" onclick="location.href='${loginUrl}'">🏪 매장이세요?<br>회원가입 하고 오프라인 전용 혜택 받기<br>(5,000원 즉시 할인권)</button>
-                        <button class="btn-result-text online" onclick="location.href='${loginUrl}'">🌐 온라인이세요?<br>회원가입 하고 게임 더 하기</button>
+                        <button class="btn-result-text offline" onclick="location.href='${loginUrl}'">🏪 매장에 방문중이에요<br>회원가입 하고 오프라인 전용 혜택 받기<br>(5,000원 즉시 할인권)</button>
+                        <button class="btn-result-text online" onclick="location.href='${loginUrl}'">🌐 온라인으로 참여했어요<br>간편회원가입하고 게임 더 즐기기</button>
                     `;
                 } else {
                     // --- 로그인 + 성공 ---
-                    if (STATE.hasReceivedCoupon && STATE.hasReceivedOnlineCoupon) {
-                        // 이미 둘 다 수령한 경우
-                        btnWrapper.innerHTML = STATE.currentLives > 0
-                            ? `<button class="btn-result-text online" onclick="goHome()">🎮 메인으로 가서 다시하기</button>`
-                            : `<button class="btn-result-text online" onclick="goHome()">메인으로 돌아가기</button>`;
+                    if (STATE.hasReceivedCoupon || STATE.hasReceivedSecretCoupon || STATE.hasReceivedOnlineCoupon) {
+                        // 둘 중 한 개라도 수령한 경우
+                        btnWrapper.innerHTML = `<button class="btn-result-text online" onclick="goHome()">🌐 게임 더 하기, 숨겨진 혜택을 찾아보세요</button>`;
                     } else {
-                        const offlineBtn = STATE.hasReceivedCoupon
-                            ? ''
-                            : `<button class="btn-result-text offline" onclick="openOfflineRewardModal()">🏪 매장이세요?<br>오프라인 전용 혜택 받기 (5,000원 즉시 할인권)</button>`;
-                        const onlineBtn = STATE.hasReceivedOnlineCoupon
-                            ? `<button class="btn-result-text online" onclick="goHome()">🎮 게임 더 하기</button>`
-                            : `<button class="btn-result-text online" onclick="openOnlineRewardModal()">🌐 게임 더 하기, 숨겨진 혜택을 찾아보세요</button>`;
-                        btnWrapper.innerHTML = offlineBtn + onlineBtn;
+                        // 둘 다 수령하지 않은 경우
+                        btnWrapper.innerHTML = `
+                            <button class="btn-result-text offline" onclick="openOfflineRewardModal()">🏪 매장에 방문중이에요<br>오프라인 전용 혜택 받기 (5,000원 즉시 할인권)</button>
+                            <button class="btn-result-text online" onclick="openOnlineRewardModal()">🌐 온라인으로 참여했어요<br>게임 더 하기, 숨겨진 혜택을 찾아보세요</button>
+                        `;
                     }
                 }
             } else {
@@ -2567,10 +2569,14 @@
                 } else {
                     // --- 로그인 + 실패 ---
                     failExtraUi.style.display = 'none';
-                    btnWrapper.innerHTML = `
-                        <button class="btn-result-text offline" onclick="goHome()">🏪 매장에 방문중이에요?<br>재도전하고 매장할인 혜택 받기</button>
-                        <button class="btn-result-text online" onclick="goHome()">🌐 온라인으로 참여했어요?<br>재도전하고 숨겨진 혜택을 찾아보세요</button>
-                    `;
+                    if (STATE.hasReceivedCoupon || STATE.hasReceivedSecretCoupon || STATE.hasReceivedOnlineCoupon) {
+                        btnWrapper.innerHTML = `<button class="btn-result-text online" onclick="goHome()">🌐 게임 더 하기, 숨겨진 혜택을 찾아보세요</button>`;
+                    } else {
+                        btnWrapper.innerHTML = `
+                            <button class="btn-result-text offline" onclick="goHome()">🏪 매장에 방문중이에요?<br>재도전하고 매장할인 혜택 받기</button>
+                            <button class="btn-result-text online" onclick="goHome()">🌐 온라인으로 참여했어요?<br>재도전하고 숨겨진 혜택을 찾아보세요</button>
+                        `;
+                    }
                 }
             }
 

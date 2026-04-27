@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>도파민 디톡스 게임 통계</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+            color: #fff;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 900;
+            margin-bottom: 8px;
+            background: linear-gradient(90deg, #4bc8d8, #e84887);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: #aaa;
+            margin-bottom: 40px;
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            width: 100%;
+            max-width: 700px;
+            margin-bottom: 36px;
+        }
+
+        .card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 28px 16px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .card-icon { font-size: 36px; margin-bottom: 10px; }
+        .card-label { font-size: 13px; color: #aaa; margin-bottom: 8px; }
+        .card-value {
+            font-size: 48px;
+            font-weight: 900;
+            line-height: 1;
+        }
+
+        .card.total .card-value { color: #4bc8d8; }
+        .card.success .card-value { color: #5de88a; }
+        .card.fail .card-value { color: #e84887; }
+
+        .rate-box {
+            width: 100%;
+            max-width: 700px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 24px 28px;
+            margin-bottom: 36px;
+            backdrop-filter: blur(10px);
+        }
+
+        .rate-title {
+            font-size: 15px;
+            color: #ccc;
+            margin-bottom: 14px;
+            font-weight: 700;
+        }
+
+        .bar-wrap {
+            background: rgba(255,255,255,0.08);
+            border-radius: 100px;
+            height: 22px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .bar-fill {
+            height: 100%;
+            border-radius: 100px;
+            transition: width 0.6s ease;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 10px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .bar-success { background: linear-gradient(90deg, #3bc8d8, #5de88a); }
+        .bar-fail    { background: linear-gradient(90deg, #e84887, #f97316); }
+
+        .bar-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            color: #aaa;
+        }
+
+        .last-time {
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 32px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        button {
+            padding: 12px 28px;
+            border: none;
+            border-radius: 100px;
+            font-size: 15px;
+            font-weight: 700;
+            font-family: 'Noto Sans KR', sans-serif;
+            cursor: pointer;
+            transition: transform 0.1s, opacity 0.1s;
+        }
+
+        button:active { transform: scale(0.96); opacity: 0.85; }
+
+        .btn-refresh {
+            background: #4bc8d8;
+            color: #fff;
+        }
+
+        .btn-reset {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .btn-game {
+            background: linear-gradient(90deg, #e84887, #f97316);
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🎮 도파민 디톡스 통계</h1>
+    <p class="subtitle">mk.html 게임 버튼 터치 기반 참여 데이터</p>
+
+    <div class="cards">
+        <div class="card total">
+            <div class="card-icon">👥</div>
+            <div class="card-label">총 참여 횟수</div>
+            <div class="card-value" id="val-total">0</div>
+        </div>
+        <div class="card success">
+            <div class="card-icon">🏆</div>
+            <div class="card-label">성공</div>
+            <div class="card-value" id="val-success">0</div>
+        </div>
+        <div class="card fail">
+            <div class="card-icon">💔</div>
+            <div class="card-label">실패</div>
+            <div class="card-value" id="val-fail">0</div>
+        </div>
+    </div>
+
+    <div class="rate-box">
+        <div class="rate-title">📊 성공률 / 실패율</div>
+        <div class="bar-wrap">
+            <div class="bar-fill bar-success" id="bar-success" style="width:0%"></div>
+        </div>
+        <div class="bar-wrap">
+            <div class="bar-fill bar-fail" id="bar-fail" style="width:0%"></div>
+        </div>
+        <div class="bar-labels">
+            <span>성공 <strong id="pct-success">0</strong>%</span>
+            <span>실패 <strong id="pct-fail">0</strong>%</span>
+        </div>
+    </div>
+
+    <p class="last-time" id="last-time">마지막 플레이: 없음</p>
+
+    <div class="actions">
+        <button class="btn-refresh" onclick="load()">🔄 새로고침</button>
+        <button class="btn-game" onclick="location.href='mk.html'">🎮 게임 열기</button>
+        <button class="btn-reset" onclick="resetData()">🗑 데이터 초기화</button>
+    </div>
+
+    <script>
+        function load() {
+            const stats = JSON.parse(localStorage.getItem('mk_stats') || '{"total":0,"success":0,"fail":0}');
+            const total = stats.total || 0;
+            const success = stats.success || 0;
+            const fail = stats.fail || 0;
+
+            document.getElementById('val-total').textContent = total.toLocaleString();
+            document.getElementById('val-success').textContent = success.toLocaleString();
+            document.getElementById('val-fail').textContent = fail.toLocaleString();
+
+            const completed = success + fail;
+            const successPct = completed > 0 ? Math.round((success / completed) * 100) : 0;
+            const failPct = completed > 0 ? Math.round((fail / completed) * 100) : 0;
+
+            document.getElementById('bar-success').style.width = successPct + '%';
+            document.getElementById('bar-success').textContent = successPct > 10 ? successPct + '%' : '';
+            document.getElementById('bar-fail').style.width = failPct + '%';
+            document.getElementById('bar-fail').textContent = failPct > 10 ? failPct + '%' : '';
+
+            document.getElementById('pct-success').textContent = successPct;
+            document.getElementById('pct-fail').textContent = failPct;
+
+            if (stats.lastPlayed) {
+                const d = new Date(stats.lastPlayed);
+                document.getElementById('last-time').textContent =
+                    `마지막 플레이: ${d.toLocaleDateString('ko-KR')} ${d.toLocaleTimeString('ko-KR')}`;
+            } else {
+                document.getElementById('last-time').textContent = '마지막 플레이: 없음';
+            }
+        }
+
+        function resetData() {
+            if (!confirm('통계 데이터를 초기화하시겠습니까?')) return;
+            localStorage.removeItem('mk_stats');
+            load();
+        }
+
+        load();
+
+        // 5초마다 자동 갱신
+        setInterval(load, 5000);
+    </script>
+</body>
+</html>

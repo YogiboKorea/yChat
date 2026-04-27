@@ -692,4 +692,67 @@ router.get('/gimpo/admin/logs', async (req, res) => {
     }
 });
 
+// ============================================================
+// mk 기기 게임 통계 라우트 (game_mk_logs 컬렉션)
+// ============================================================
+
+// POST /api/game/mk/play - 게임 버튼 클릭 기록
+router.post('/mk/play', async (req, res) => {
+    try {
+        const { result, recordTime } = req.body; // result: 'start'|'success'|'fail'
+        const db = getDB();
+
+        const nowKST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+        const dateStr = nowKST.toISOString().slice(0, 10); // YYYY-MM-DD
+
+        await db.collection('game_mk_logs').insertOne({
+            result: result || 'start',
+            recordTime: recordTime || null,
+            date: dateStr,
+            createdAt: nowKST
+        });
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('[mk-game] play 기록 오류:', err);
+        res.status(500).json({ success: false, error: '서버 에러' });
+    }
+});
+
+// GET /api/game/mk/stats - 전체 통계 + 날짜별 집계
+router.get('/mk/stats', async (req, res) => {
+    try {
+        const db = getDB();
+
+        const [total, success, fail, dailyRaw] = await Promise.all([
+            db.collection('game_mk_logs').countDocuments({ result: 'start' }),
+            db.collection('game_mk_logs').countDocuments({ result: 'success' }),
+            db.collection('game_mk_logs').countDocuments({ result: 'fail' }),
+            db.collection('game_mk_logs').aggregate([
+                {
+                    $group: {
+                        _id: '$date',
+                        total: { $sum: { $cond: [{ $eq: ['$result', 'start'] }, 1, 0] } },
+                        success: { $sum: { $cond: [{ $eq: ['$result', 'success'] }, 1, 0] } },
+                        fail: { $sum: { $cond: [{ $eq: ['$result', 'fail'] }, 1, 0] } }
+                    }
+                },
+                { $sort: { _id: -1 } }
+            ]).toArray()
+        ]);
+
+        const lastLog = await db.collection('game_mk_logs').findOne({}, { sort: { createdAt: -1 } });
+
+        res.json({
+            success: true,
+            total, success, fail,
+            lastPlayed: lastLog ? lastLog.createdAt : null,
+            daily: dailyRaw.map(d => ({ date: d._id, total: d.total, success: d.success, fail: d.fail }))
+        });
+    } catch (err) {
+        console.error('[mk-game] stats 조회 오류:', err);
+        res.status(500).json({ success: false, error: '서버 에러' });
+    }
+});
+
 module.exports = router;

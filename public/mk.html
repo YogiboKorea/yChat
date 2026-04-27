@@ -636,6 +636,7 @@
             width: 300px;
         }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
 </head>
 
 <body>
@@ -868,11 +869,7 @@
             startTime = Date.now();
 
             // 참여 카운터 → DB 기록
-            fetch('/api/game/mk/play', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ result: 'start' })
-            }).catch(() => {});
+            axios.post('/api/game/mk/play', { result: 'start' }).catch(() => {});
 
             document.getElementById('touch-point-bar').classList.remove('show');
             document.getElementById('btn-touch').classList.add('pressing');
@@ -918,11 +915,7 @@
             const isSuccess = (finalTime >= 10000 && finalTime <= 11000);
 
             // 성공/실패 → DB 기록
-            fetch('/api/game/mk/play', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ result: isSuccess ? 'success' : 'fail', recordTime: finalTime })
-            }).catch(() => {});
+            axios.post('/api/game/mk/play', { result: isSuccess ? 'success' : 'fail', recordTime: finalTime }).catch(() => {});
 
             showResult(isSuccess);
         }

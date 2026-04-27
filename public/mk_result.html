@@ -183,6 +183,7 @@
         .loading { text-align: center; padding: 40px; color: #888; }
         .empty   { text-align: center; padding: 20px; color: #666; font-size: 13px; }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
 </head>
 <body>
 
@@ -254,8 +255,7 @@
 
     async function load() {
         try {
-            const res = await fetch('/api/game/mk/stats');
-            const data = await res.json();
+            const { data } = await axios.get('/api/game/mk/stats');
 
             if (!data.success) throw new Error('API 오류');
 

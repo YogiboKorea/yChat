@@ -728,7 +728,7 @@ router.get('/mk/stats', async (req, res) => {
     try {
         const db = getDB();
 
-        const [total, success, fail, dailyRaw] = await Promise.all([
+        const [totalCount, successCount, failCount, dailyRaw] = await Promise.all([
             db.collection('game_mk_logs').countDocuments({ result: 'start' }),
             db.collection('game_mk_logs').countDocuments({ result: 'success' }),
             db.collection('game_mk_logs').countDocuments({ result: 'fail' }),
@@ -749,7 +749,9 @@ router.get('/mk/stats', async (req, res) => {
 
         res.json({
             success: true,
-            total, success, fail,
+            total: totalCount,
+            success: successCount,
+            fail: failCount,
             lastPlayed: lastLog ? lastLog.createdAt : null,
             daily: dailyRaw.map(d => ({ date: d._id, total: d.total, success: d.success, fail: d.fail }))
         });

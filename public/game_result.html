@@ -207,6 +207,22 @@
             background: #e2e3e5;
             color: #383d41;
         }
+
+        .btn-excel {
+            background-color: #1d6f42;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 13px;
+            transition: background 0.2s;
+        }
+
+        .btn-excel:hover {
+            background-color: #155734;
+        }
     </style>
 </head>
 
@@ -296,6 +312,7 @@
                     <span style="color:#888; font-weight:bold;">~</span>
                     <input type="date" id="log-date-end" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
                     <button class="btn-save" style="background-color:#888; padding: 8px 15px;" onclick="loadLogs()">조회 / 새로고침</button>
+                    <button class="btn-excel" onclick="downloadExcel()">📥 엑셀 다운로드</button>
                 </div>
             </div>
             <div class="filter-bar" id="filter-bar" style="display:none;">
@@ -322,6 +339,7 @@
         </div>
     </div>
 
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
     <script>
         // 현재 포트 및 도메인 자동 인식
         const API_BASE_URL = 'https://port-0-ychat-lzgmwhc4d9883c97.sel4.cloudtype.app';
@@ -574,6 +592,64 @@
                 .catch(err => {
                     document.getElementById('log-table-body').innerHTML = `<tr><td colspan="4" style="text-align:center; color:red;">로그를 불러오지 못했습니다. (${err.message})</td></tr>`;
                 });
+        }
+
+        function downloadExcel() {
+            if (!allLogs || allLogs.length === 0) {
+                alert('다운로드할 데이터가 없습니다. 먼저 조회 버튼을 눌러주세요.');
+                return;
+            }
+
+            // 현재 필터 적용
+            const filtered = allLogs.filter(log => {
+                if (currentFilter === 'all') return true;
+                if (currentFilter === 'claim') return log.result === 'claim';
+                return log.result === currentFilter;
+            });
+
+            if (filtered.length === 0) {
+                alert('현재 필터 조건에 맞는 데이터가 없습니다.');
+                return;
+            }
+
+            const rows = filtered.map(log => {
+                const d = new Date(log.createdAt);
+                const dateStr = d.toLocaleString('ko-KR');
+
+                let resultLabel;
+                if (log.result === 'claim') {
+                    if (log.claimType === 'gacha') resultLabel = '성공 가챠수령';
+                    else if (log.claimType === 'snack') resultLabel = '실패 간식수령';
+                    else resultLabel = '직원확인';
+                } else if (log.result === 'success') {
+                    resultLabel = '성공';
+                } else {
+                    resultLabel = '실패';
+                }
+
+                let timeStr = '-';
+                if (log.recordTime) {
+                    timeStr = msToTimeStr(log.recordTime) + ' 초';
+                }
+
+                return {
+                    '참여 일시': dateStr,
+                    '회원/게스트 ID': log.userId || '',
+                    '결과': resultLabel,
+                    '실제 멈춘 시간': timeStr
+                };
+            });
+
+            const ws = XLSX.utils.json_to_sheet(rows);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, '게임로그');
+
+            const startVal = document.getElementById('log-date-start').value;
+            const endVal = document.getElementById('log-date-end').value;
+            const tabLabel = currentTab === 'gimpo' ? '김포' : '디톡스';
+            const filename = `게임로그_${tabLabel}_${startVal}_${endVal}.xlsx`;
+
+            XLSX.writeFile(wb, filename);
         }
     </script>
 

@@ -726,6 +726,53 @@ router.post('/mk/play', async (req, res) => {
     }
 });
 
+// GET /api/game/mk/config - 설정 가져오기
+router.get('/mk/config', async (req, res) => {
+    try {
+        const db = getDB();
+        const config = await db.collection('game_mk_config').findOne({ type: 'success_criteria' });
+        if (config && config.minTimeSec) {
+            res.json({ success: true, minTimeSec: config.minTimeSec, maxTimeSec: config.maxTimeSec });
+        } else {
+            // 하위 호환성 (기존 targetTimeSec가 있으면 10초~10.2초 처럼 매핑, 없으면 10.0~10.2초)
+            const fallbackMin = config && config.targetTimeSec ? config.targetTimeSec : 10.0;
+            const fallbackMax = config && config.targetTimeSec ? config.targetTimeSec + 0.2 : 10.2;
+            res.json({ success: true, minTimeSec: fallbackMin, maxTimeSec: fallbackMax });
+        }
+    } catch (err) {
+        console.error('[mk-game] config 조회 오류:', err);
+        res.status(500).json({ success: false, error: '서버 에러' });
+    }
+});
+
+// POST /api/game/mk/config - 설정 업데이트
+router.post('/mk/config', async (req, res) => {
+    try {
+        const { minTimeSec, maxTimeSec } = req.body;
+        const db = getDB();
+        let minSec = parseFloat(minTimeSec);
+        let maxSec = parseFloat(maxTimeSec);
+        if (isNaN(minSec) || minSec <= 0) minSec = 10.0;
+        if (isNaN(maxSec) || maxSec <= 0) maxSec = 10.2;
+        
+        await db.collection('game_mk_config').updateOne(
+            { type: 'success_criteria' },
+            {
+                $set: {
+                    minTimeSec: minSec,
+                    maxTimeSec: maxSec,
+                    updatedAt: new Date()
+                }
+            },
+            { upsert: true }
+        );
+        res.json({ success: true, minTimeSec: minSec, maxTimeSec: maxSec });
+    } catch (err) {
+        console.error('[mk-game] config 업데이트 오류:', err);
+        res.status(500).json({ success: false, error: '서버 에러' });
+    }
+});
+
 // GET /api/game/mk/stats - 전체 통계 + 날짜별 집계
 router.get('/mk/stats', async (req, res) => {
     try {

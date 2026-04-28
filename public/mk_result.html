@@ -168,6 +168,25 @@
             transition: transform 0.1s, opacity 0.1s;
         }
 
+        /* 설정 박스 */
+        .config-box {
+            max-width: 720px;
+            margin: 0 auto 20px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 14px;
+            padding: 15px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .config-title { font-size: 15px; color: #ccc; font-weight: 700; }
+        
+        @media (max-width: 500px) {
+            .config-box { flex-direction: column; gap: 12px; }
+        }
+
         button:active { transform: scale(0.96); opacity: 0.85; }
         .btn-refresh { background: #4bc8d8; color: #fff; }
         .btn-excel   { background: #22c55e; color: #fff; }
@@ -196,6 +215,17 @@
     <button class="btn-refresh" onclick="load()">🔄 새로고침</button>
     <button class="btn-excel"   onclick="downloadExcel()">📥 엑셀 다운로드</button>
     <button class="btn-game"    onclick="location.href='mk.html'">🎮 게임 열기</button>
+</div>
+
+<div class="config-box">
+    <div class="config-title">⏱️ 성공 인정 범위 (현재: <strong id="current-target-sec" style="color:#4bc8d8;">10.00 ~ 10.20</strong>초)</div>
+    <div style="display:flex; gap:10px; justify-content:center; align-items:center;">
+        <input type="number" id="min-sec-input" value="10.00" step="0.01" style="width: 70px; padding: 8px; border-radius: 8px; border: none; text-align: center; font-weight: bold; font-size: 15px;">
+        <span style="color:#fff; font-weight: bold;">~</span>
+        <input type="number" id="max-sec-input" value="10.20" step="0.01" style="width: 70px; padding: 8px; border-radius: 8px; border: none; text-align: center; font-weight: bold; font-size: 15px;">
+        <span style="color:#fff; font-weight: bold;">초</span>
+        <button onclick="saveConfig()" style="background: #e84887; color: #fff; border: none; border-radius: 8px; padding: 8px 16px; font-weight: bold; font-family: 'Noto Sans KR', sans-serif; cursor: pointer;">변경</button>
+    </div>
 </div>
 
 <div class="summary-cards">
@@ -252,6 +282,45 @@
 
 <script>
     let rawDaily = [];
+
+    async function loadConfig() {
+        try {
+            const { data } = await axios.get('/api/game/mk/config');
+            if (data.success && data.minTimeSec) {
+                document.getElementById('current-target-sec').textContent = data.minTimeSec.toFixed(2) + ' ~ ' + data.maxTimeSec.toFixed(2);
+                document.getElementById('min-sec-input').value = data.minTimeSec.toFixed(2);
+                document.getElementById('max-sec-input').value = data.maxTimeSec.toFixed(2);
+            }
+        } catch (e) {
+            console.error('설정 로드 실패:', e);
+        }
+    }
+
+    async function saveConfig() {
+        const minSec = document.getElementById('min-sec-input').value;
+        const maxSec = document.getElementById('max-sec-input').value;
+        
+        if (!minSec || !maxSec || isNaN(minSec) || isNaN(maxSec) || parseFloat(minSec) <= 0) {
+            alert('올바른 목표 초수를 입력하세요.');
+            return;
+        }
+        
+        try {
+            const { data } = await axios.post('/api/game/mk/config', { 
+                minTimeSec: parseFloat(minSec), 
+                maxTimeSec: parseFloat(maxSec) 
+            });
+            if (data.success) {
+                alert(`성공 인정 범위가 ${data.minTimeSec.toFixed(2)}초 ~ ${data.maxTimeSec.toFixed(2)}초로 변경되었습니다.`);
+                document.getElementById('current-target-sec').textContent = data.minTimeSec.toFixed(2) + ' ~ ' + data.maxTimeSec.toFixed(2);
+            } else {
+                alert('변경에 실패했습니다.');
+            }
+        } catch (e) {
+            console.error('설정 변경 실패:', e);
+            alert('서버 에러로 변경에 실패했습니다.');
+        }
+    }
 
     async function load() {
         try {
@@ -339,6 +408,7 @@
         URL.revokeObjectURL(url);
     }
 
+    loadConfig();
     load();
     setInterval(load, 10000); // 10초 자동 갱신
 </script>

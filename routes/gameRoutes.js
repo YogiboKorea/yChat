@@ -776,13 +776,24 @@ router.post('/mk/config', async (req, res) => {
 // GET /api/game/mk/stats - 전체 통계 + 날짜별 집계
 router.get('/mk/stats', async (req, res) => {
     try {
+        const { date, startDate, endDate } = req.query;
         const db = getDB();
 
+        let matchQuery = {};
+        if (date) {
+            matchQuery.date = date;
+        } else if (startDate || endDate) {
+            matchQuery.date = {};
+            if (startDate) matchQuery.date.$gte = startDate;
+            if (endDate) matchQuery.date.$lte = endDate;
+        }
+
         const [totalCount, successCount, failCount, dailyRaw] = await Promise.all([
-            db.collection('game_mk_logs').countDocuments({ result: 'start' }),
-            db.collection('game_mk_logs').countDocuments({ result: 'success' }),
-            db.collection('game_mk_logs').countDocuments({ result: 'fail' }),
+            db.collection('game_mk_logs').countDocuments({ ...matchQuery, result: 'start' }),
+            db.collection('game_mk_logs').countDocuments({ ...matchQuery, result: 'success' }),
+            db.collection('game_mk_logs').countDocuments({ ...matchQuery, result: 'fail' }),
             db.collection('game_mk_logs').aggregate([
+                { $match: matchQuery },
                 {
                     $group: {
                         _id: '$date',
@@ -795,7 +806,7 @@ router.get('/mk/stats', async (req, res) => {
             ]).toArray()
         ]);
 
-        const lastLog = await db.collection('game_mk_logs').findOne({}, { sort: { createdAt: -1 } });
+        const lastLog = await db.collection('game_mk_logs').findOne(matchQuery, { sort: { createdAt: -1 } });
 
         res.json({
             success: true,

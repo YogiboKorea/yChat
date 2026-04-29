@@ -227,7 +227,7 @@
 
         .char-display-wrapper {
             position: absolute;
-            top: 650px;
+            top: 750px;
             left: 50%;
             transform: translateX(-50%);
             width: 800px;
@@ -243,6 +243,10 @@
             width: 800px;
             object-fit: contain;
             transform-origin: bottom center;
+        }
+
+        #screen-game .char-display-wrapper {
+            top: 850px;
         }
 
         #screen-game .char-display-wrapper img {
@@ -426,7 +430,7 @@
 
         .result-buttons {
             position: absolute;
-            bottom: 120px;
+            top: 1430px;
             left: 50%;
             transform: translateX(-50%);
             display: flex;
@@ -677,7 +681,14 @@
         <div id="screen-confirm" class="screen">
             <div class="ui-top">
                 <div class="speech-bubble">
-                    <span id="confirm-char-name">내 메이트 : </span><br>도파민 <span class="dyn-target-time">10</span>초 디톡스 시작해볼까요?
+                    <span id="confirm-char-name">내 메이트 : </span><br>도파민 <span class="dyn-target-time">10</span>초 디톡스
+                    시작해볼까요?
+                </div>
+                <div class="start-action-wrapper" style="margin-top: 60px;">
+                    <img src="http://yogibo.kr/game/게임설명무름표.png" class="btn-info-circle"
+                        onclick="document.getElementById('info-modal').style.display='flex';" alt="설명">
+                    <img src="http://yogibo.kr/game/시작하기버튼.png" class="btn-game-start" onclick="startGameUI()"
+                        alt="시작하기">
                 </div>
             </div>
 
@@ -686,12 +697,6 @@
             </div>
 
             <div class="ui-bottom">
-                <div class="start-action-wrapper">
-                    <img src="http://yogibo.kr/game/게임설명무름표.png" class="btn-info-circle"
-                        onclick="document.getElementById('info-modal').style.display='flex';" alt="설명">
-                    <img src="http://yogibo.kr/game/시작하기버튼.png" class="btn-game-start" onclick="startGameUI()"
-                        alt="시작하기">
-                </div>
             </div>
         </div>
 
@@ -713,10 +718,14 @@
                 <img src="http://yogibo.kr/game/push_phone.png" class="call-img-bar" alt="밀어서 통화하기">
             </div>
 
-            <div class="ui-top">
-                <div class="timer-box">
+            <div class="ui-top" style="top: 130px;">
+                <div class="timer-box" style="margin-bottom: 20px;">
                     <div class="timer-label">타이머</div>
                     <div class="timer-text" id="timer-text">00:00</div>
+                </div>
+                <div class="action-btn-wrapper">
+                    <img src="http://yogibo.kr/game/point_bar.png" id="touch-point-bar" alt="누르고 있으세요">
+                    <img src="http://yogibo.kr/game/press.png" class="btn-touch" id="btn-touch" alt="터치">
                 </div>
             </div>
 
@@ -725,10 +734,6 @@
             </div>
 
             <div class="ui-bottom">
-                <div class="action-btn-wrapper">
-                    <img src="http://yogibo.kr/game/point_bar.png" id="touch-point-bar" alt="누르고 있으세요">
-                    <img src="http://yogibo.kr/game/press.png" class="btn-touch" id="btn-touch" alt="터치">
-                </div>
             </div>
         </div>
 
@@ -846,13 +851,13 @@
         let timerReqId;
         let frameInterval;
         let distractorTimeouts = [];
-        
+
         let minTimeSec = 10.0; // 설정에서 받아올 목표 시간 최소값 (기본 10초)
         let maxTimeSec = 10.2; // 설정에서 받아올 목표 시간 최대값 (기본 10.2초)
 
         async function fetchConfig() {
             try {
-                const { data } = await axios.get('/api/game/mk/config');
+                const { data } = await axios.get('https://port-0-ychat-lzgmwhc4d9883c97.sel4.cloudtype.app/api/game/mk/config');
                 if (data.success && data.minTimeSec) {
                     minTimeSec = data.minTimeSec;
                     maxTimeSec = data.maxTimeSec;
@@ -867,7 +872,7 @@
                 console.error('설정 로딩 실패:', err);
             }
         }
-        
+
         // 초기 로드 시 설정 가져오기
         fetchConfig();
 
@@ -894,7 +899,7 @@
             startTime = Date.now();
 
             // 참여 카운터 → DB 기록
-            axios.post('/api/game/mk/play', { result: 'start' }).catch(() => {});
+            axios.post('https://port-0-ychat-lzgmwhc4d9883c97.sel4.cloudtype.app/api/game/mk/play', { result: 'start' }).catch(() => { });
 
             document.getElementById('touch-point-bar').classList.remove('show');
             document.getElementById('btn-touch').classList.add('pressing');
@@ -943,7 +948,7 @@
             const isSuccess = (finalTime >= minMs && finalTime <= maxMs);
 
             // 성공/실패 → DB 기록
-            axios.post('/api/game/mk/play', { result: isSuccess ? 'success' : 'fail', recordTime: finalTime }).catch(() => {});
+            axios.post('https://port-0-ychat-lzgmwhc4d9883c97.sel4.cloudtype.app/api/game/mk/play', { result: isSuccess ? 'success' : 'fail', recordTime: finalTime }).catch(() => { });
 
             showResult(isSuccess);
         }

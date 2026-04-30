@@ -1279,8 +1279,6 @@
             <div id="header-left-btns" style="display: flex; gap: 8px;">
                 <button class="header-btn" id="btn-header-home" onclick="goHome()" style="display: none;"><img
                         src="http://yogibo.kr/game/메인.png" alt="메인"></button>
-                <button class="header-btn" id="btn-header-back" onclick="goBack()" style="display: none;"><img
-                        src="http://yogibo.kr/game/이전.png" alt="이전"></button>
                 <button class="header-btn" id="btn-header-pause" style="display: none;"><img
                         src="http://yogibo.kr/game/정지.png" alt="정지"></button>
             </div>
@@ -1382,9 +1380,9 @@
         </div>
 
         <div id="screen-result" class="screen">
-
+            <!--
             <div class="result-home-btn" onclick="goHome()">🏠 홈 화면 가기</div>
-
+-->
             <img id="result-banner" class="result-banner" src="" alt="타이틀 배너">
 
             <div class="result-char-wrapper">
@@ -1820,6 +1818,10 @@
             });
         }
 
+        if (document.referrer && document.referrer.includes('marketing/page/survey')) {
+            sessionStorage.setItem('fromSurvey', 'true');
+        }
+
         const STATE = { currentScreen: 'intro', selectedChar: null, maxLives: 5, currentLives: 0, history: [], guestId: null, hasReceivedCoupon: false, hasReceivedOnlineCoupon: false, hasReceivedSecretCoupon: false, completedMissions: [], downloadedCoupons: [], pendingAction: null, config: { minTime: 10000, maxTime: 11000 } };
 
         function getLoginUrlWithReturn(extraParams = {}) {
@@ -2028,7 +2030,6 @@
         const gameCharImg = document.getElementById('game-char-img');
 
         const btnHeaderHome = document.getElementById('btn-header-home');
-        const btnHeaderBack = document.getElementById('btn-header-back');
         const btnHeaderPause = document.getElementById('btn-header-pause');
 
         function renderLives() {
@@ -2065,18 +2066,15 @@
             STATE.currentScreen = targetScreenId;
 
             btnHeaderHome.style.display = 'none';
-            btnHeaderBack.style.display = 'none';
             btnHeaderPause.style.display = 'none';
 
-            if (['intro', 'result'].includes(targetScreenId)) {
+            if (['intro'].includes(targetScreenId)) {
                 header.style.display = 'none';
             } else {
                 header.style.display = 'flex';
                 renderLives();
 
-                if (targetScreenId === 'select') {
-                    btnHeaderBack.style.display = 'block';
-                } else if (targetScreenId === 'confirm') {
+                if (targetScreenId === 'select' || targetScreenId === 'confirm' || targetScreenId === 'result') {
                     btnHeaderHome.style.display = 'block';
                 } else if (targetScreenId === 'game') {
                     btnHeaderPause.style.display = 'block';
@@ -2084,8 +2082,12 @@
             }
         }
 
-        function goBack() { STATE.history.length > 0 ? switchScreen(STATE.history.pop(), false) : goHome(); }
         function goHome() {
+            if (sessionStorage.getItem('fromSurvey') === 'true') {
+                location.href = 'http://yogibo.kr/marketing/page/survey/index.html';
+                return;
+            }
+
             STATE.history = []; STATE.selectedChar = null;
             document.querySelectorAll('.char-label, .character-card').forEach(el => el.classList.remove('active'));
             switchScreen('intro');

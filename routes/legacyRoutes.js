@@ -374,8 +374,18 @@ router.get('/api/:_any/products', async (req, res) => {
     const params = { shop_no: 1, limit: parseInt(req.query.limit) || 1000, offset: parseInt(req.query.offset) || 0 };
     if (req.query.q) params['search[product_name]'] = req.query.q;
     const data = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/products`, {}, params);
-    res.json({ products: data.products?.map(p => ({ product_no: p.product_no, product_name: p.product_name, price: p.price })) || [], total: data.total_count });
+    res.json({ products: data.products?.map(p => ({ product_no: p.product_no, product_name: p.product_name, price: p.price, list_image: p.list_image })) || [], total: data.total_count });
   } catch (err) { res.status(500).json({ error: '상품 조회 실패' }); }
+});
+
+router.get('/api/:_any/products/:product_no', async (req, res) => {
+  const { product_no } = req.params;
+  try {
+    const data = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${product_no}`, {}, { shop_no: 1 });
+    const p = data.product || (data.products && data.products[0]);
+    if (!p) return res.status(404).json({ error: '상품을 찾을 수 없습니다.' });
+    res.json({ product_no: p.product_no, product_name: p.product_name, price: p.price, list_image: p.list_image });
+  } catch (err) { res.status(500).json({ error: '상품 단건 조회 실패' }); }
 });
 
 // ───────────────────────────────────────────────

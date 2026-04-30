@@ -283,6 +283,48 @@ router.get('/api/:_any/analytics/:pageId/visitors-by-date', async (req, res) => 
   } catch (err) { res.status(500).json({ error: '집계 오류' }); }
 });
 
+router.get('/api/:_any/analytics/:pageId/clicks-by-date', async (req, res) => {
+  const { pageId } = req.params; const { start_date, end_date } = req.query;
+  const match = { pageId, dateKey: { $gte: start_date.slice(0,10), $lte: end_date.slice(0,10) } };
+  try {
+    const data = await runDb(db => db.collection(`clicks_${MALL_ID}`).aggregate([
+      { $match: match }, { $group: { _id: { date: '$dateKey', element: '$element' }, count: { $sum: 1 } } }, { $sort: { _id: 1 } }
+    ]).toArray());
+    res.json(data.map(d => ({ date: d._id.date, ...d })));
+  } catch(e) { res.status(500).json({error:'Error'}); }
+});
+
+router.get('/api/:_any/analytics/:pageId/devices-by-date', async (req, res) => {
+  const { pageId } = req.params; const { start_date, end_date, url } = req.query;
+  const match = { pageId, dateKey: { $gte: start_date.slice(0,10), $lte: end_date.slice(0,10) } };
+  if(url) match.pageUrl = url;
+  try {
+    const data = await runDb(db => db.collection(`visits_${MALL_ID}`).aggregate([
+      { $match: match }, { $group: { _id: { date: '$dateKey', device: '$device' }, count: { $sum: 1 } } }, { $sort: { '_id.date': 1 } }
+    ]).toArray());
+    res.json(data.map(d => ({ date: d._id.date, device: d._id.device, count: d.count })));
+  } catch(e) { res.status(500).json({error:'Error'}); }
+});
+
+router.get('/api/:_any/analytics/:pageId/product-performance', async (req, res) => {
+  try {
+    const clicks = await runDb(async (db) => db.collection(`prdClick_${MALL_ID}`).aggregate([{ $match: { pageId: req.params.pageId } }, { $group: { _id: '$productNo', clicks: { $sum: '$clickCount' } } }]).toArray());
+    const productNos = clicks.map(c => c._id);
+    if (!productNos.length) return res.json([]);
+    const prodRes = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/products`, {}, { shop_no: 1, product_no: productNos.join(','), limit: productNos.length, fields: 'product_no,product_name' });
+    const detailMap = (prodRes.products || []).reduce((m,p) => { m[p.product_no]=p.product_name; return m; }, {});
+    res.json(clicks.map(c => ({ productNo: c._id, productName: detailMap[c._id] || 'Unknown', clicks: c.clicks })).sort((a,b)=>b.clicks-a.clicks));
+  } catch (e) { res.status(500).json({ error: 'Error' }); }
+});
+
+router.get('/api/:_any/analytics/:pageId/coupon-stats', async (req, res) => { res.json([]); });
+router.get('/api/:_any/analytics/:pageId/url-clicks', async (req, res) => { res.json({ count: 0 }); });
+router.get('/api/:_any/analytics/:pageId/coupon-clicks', async (req, res) => { res.json({ count: 0 }); });
+router.get('/api/:_any/analytics/:pageId/urls', async (req, res) => { res.json([]); });
+router.get('/api/:_any/analytics/:pageId/coupons-distinct', async (req, res) => { res.json([]); });
+router.get('/api/:_any/analytics/:pageId/devices', async (req, res) => { res.json([]); });
+router.get('/api/:_any/analytics/:pageId/product-clicks', async (req, res) => { res.json([]); });
+
 // ───────────────────────────────────────────────
 // Category, Coupons, Products (Cafe24 Proxies)
 // ───────────────────────────────────────────────

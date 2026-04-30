@@ -21,11 +21,12 @@ const { PORT = 5000 } = process.env;
 const app = express();
 
 const allowedOrigins = [
-  'https://yogibo.kr', 
-  'http://skin-skin123.yogibo.cafe24.com', 
+  'https://yogibo.kr',
+  'http://skin-skin123.yogibo.cafe24.com',
   'https://skin-skin123.yogibo.cafe24.com',
   'https://port-0-ychat-lzgmwhc4d9883c97.sel4.cloudtype.app',
-  'https://design-six-zeta.vercel.app'
+  'https://design-six-zeta.vercel.app',
+  'http://localhost:3000'
 ];
 app.use(cors({
   origin: function (origin, callback) {
@@ -103,7 +104,7 @@ app.post('/api/event/detox-reward', async (req, res) => {
     // 3. Cafe24 API로 포인트 적립
     const { apiRequest } = require("./config/cafe24Api");
     const CAFE24_MALLID = process.env.CAFE24_MALLID || 'yogibo';
-    
+
     const payload = {
       shop_no: 1,
       request: {

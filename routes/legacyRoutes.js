@@ -107,7 +107,12 @@ router.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) 
 
         let size = -1;
         try { size = await client.size(filename); } catch { }
-        const url = `${FTP_PUBLIC_BASE}/uploads/${relSuffix}/${filename}`.replace(/([^:]\/)\/+/g, '$1');
+        
+        let publicBase = FTP_PUBLIC_BASE;
+        if (publicBase === 'https://yogibo.openhost.cafe24.com/' || publicBase === 'https://yogibo.openhost.cafe24.com') {
+            publicBase = 'https://yogibo.kr/img/temple';
+        }
+        const url = `${publicBase}/uploads/${relSuffix}/${filename}`.replace(/([^:]\/)\/+/g, '$1');
 
         return res.json({ url, ftpBase: base, ftpDir: finalPwd, ftpPath: `${finalPwd}/${filename}`, size });
       } catch (e) { /* ignore and try next */ }

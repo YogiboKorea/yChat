@@ -1601,7 +1601,7 @@
         function renderMissions() {
             const container = document.getElementById('mission-list-container');
             if (!container) return;
-            
+
             let normalHtml = '';
             let kakaoHtml = '';
 
@@ -1798,16 +1798,18 @@
         const STATE = { currentScreen: 'intro', selectedChar: null, maxLives: 5, currentLives: 0, history: [], guestId: null, hasReceivedCoupon: false, hasReceivedOnlineCoupon: false, completedMissions: [], downloadedCoupons: [], pendingAction: null, config: { minTime: 10000, maxTime: 11000 } };
 
         function getLoginUrlWithReturn(extraParams = {}) {
-            const urlObj = new URL(window.location.href, window.location.origin);
+            // 항상 event_pop.html로 고정 (카페24 레이아웃 구조에서 window.location이 index.html로 잡히는 문제 방지)
+            const basePath = '/game/event_pop.html';
+            const params = new URLSearchParams();
             if (STATE.selectedChar) {
-                urlObj.searchParams.set('char', STATE.selectedChar);
+                params.set('char', STATE.selectedChar);
             }
             for (const key in extraParams) {
-                urlObj.searchParams.set(key, extraParams[key]);
+                params.set(key, extraParams[key]);
             }
-            const fullPath = urlObj.pathname + urlObj.search + urlObj.hash;
-            const cleanPath = fullPath.replace(/([?&])hmac=[^&]*(&?)/g, (_, p1, p2) => p2 ? p1 : '');
-            return LOGIN_BASE + '?returnUrl=' + encodeURIComponent(cleanPath);
+            const queryStr = params.toString() ? '?' + params.toString() : '';
+            const fullPath = basePath + queryStr;
+            return LOGIN_BASE + '?returnUrl=' + encodeURIComponent(fullPath);
         }
 
         function getFinalId() {
@@ -2609,6 +2611,28 @@
                     });
             }
         }
+        // --- 방문자 트래킹 스크립트 ---
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                const sendVisit = (uid, isMem) => {
+                    fetch(`${API_BASE_URL}/api/game/visit`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ type: 'gimpo', userId: uid, isMember: isMem })
+                    }).catch(e => console.error('visit log err:', e));
+                };
+
+                if (typeof CAFE24API !== 'undefined') {
+                    CAFE24API.getMemberID(function (res) {
+                        const uid = res ? res : (typeof getFinalId === 'function' ? getFinalId() : (STATE && STATE.guestId ? STATE.guestId : 'guest_unknown'));
+                        sendVisit(uid, !!res);
+                    });
+                } else {
+                    const uid = typeof getFinalId === 'function' ? getFinalId() : (STATE && STATE.guestId ? STATE.guestId : 'guest_unknown');
+                    sendVisit(uid, false);
+                }
+            }, 500);
+        });
     </script>
 </body>
 

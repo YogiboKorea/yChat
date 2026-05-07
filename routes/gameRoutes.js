@@ -388,7 +388,7 @@ router.get('/detox/admin/logs', async (req, res) => {
         const { date, startDate, endDate } = req.query;
         const db = getDB();
 
-        const query = { isMember: true };
+        const query = {};
 
         // 날짜 범위 필터
         if (startDate || endDate || date) {
@@ -682,17 +682,43 @@ router.get('/gimpo/admin/logs', async (req, res) => {
     try {
         const { date, startDate, endDate } = req.query;
         const db = getDB();
-        const query = { isMember: true };
+        const query = {};
+        const pointQuery = {};
 
         // 날짜 범위 필터
         if (startDate || endDate || date) {
             const start = new Date(`${startDate || date}T00:00:00+09:00`);
             const end = new Date(`${endDate || date}T23:59:59.999+09:00`);
             query.createdAt = { $gte: start, $lte: end };
+            pointQuery.participatedAt = { $gte: start, $lte: end };
         }
 
         const logs = await db.collection('game_gimpo_logs').find(query).sort({ createdAt: -1 }).toArray();
-        res.json({ success: true, logs });
+
+        // 김포 매장 게임 참여자 (처음 게임에 접속하여 유저 데이터가 생성된 회원) 목록 가져오기
+        const userQuery = {};
+        if (startDate || endDate || date) {
+            const start = new Date(`${startDate || date}T00:00:00+09:00`);
+            const end = new Date(`${endDate || date}T23:59:59.999+09:00`);
+            userQuery.createdAt = { $gte: start, $lte: end };
+        }
+
+        const participantUsers = await db.collection('game_gimpo_users').find(userQuery).sort({ createdAt: -1 }).toArray();
+
+        // 포맷을 game_gimpo_logs와 맞추기
+        const formattedUserLogs = participantUsers.map(u => ({
+            _id: u._id,
+            userId: u.userId,
+            isMember: true,
+            result: 'participate', // 게임 최초 접속(참여)
+            recordTime: null,
+            createdAt: u.createdAt
+        }));
+
+        // 병합 및 시간순 정렬 (내림차순)
+        const combinedLogs = [...logs, ...formattedUserLogs].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        res.json({ success: true, logs: combinedLogs });
     } catch (err) {
         console.error(err);
         res.status(500).json({ success: false, error: '서버 에러' });
@@ -754,7 +780,7 @@ router.post('/mk/config', async (req, res) => {
         let maxSec = parseFloat(maxTimeSec);
         if (isNaN(minSec) || minSec <= 0) minSec = 10.0;
         if (isNaN(maxSec) || maxSec <= 0) maxSec = 10.2;
-        
+
         await db.collection('game_mk_config').updateOne(
             { type: 'success_criteria' },
             {
@@ -818,6 +844,59 @@ router.get('/mk/stats', async (req, res) => {
         });
     } catch (err) {
         console.error('[mk-game] stats 조회 오류:', err);
+        res.status(500).json({ success: false, error: '서버 에러' });
+    }
+});
+// ============================================================
+// 방문자 트래킹 라우트 (game_visits 컬렉션)
+// ============================================================
+
+// POST /api/game/visit - 방문 기록
+router.post('/visit', async (req, res) => {
+    try {
+        const { type, userId, isMember } = req.body; // type: 'detox' | 'gimpo'
+        if (!type || !userId) return res.status(400).json({ success: false, error: 'type and userId are required' });
+
+        const db = getDB();
+        const nowKST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+        const dateStr = nowKST.toISOString().slice(0, 10);
+
+        await db.collection('game_visits').updateOne(
+            { type, userId, date: dateStr },
+            {
+                $setOnInsert: { isMember: !!isMember, createdAt: nowKST },
+                $inc: { visitCount: 1 }
+            },
+            { upsert: true }
+        );
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('[game-visit] 방문 기록 오류:', err);
+        res.status(500).json({ success: false, error: '서버 에러' });
+    }
+});
+
+// GET /api/game/admin/visits - 방문 기록 조회
+router.get('/admin/visits', async (req, res) => {
+    try {
+        const { type, date, startDate, endDate } = req.query;
+        const db = getDB();
+
+        let query = {};
+        if (type) query.type = type;
+
+        if (startDate || endDate || date) {
+            query.date = {};
+            if (startDate || date) query.date.$gte = startDate || date;
+            if (endDate || date) query.date.$lte = endDate || date;
+        }
+
+        const visits = await db.collection('game_visits').find(query).sort({ createdAt: -1 }).toArray();
+
+        res.json({ success: true, visits });
+    } catch (err) {
+        console.error('[game-visit] 방문 기록 조회 오류:', err);
         res.status(500).json({ success: false, error: '서버 에러' });
     }
 });

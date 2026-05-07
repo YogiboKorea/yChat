@@ -2669,6 +2669,28 @@
                     alert('서버 오류가 발생했습니다.');
                 });
         }
+        // --- 방문자 트래킹 스크립트 ---
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                const sendVisit = (uid, isMem) => {
+                    fetch(`${API_BASE_URL}/api/game/visit`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ type: 'detox', userId: uid, isMember: isMem })
+                    }).catch(e => console.error('visit log err:', e));
+                };
+
+                if (typeof CAFE24API !== 'undefined') {
+                    CAFE24API.getMemberID(function (res) {
+                        const uid = res ? res : (typeof getFinalId === 'function' ? getFinalId() : (STATE && STATE.guestId ? STATE.guestId : 'guest_unknown'));
+                        sendVisit(uid, !!res);
+                    });
+                } else {
+                    const uid = typeof getFinalId === 'function' ? getFinalId() : (STATE && STATE.guestId ? STATE.guestId : 'guest_unknown');
+                    sendVisit(uid, false);
+                }
+            }, 500);
+        });
     </script>
 </body>
 

@@ -193,9 +193,20 @@
             border-color: #f0a500;
         }
 
+        .filter-btn.active-participate {
+            background: #6f42c1;
+            color: white;
+            border-color: #6f42c1;
+        }
+
         .badge-gacha {
             background: #d4edda;
             color: #155724;
+        }
+
+        .badge-participate {
+            background: #e0cffc;
+            color: #4a148c;
         }
 
         .badge-snack {
@@ -244,10 +255,11 @@
                 <label>~ 최대 시간(Sec): </label>
                 <input type="text" id="max-sec" placeholder="10:30" style="width: 110px;">
             </div>
-            
+
             <div class="input-group" style="margin-top: 15px;">
                 <label style="font-weight: bold; color: #4bc8d8;">기본 목숨(개): </label>
-                <input type="number" id="base-hearts" value="2" min="1" max="100" style="width: 80px; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                <input type="number" id="base-hearts" value="2" min="1" max="100"
+                    style="width: 80px; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
                 <span style="font-size:13px; color:#666;">(회원 접속 시 부여되는 기본 하트 개수)</span>
             </div>
 
@@ -258,48 +270,64 @@
                 <div class="mission-row" style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
                     <label style="font-weight:bold;">1</label>
                     <input type="checkbox" id="miss-enable-1" style="width: 18px; height: 18px;">
-                    <input type="text" id="miss-text-1" placeholder="미션 텍스트 (예: 카카오 플친 추가시)" style="flex:2; padding:8px; border:1px solid #ccc; border-radius:4px;">
-                    <input type="text" id="miss-url-1" placeholder="이동할 링크 URL" style="flex:3; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                    <input type="text" id="miss-text-1" placeholder="미션 텍스트 (예: 카카오 플친 추가시)"
+                        style="flex:2; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                    <input type="text" id="miss-url-1" placeholder="이동할 링크 URL"
+                        style="flex:3; padding:8px; border:1px solid #ccc; border-radius:4px;">
                     <label style="font-size:14px;">보상 (+):</label>
-                    <input type="number" id="miss-reward-1" value="1" min="1" style="width: 50px; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                    <input type="number" id="miss-reward-1" value="1" min="1"
+                        style="width: 50px; padding:8px; border:1px solid #ccc; border-radius:4px;">
                 </div>
                 <div class="mission-row" style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
                     <label style="font-weight:bold;">2</label>
                     <input type="checkbox" id="miss-enable-2" style="width: 18px; height: 18px;">
-                    <input type="text" id="miss-text-2" placeholder="미션 텍스트" style="flex:2; padding:8px; border:1px solid #ccc; border-radius:4px;">
-                    <input type="text" id="miss-url-2" placeholder="이동할 링크 URL" style="flex:3; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                    <input type="text" id="miss-text-2" placeholder="미션 텍스트"
+                        style="flex:2; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                    <input type="text" id="miss-url-2" placeholder="이동할 링크 URL"
+                        style="flex:3; padding:8px; border:1px solid #ccc; border-radius:4px;">
                     <label style="font-size:14px;">보상 (+):</label>
-                    <input type="number" id="miss-reward-2" value="1" min="1" style="width: 50px; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                    <input type="number" id="miss-reward-2" value="1" min="1"
+                        style="width: 50px; padding:8px; border:1px solid #ccc; border-radius:4px;">
                 </div>
                 <div class="mission-row" style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
                     <label style="font-weight:bold;">3</label>
                     <input type="checkbox" id="miss-enable-3" style="width: 18px; height: 18px;">
-                    <input type="text" id="miss-text-3" placeholder="미션 텍스트" style="flex:2; padding:8px; border:1px solid #ccc; border-radius:4px;">
-                    <input type="text" id="miss-url-3" placeholder="이동할 링크 URL" style="flex:3; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                    <input type="text" id="miss-text-3" placeholder="미션 텍스트"
+                        style="flex:2; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                    <input type="text" id="miss-url-3" placeholder="이동할 링크 URL"
+                        style="flex:3; padding:8px; border:1px solid #ccc; border-radius:4px;">
                     <label style="font-size:14px;">보상 (+):</label>
-                    <input type="number" id="miss-reward-3" value="1" min="1" style="width: 50px; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                    <input type="number" id="miss-reward-3" value="1" min="1"
+                        style="width: 50px; padding:8px; border:1px solid #ccc; border-radius:4px;">
                 </div>
                 <div class="mission-row" style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
                     <label style="font-weight:bold;">4</label>
                     <input type="checkbox" id="miss-enable-4" style="width: 18px; height: 18px;">
-                    <input type="text" id="miss-text-4" placeholder="미션 텍스트" style="flex:2; padding:8px; border:1px solid #ccc; border-radius:4px;">
-                    <input type="text" id="miss-url-4" placeholder="이동할 링크 URL" style="flex:3; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                    <input type="text" id="miss-text-4" placeholder="미션 텍스트"
+                        style="flex:2; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                    <input type="text" id="miss-url-4" placeholder="이동할 링크 URL"
+                        style="flex:3; padding:8px; border:1px solid #ccc; border-radius:4px;">
                     <label style="font-size:14px;">보상 (+):</label>
-                    <input type="number" id="miss-reward-4" value="1" min="1" style="width: 50px; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                    <input type="number" id="miss-reward-4" value="1" min="1"
+                        style="width: 50px; padding:8px; border:1px solid #ccc; border-radius:4px;">
                 </div>
                 <div class="mission-row" style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
                     <label style="font-weight:bold;">5</label>
                     <input type="checkbox" id="miss-enable-5" style="width: 18px; height: 18px;">
-                    <input type="text" id="miss-text-5" placeholder="미션 텍스트" style="flex:2; padding:8px; border:1px solid #ccc; border-radius:4px;">
-                    <input type="text" id="miss-url-5" placeholder="이동할 링크 URL" style="flex:3; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                    <input type="text" id="miss-text-5" placeholder="미션 텍스트"
+                        style="flex:2; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                    <input type="text" id="miss-url-5" placeholder="이동할 링크 URL"
+                        style="flex:3; padding:8px; border:1px solid #ccc; border-radius:4px;">
                     <label style="font-size:14px;">보상 (+):</label>
-                    <input type="number" id="miss-reward-5" value="1" min="1" style="width: 50px; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                    <input type="number" id="miss-reward-5" value="1" min="1"
+                        style="width: 50px; padding:8px; border:1px solid #ccc; border-radius:4px;">
                 </div>
             </div>
 
             <div style="margin-top: 20px;">
                 <button class="btn-save" onclick="saveConfig()">현재 설정값 저장하기</button>
-                <span id="config-msg" style="margin-left: 15px; color: #155724; font-size: 14px; font-weight: bold;"></span>
+                <span id="config-msg"
+                    style="margin-left: 15px; color: #155724; font-size: 14px; font-weight: bold;"></span>
             </div>
         </div>
 
@@ -308,10 +336,13 @@
                 <h3 style="margin-bottom: 10px;">📋 회원 참여자 로그</h3>
                 <div style="margin-bottom: 10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                     <label style="font-weight:bold; color:#555;">기간검색: </label>
-                    <input type="date" id="log-date-start" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                    <input type="date" id="log-date-start"
+                        style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
                     <span style="color:#888; font-weight:bold;">~</span>
-                    <input type="date" id="log-date-end" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
-                    <button class="btn-save" style="background-color:#888; padding: 8px 15px;" onclick="loadLogs()">조회 / 새로고침</button>
+                    <input type="date" id="log-date-end"
+                        style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                    <button class="btn-save" style="background-color:#888; padding: 8px 15px;" onclick="loadLogs()">조회 /
+                        새로고침</button>
                     <button class="btn-excel" onclick="downloadExcel()">📥 엑셀 다운로드</button>
                 </div>
             </div>
@@ -320,6 +351,8 @@
                 <button class="filter-btn" id="filter-success" onclick="setFilter('success')">✅ 성공</button>
                 <button class="filter-btn" id="filter-fail" onclick="setFilter('fail')">❌ 실패</button>
                 <button class="filter-btn" id="filter-claim" onclick="setFilter('claim')">🎁 상품수령</button>
+                <button class="filter-btn" id="filter-participate" onclick="setFilter('participate')"
+                    style="display:none;">🎮 게임접속(참여)</button>
             </div>
             <table>
                 <thead>
@@ -354,6 +387,10 @@
             document.getElementById('tab-detox').className = 'tab-btn' + (tab === 'detox' ? ' active' : '');
             document.getElementById('tab-gimpo').className = 'tab-btn' + (tab === 'gimpo' ? ' active-gimpo' : '');
             document.getElementById('page-title').innerText = tab === 'gimpo' ? '🏪 김포 매장 이벤트 관리자' : '🎮 10초 디톡스 게임 관리자';
+
+            const partBtn = document.getElementById('filter-participate');
+            if (partBtn) partBtn.style.display = tab === 'gimpo' ? 'inline-block' : 'none';
+
             loadConfig();
             loadLogs();
         }
@@ -367,7 +404,7 @@
             const todayStr = `${year}-${month}-${day}`;
             document.getElementById('log-date-start').value = todayStr;
             document.getElementById('log-date-end').value = todayStr;
-            
+
             loadConfig();
             loadLogs();
         });
@@ -393,7 +430,7 @@
         async function fetchSafeJson(response) {
             const text = await response.text();
             if (!text) throw new Error("서버에서 빈 응답이 왔습니다. 시스템이 재시작 중(배포 중)일 수 있습니다.");
-            try { return JSON.parse(text); } 
+            try { return JSON.parse(text); }
             catch (e) { throw new Error("서버 응답 오류: " + text.substring(0, 50)); }
         }
 
@@ -405,9 +442,9 @@
                         document.getElementById('min-sec').value = msToTimeStr(data.minTime);
                         document.getElementById('max-sec').value = msToTimeStr(data.maxTime);
                         document.getElementById('base-hearts').value = data.baseHearts !== undefined ? data.baseHearts : 2;
-                        
+
                         // 설정 초기화
-                        for(let i=1; i<=5; i++) {
+                        for (let i = 1; i <= 5; i++) {
                             document.getElementById(`miss-enable-${i}`).checked = false;
                             document.getElementById(`miss-text-${i}`).value = '';
                             document.getElementById(`miss-url-${i}`).value = '';
@@ -434,7 +471,7 @@
             const minStr = document.getElementById('min-sec').value.trim();
             const maxStr = document.getElementById('max-sec').value.trim();
             const baseHearts = parseInt(document.getElementById('base-hearts').value) || 2;
-            
+
             const minMs = timeStrToMs(minStr);
             const maxMs = timeStrToMs(maxStr);
 
@@ -449,7 +486,7 @@
 
             const missions = [];
             let hasUncheckedText = false;
-            for(let i=1; i<=5; i++) {
+            for (let i = 1; i <= 5; i++) {
                 const isChecked = document.getElementById(`miss-enable-${i}`).checked;
                 const textVal = document.getElementById(`miss-text-${i}`).value.trim();
                 if (!isChecked && textVal) {
@@ -481,7 +518,7 @@
                         const msg = document.getElementById('config-msg');
                         msg.innerText = '✅ 설정이 실시간으로 반영되었습니다!';
                         setTimeout(() => msg.innerText = '', 3000);
-                        
+
                         document.getElementById('min-sec').value = msToTimeStr(minMs);
                         document.getElementById('max-sec').value = msToTimeStr(maxMs);
                     }
@@ -504,6 +541,8 @@
                 document.getElementById('filter-fail').classList.add('active-fail');
             } else if (type === 'claim') {
                 document.getElementById('filter-claim').classList.add('active-claim');
+            } else if (type === 'participate') {
+                document.getElementById('filter-participate').classList.add('active-participate');
             }
             renderLogs(allLogs);
         }
@@ -516,6 +555,7 @@
             const filtered = logs.filter(log => {
                 if (currentFilter === 'all') return true;
                 if (currentFilter === 'claim') return log.result === 'claim';
+                if (currentFilter === 'participate') return log.result === 'participate';
                 return log.result === currentFilter;
             });
 
@@ -525,7 +565,7 @@
             }
 
             filtered.forEach(log => {
-                if (log.userId && log.userId.startsWith('guest_')) return;
+                // 게스트 필터링 제거
 
                 const tr = document.createElement('tr');
                 const d = new Date(log.createdAt);
@@ -533,6 +573,7 @@
 
                 const isSuccess = log.result === 'success';
                 const isClaim = log.result === 'claim';
+                const isParticipate = log.result === 'participate';
                 let badgeHtml;
                 if (isClaim) {
                     if (log.claimType === 'gacha') {
@@ -542,6 +583,8 @@
                     } else {
                         badgeHtml = `<span class="badge badge-claim-default">📋 직원확인</span>`;
                     }
+                } else if (isParticipate) {
+                    badgeHtml = `<span class="badge badge-participate">🎮 게임 최초접속</span>`;
                 } else {
                     badgeHtml = isSuccess ? '<span class="badge badge-success">✅ 성공</span>' : '<span class="badge badge-fail">❌ 실패</span>';
                 }
@@ -550,7 +593,7 @@
                 if (log.recordTime) {
                     timeStr = msToTimeStr(log.recordTime) + ' 초';
                 } else {
-                    timeStr = isClaim ? '-' : '(기록 없음)';
+                    timeStr = isClaim || isParticipate ? '-' : '(기록 없음)';
                 }
 
                 tr.innerHTML = `
@@ -582,7 +625,7 @@
                 .then(r => fetchSafeJson(r))
                 .then(data => {
                     if (data.success) {
-                        allLogs = (data.logs || []).filter(log => !log.userId || !log.userId.startsWith('guest_'));
+                        allLogs = data.logs || [];
                         // 필터 바 표시
                         document.getElementById('filter-bar').style.display = 'flex';
                         // 현재 필터로 렌더
@@ -604,6 +647,7 @@
             const filtered = allLogs.filter(log => {
                 if (currentFilter === 'all') return true;
                 if (currentFilter === 'claim') return log.result === 'claim';
+                if (currentFilter === 'participate') return log.result === 'participate';
                 return log.result === currentFilter;
             });
 
@@ -621,6 +665,8 @@
                     if (log.claimType === 'gacha') resultLabel = '성공 가챠수령';
                     else if (log.claimType === 'snack') resultLabel = '실패 간식수령';
                     else resultLabel = '직원확인';
+                } else if (log.result === 'participate') {
+                    resultLabel = '게임 최초접속(참여)';
                 } else if (log.result === 'success') {
                     resultLabel = '성공';
                 } else {

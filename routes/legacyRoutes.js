@@ -35,7 +35,11 @@ if (!fs.existsSync(UPLOAD_DIR)) {
 const upload = multer({
   storage: multer.diskStorage({
     destination(req, file, cb) { cb(null, UPLOAD_DIR); },
-    filename(req, file, cb) { cb(null, `${Date.now()}_${file.originalname}`); }
+    filename(req, file, cb) {
+      const ext = path.extname(file.originalname);
+      const safeRandom = Math.random().toString(36).substring(2, 10);
+      cb(null, `${Date.now()}_${safeRandom}${ext}`);
+    }
   }),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
 });
@@ -107,10 +111,10 @@ router.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) 
 
         let size = -1;
         try { size = await client.size(filename); } catch { }
-        
+
         let publicBase = FTP_PUBLIC_BASE;
         if (publicBase === 'https://yogibo.openhost.cafe24.com/' || publicBase === 'https://yogibo.openhost.cafe24.com') {
-            publicBase = 'https://yogibo.kr/img/temple';
+          publicBase = 'https://yogibo.kr/img/temple';
         }
         const url = `${publicBase}/uploads/${relSuffix}/${filename}`.replace(/([^:]\/)\/+/g, '$1');
 
@@ -290,25 +294,25 @@ router.get('/api/:_any/analytics/:pageId/visitors-by-date', async (req, res) => 
 
 router.get('/api/:_any/analytics/:pageId/clicks-by-date', async (req, res) => {
   const { pageId } = req.params; const { start_date, end_date } = req.query;
-  const match = { pageId, dateKey: { $gte: start_date.slice(0,10), $lte: end_date.slice(0,10) } };
+  const match = { pageId, dateKey: { $gte: start_date.slice(0, 10), $lte: end_date.slice(0, 10) } };
   try {
     const data = await runDb(db => db.collection(`clicks_${MALL_ID}`).aggregate([
       { $match: match }, { $group: { _id: { date: '$dateKey', element: '$element' }, count: { $sum: 1 } } }, { $sort: { _id: 1 } }
     ]).toArray());
     res.json(data.map(d => ({ date: d._id.date, ...d })));
-  } catch(e) { res.status(500).json({error:'Error'}); }
+  } catch (e) { res.status(500).json({ error: 'Error' }); }
 });
 
 router.get('/api/:_any/analytics/:pageId/devices-by-date', async (req, res) => {
   const { pageId } = req.params; const { start_date, end_date, url } = req.query;
-  const match = { pageId, dateKey: { $gte: start_date.slice(0,10), $lte: end_date.slice(0,10) } };
-  if(url) match.pageUrl = url;
+  const match = { pageId, dateKey: { $gte: start_date.slice(0, 10), $lte: end_date.slice(0, 10) } };
+  if (url) match.pageUrl = url;
   try {
     const data = await runDb(db => db.collection(`visits_${MALL_ID}`).aggregate([
       { $match: match }, { $group: { _id: { date: '$dateKey', device: '$device' }, count: { $sum: 1 } } }, { $sort: { '_id.date': 1 } }
     ]).toArray());
     res.json(data.map(d => ({ date: d._id.date, device: d._id.device, count: d.count })));
-  } catch(e) { res.status(500).json({error:'Error'}); }
+  } catch (e) { res.status(500).json({ error: 'Error' }); }
 });
 
 router.get('/api/:_any/analytics/:pageId/product-performance', async (req, res) => {
@@ -317,8 +321,8 @@ router.get('/api/:_any/analytics/:pageId/product-performance', async (req, res) 
     const productNos = clicks.map(c => c._id);
     if (!productNos.length) return res.json([]);
     const prodRes = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/products`, {}, { shop_no: 1, product_no: productNos.join(','), limit: productNos.length, fields: 'product_no,product_name' });
-    const detailMap = (prodRes.products || []).reduce((m,p) => { m[p.product_no]=p.product_name; return m; }, {});
-    res.json(clicks.map(c => ({ productNo: c._id, productName: detailMap[c._id] || 'Unknown', clicks: c.clicks })).sort((a,b)=>b.clicks-a.clicks));
+    const detailMap = (prodRes.products || []).reduce((m, p) => { m[p.product_no] = p.product_name; return m; }, {});
+    res.json(clicks.map(c => ({ productNo: c._id, productName: detailMap[c._id] || 'Unknown', clicks: c.clicks })).sort((a, b) => b.clicks - a.clicks));
   } catch (e) { res.status(500).json({ error: 'Error' }); }
 });
 

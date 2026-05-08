@@ -266,8 +266,7 @@
         <h1 id="page-title">🎮 10초 디톡스 게임 관리자</h1>
 
         <div class="tab-bar">
-            <div class="tab-btn active" id="tab-detox" onclick="switchTab('detox')">🎮 디톡스 (기존)</div>
-            <div class="tab-btn" id="tab-online" onclick="switchTab('online')">🌐 디톡스 (온라인)</div>
+            <div class="tab-btn active-online" id="tab-online" onclick="switchTab('online')">🌐 디톡스 (온라인)</div>
             <div class="tab-btn" id="tab-offline" onclick="switchTab('offline')">🏪 디톡스 (오프라인)</div>
             <div class="tab-btn" id="tab-gimpo" onclick="switchTab('gimpo')">📍 김포 매장</div>
             <a class="tab-btn" href="/game/event_entry.html" style="text-decoration:none; display:flex; align-items:center; justify-content:center;">👥 방문 회원 확인</a>
@@ -402,7 +401,7 @@
     <script>
         // 현재 포트 및 도메인 자동 인식
         const API_BASE_URL = 'https://port-0-ychat-lzgmwhc4d9883c97.sel4.cloudtype.app';
-        let currentTab = 'detox'; // 'detox' | 'online' | 'offline' | 'gimpo'
+        let currentTab = 'online'; // 'online', 'offline', 'gimpo'
 
         function getApiPrefix() {
             if (currentTab === 'gimpo') return '/api/game/gimpo';
@@ -421,14 +420,13 @@
             currentTab = tab;
 
             // 모든 탭 초기화
-            ['detox', 'online', 'offline', 'gimpo'].forEach(t => {
+            ['online', 'offline', 'gimpo'].forEach(t => {
                 const el = document.getElementById('tab-' + t);
                 if (el) el.className = 'tab-btn';
             });
 
             // 활성 탭 스타일
             const activeClass = {
-                detox: 'tab-btn active',
                 online: 'tab-btn active-online',
                 offline: 'tab-btn active-offline',
                 gimpo: 'tab-btn active-gimpo'
@@ -438,10 +436,9 @@
 
             // 페이지 제목
             const titles = {
-                detox: '🎮 10초 디톡스 게임 관리자',
-                online: '🌐 디톡스 온라인 참여 관리자',
-                offline: '🏪 디톡스 오프라인 매장 관리자',
-                gimpo: '📍 김포 매장 이벤트 관리자'
+                online: '🌐 디톡스 (온라인) 관리자',
+                offline: '🏪 디톡스 (오프라인) 관리자',
+                gimpo: '📍 김포 매장 게임 관리자'
             };
             document.getElementById('page-title').innerText = titles[tab] || '';
 
@@ -617,6 +614,10 @@
 
             // 탭별 추가 필터 (온라인/오프라인은 claimType으로 구분)
             let filtered = logs.filter(log => {
+                // 비회원(게스트) 로그 제외 (실패/성공/전체 상관없이 노출 안 함)
+                if (log.userId && log.userId.startsWith('guest_')) return false;
+                if (log.isMember === false) return false;
+
                 if (currentFilter === 'all') {
                     if (currentTab === 'online') return log.claimType !== 'offline';
                     if (currentTab === 'offline') return log.claimType === 'offline' || log.result === 'claim';

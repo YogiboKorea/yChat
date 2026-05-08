@@ -88,7 +88,7 @@ app.post('/api/event/detox-reward', async (req, res) => {
     return res.status(400).json({ success: false, message: '로그인 후 참여 가능한 이벤트입니다.' });
   }
 
-  const amount = 3000;
+  const amount = 5000;
 
   try {
     const { getDB } = require("./config/db");

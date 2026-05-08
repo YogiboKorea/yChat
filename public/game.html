@@ -119,7 +119,7 @@
 
         /* --- [0] 인트로 --- */
         #screen-intro {
-            background-image: url('http://yogibo.kr/game/시작배경2.png');
+            background-image: url('http://yogibo.kr/game/시작배경00.png');
             cursor: pointer;
             background-size: cover;
             background-position: center;
@@ -1440,14 +1440,14 @@
             <div onclick="closeSuccessRewardModal()"
                 style="position: absolute; top: 15px; right: 20px; font-size: 24px; font-weight: bold; color: #999; cursor: pointer;">
                 ✕</div>
-            <div style="font-size: 52px; margin-bottom: 12px;">🎉</div>
-            <h3 style="color: #333; margin-bottom: 10px; font-size: 22px; font-weight: 900; line-height: 1.3;">10초 디톡스 성공!</h3>
-            <div style="background: linear-gradient(135deg, #fff5f9, #fef0fc); border-radius: 16px; padding: 18px; margin-bottom: 20px; border: 2px solid #e84887;">
+            <div id="reward-modal-icon" style="font-size: 52px; margin-bottom: 12px;">🎉</div>
+            <h3 id="reward-modal-title" style="color: #333; margin-bottom: 10px; font-size: 22px; font-weight: 900; line-height: 1.3;">적립금 지급 완료!</h3>
+            <div style="background: linear-gradient(135deg, #fff5f9, #fef0fc); border-radius: 16px; padding: 18px; margin-bottom: 12px; border: 2px solid #e84887;">
                 <p style="font-size: 28px; font-weight: 900; color: #e84887; margin: 0 0 4px;">5,000원</p>
-                <p style="font-size: 14px; color: #555; margin: 0; font-weight: 600;">공식몰 적립금이 지급되었습니다!</p>
+                <p id="reward-modal-msg" style="font-size: 14px; color: #555; margin: 0; font-weight: 600;">온라인 전용 적립금이 지급되었습니다!</p>
             </div>
             <p style="font-size: 13px; color: #888; margin-bottom: 20px; line-height: 1.5;">마이페이지 &gt; 적립금에서 확인하세요</p>
-            <button onclick="closeSuccessRewardModal(); goHome();"
+            <button onclick="closeSuccessRewardModal();"
                 style="background: linear-gradient(135deg, #e84887, #c0306d); color: white; border: none; border-radius: 30px; padding: 15px 0; width: 100%; font-size: 16px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(232,72,135,0.35);">확인</button>
         </div>
     </div>
@@ -2038,13 +2038,13 @@
             btnHeaderHome.style.display = 'none';
             btnHeaderPause.style.display = 'none';
 
-            if (['intro'].includes(targetScreenId)) {
+            if (['intro', 'result'].includes(targetScreenId)) {
                 header.style.display = 'none';
             } else {
                 header.style.display = 'flex';
                 renderLives();
 
-                if (targetScreenId === 'select' || targetScreenId === 'confirm' || targetScreenId === 'result') {
+                if (targetScreenId === 'select' || targetScreenId === 'confirm') {
                     btnHeaderHome.style.display = 'block';
                 } else if (targetScreenId === 'game') {
                     btnHeaderPause.style.display = 'block';
@@ -2510,16 +2510,17 @@
                     `;
                 } else {
                     // --- 로그인 + 성공 ---
-                    if (STATE.hasReceivedCoupon) {
-                        // 이미 5,000원 적립금 수령한 경우
-                        btnWrapper.innerHTML = `<button class="btn-result-text online" onclick="goHome()">🎮 게임 더 하기</button>`;
-                    } else {
-                        // 미수령 - 버튼 클릭 시 지급
-                        btnWrapper.innerHTML = `
-                            <button class="btn-result-text" style="background: linear-gradient(135deg,#e84887,#c0306d); color:#fff;" onclick="grantSuccessReward(this)">🎁 적립금 5,000원 받기</button>
-                            <button class="btn-result-text online" onclick="goHome()">🎮 게임 더 하기</button>
-                        `;
-                    }
+                    // 이미 수령 여부와 무관하게 항상 버튼 표시 (클릭 시 팝업으로 상태 안내)
+                    const rewardBtnLabel = STATE.hasReceivedCoupon
+                        ? '✅ 적립금 지급 완료 (확인하기)'
+                        : '🎁 온라인 전용 혜택 받기';
+                    const rewardBtnStyle = STATE.hasReceivedCoupon
+                        ? 'background: #888; color:#fff;'
+                        : 'background: linear-gradient(135deg,#e84887,#c0306d); color:#fff;';
+                    btnWrapper.innerHTML = `
+                        <button class="btn-result-text" style="${rewardBtnStyle}" onclick="grantSuccessReward(this)">${rewardBtnLabel}</button>
+                        <button class="btn-result-text online" onclick="goHome()">🎮 게임 더 하기</button>
+                    `;
                 }
             } else {
                 // ===== 실패 =====
@@ -2571,7 +2572,12 @@
         // 성공 시 5,000원 적립금 버튼 클릭 지급 함수
         function grantSuccessReward(btn) {
             if (!memberId) return;
+
+            // 이미 수령한 경우 → "이미 지급 완료" 팝업
             if (STATE.hasReceivedCoupon) {
+                document.getElementById('reward-modal-icon').innerText = '✅';
+                document.getElementById('reward-modal-title').innerText = '이미 적립금 지급 완료!';
+                document.getElementById('reward-modal-msg').innerText = '이미 적립금 지급이 완료되었습니다.';
                 openSuccessRewardModal();
                 return;
             }
@@ -2588,19 +2594,28 @@
                 .then(data => {
                     if (data.success) {
                         STATE.hasReceivedCoupon = true;
+                        document.getElementById('reward-modal-icon').innerText = '🎉';
+                        document.getElementById('reward-modal-title').innerText = '적립금 지급 완료!';
+                        document.getElementById('reward-modal-msg').innerText = '온라인 전용 적립금이 지급되었습니다!';
                         openSuccessRewardModal();
+                        // 버튼 상태 업데이트
+                        if (btn) { btn.textContent = '✅ 적립금 지급 완료 (확인하기)'; btn.style.background = '#888'; btn.disabled = false; }
                     } else if (data.alreadyDone) {
                         STATE.hasReceivedCoupon = true;
+                        document.getElementById('reward-modal-icon').innerText = '✅';
+                        document.getElementById('reward-modal-title').innerText = '이미 적립금 지급 완료!';
+                        document.getElementById('reward-modal-msg').innerText = '이미 적립금 지급이 완료되었습니다.';
                         openSuccessRewardModal();
+                        if (btn) { btn.textContent = '✅ 적립금 지급 완료 (확인하기)'; btn.style.background = '#888'; btn.disabled = false; }
                     } else {
                         alert(data.message || '적립금 지급에 실패했습니다. 잠시 후 다시 시도해주세요.');
-                        if (btn) { btn.disabled = false; btn.textContent = '🎁 적립금 5,000원 받기'; }
+                        if (btn) { btn.disabled = false; btn.textContent = '🎁 온라인 전용 혜택 받기'; }
                     }
                 })
                 .catch(err => {
                     console.error('적립금 지급 오류:', err);
                     alert('서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
-                    if (btn) { btn.disabled = false; btn.textContent = '🎁 적립금 5,000원 받기'; }
+                    if (btn) { btn.disabled = false; btn.textContent = '🎁 온라인 전용 혜택 받기'; }
                 });
         }
 

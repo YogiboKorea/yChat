@@ -2003,7 +2003,6 @@
         const btnHeaderPause = document.getElementById('btn-header-pause');
 
         function renderLives() {
-            // 말풍선: 회원에게만 표시
             if (memberId) {
                 livesDisplay.innerHTML = `<div class="lives-speech-bubble" onclick="openMissionModal()">미션참여로 기회얻기 →</div>`;
             } else {
@@ -2038,13 +2037,13 @@
             btnHeaderHome.style.display = 'none';
             btnHeaderPause.style.display = 'none';
 
-            if (['intro'].includes(targetScreenId)) {
+            if (['intro', 'result'].includes(targetScreenId)) {
                 header.style.display = 'none';
             } else {
                 header.style.display = 'flex';
                 renderLives();
 
-                if (targetScreenId === 'select' || targetScreenId === 'confirm' || targetScreenId === 'result') {
+                if (targetScreenId === 'select' || targetScreenId === 'confirm') {
                     btnHeaderHome.style.display = 'block';
                 } else if (targetScreenId === 'game') {
                     btnHeaderPause.style.display = 'block';
@@ -2276,6 +2275,14 @@
         });
 
 
+
+        function skipAdVideo() {
+            const videoEl = document.getElementById('ad-video');
+            if (videoEl) { videoEl.pause(); videoEl.currentTime = 0; }
+            document.getElementById('ad-video-modal').style.display = 'none';
+            startGameUI();
+        }
+
         function checkAdAndStart() {
             if (!memberId) {
                 const videoModal = document.getElementById('ad-video-modal');
@@ -2451,7 +2458,8 @@
                 .then(res => res.json())
                 .then(data => {
                     if (data.success && typeof data.hearts !== 'undefined') {
-                        let currentLocalBonus = memberId ? parseInt(localStorage.getItem('bonus_lives_v4_' + memberId) || '0') : 0;
+                        // 오프라인 전용 localStorage 키 사용 (온라인과 분리)
+                        let currentLocalBonus = memberId ? parseInt(localStorage.getItem('bonus_lives_offline_' + memberId) || '0') : 0;
                         STATE.currentLives = Math.min(STATE.maxLives, data.hearts + currentLocalBonus);
                         if (data.hasReceivedCoupon === true) STATE.hasReceivedCoupon = true;
                         if (data.hasReceivedOnlineCoupon === true) STATE.hasReceivedOnlineCoupon = true;
@@ -2540,7 +2548,7 @@
         // 오프라인 직원 확인 처리
         function confirmEmployee() {
             if (confirm('직원 확인 시 5,000원 즉시 할인 쿠폰이 지급되며, 이후 추가 보상 수령은 불가합니다!')) {
-                fetch(`${API_BASE_URL}/api/game/detox/claim`, {
+                fetch(`${API_BASE_URL}/api/game/detox-offline/claim`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ memberId: memberId || null, guestId: STATE.guestId, type: 'offline' })

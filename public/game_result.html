@@ -156,6 +156,29 @@
             border-color: #e84887;
         }
 
+        .tab-btn.active-online {
+            background: #4bc8d8;
+            color: white;
+            border-color: #4bc8d8;
+        }
+
+        .tab-btn.active-offline {
+            background: #e84887;
+            color: white;
+            border-color: #e84887;
+        }
+
+        .tab-btn.active-visit {
+            background: #6f42c1;
+            color: white;
+            border-color: #6f42c1;
+        }
+
+        .badge-member {
+            background: #d4edda;
+            color: #155724;
+        }
+
         .filter-bar {
             display: flex;
             gap: 8px;
@@ -244,7 +267,10 @@
 
         <div class="tab-bar">
             <div class="tab-btn active" id="tab-detox" onclick="switchTab('detox')">🎮 디톡스 (기존)</div>
-            <div class="tab-btn" id="tab-gimpo" onclick="switchTab('gimpo')">🏪 김포 매장</div>
+            <div class="tab-btn" id="tab-online" onclick="switchTab('online')">🌐 디톡스 (온라인)</div>
+            <div class="tab-btn" id="tab-offline" onclick="switchTab('offline')">🏪 디톡스 (오프라인)</div>
+            <div class="tab-btn" id="tab-gimpo" onclick="switchTab('gimpo')">📍 김포 매장</div>
+            <a class="tab-btn" href="/game/event_entry.html" style="text-decoration:none; display:flex; align-items:center; justify-content:center;">👥 방문 회원 확인</a>
         </div>
 
         <div class="config-panel">
@@ -331,7 +357,7 @@
             </div>
         </div>
 
-        <div>
+        <div id="main-log-section">
             <div style="display:flex; justify-content:space-between; align-items:flex-end;">
                 <h3 style="margin-bottom: 10px;">📋 회원 참여자 로그</h3>
                 <div style="margin-bottom: 10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
@@ -376,20 +402,58 @@
     <script>
         // 현재 포트 및 도메인 자동 인식
         const API_BASE_URL = 'https://port-0-ychat-lzgmwhc4d9883c97.sel4.cloudtype.app';
-        let currentTab = 'detox'; // 'detox' or 'gimpo'
+        let currentTab = 'detox'; // 'detox' | 'online' | 'offline' | 'gimpo'
 
         function getApiPrefix() {
-            return currentTab === 'gimpo' ? '/api/game/gimpo' : '/api/game/detox';
+            if (currentTab === 'gimpo') return '/api/game/gimpo';
+            if (currentTab === 'offline') return '/api/game/detox-offline';
+            return '/api/game/detox'; // detox(기존), online 모두 같은 API
+        }
+
+        // 탭별 로그 필터 (online: 온라인 claim만, offline: 오프라인 claim만)
+        function getTabClaimFilter() {
+            if (currentTab === 'online') return 'online';
+            if (currentTab === 'offline') return 'offline';
+            return null;
         }
 
         function switchTab(tab) {
             currentTab = tab;
-            document.getElementById('tab-detox').className = 'tab-btn' + (tab === 'detox' ? ' active' : '');
-            document.getElementById('tab-gimpo').className = 'tab-btn' + (tab === 'gimpo' ? ' active-gimpo' : '');
-            document.getElementById('page-title').innerText = tab === 'gimpo' ? '🏪 김포 매장 이벤트 관리자' : '🎮 10초 디톡스 게임 관리자';
+
+            // 모든 탭 초기화
+            ['detox', 'online', 'offline', 'gimpo'].forEach(t => {
+                const el = document.getElementById('tab-' + t);
+                if (el) el.className = 'tab-btn';
+            });
+
+            // 활성 탭 스타일
+            const activeClass = {
+                detox: 'tab-btn active',
+                online: 'tab-btn active-online',
+                offline: 'tab-btn active-offline',
+                gimpo: 'tab-btn active-gimpo'
+            };
+            const el = document.getElementById('tab-' + tab);
+            if (el) el.className = activeClass[tab] || 'tab-btn active';
+
+            // 페이지 제목
+            const titles = {
+                detox: '🎮 10초 디톡스 게임 관리자',
+                online: '🌐 디톡스 온라인 참여 관리자',
+                offline: '🏪 디톡스 오프라인 매장 관리자',
+                gimpo: '📍 김포 매장 이벤트 관리자'
+            };
+            document.getElementById('page-title').innerText = titles[tab] || '';
 
             const partBtn = document.getElementById('filter-participate');
             if (partBtn) partBtn.style.display = tab === 'gimpo' ? 'inline-block' : 'none';
+
+            // 오프라인 탭은 claim 필터 자동 선택
+            if (tab === 'offline') {
+                currentFilter = 'claim';
+            } else {
+                currentFilter = 'all';
+            }
 
             loadConfig();
             loadLogs();
@@ -551,10 +615,18 @@
             const tbody = document.getElementById('log-table-body');
             tbody.innerHTML = '';
 
-            // 필터 적용
-            const filtered = logs.filter(log => {
-                if (currentFilter === 'all') return true;
-                if (currentFilter === 'claim') return log.result === 'claim';
+            // 탭별 추가 필터 (온라인/오프라인은 claimType으로 구분)
+            let filtered = logs.filter(log => {
+                if (currentFilter === 'all') {
+                    if (currentTab === 'online') return log.claimType !== 'offline';
+                    if (currentTab === 'offline') return log.claimType === 'offline' || log.result === 'claim';
+                    return true;
+                }
+                if (currentFilter === 'claim') {
+                    if (currentTab === 'offline') return log.result === 'claim' && (log.claimType === 'offline' || !log.claimType);
+                    if (currentTab === 'online') return log.result === 'claim' && log.claimType !== 'offline';
+                    return log.result === 'claim';
+                }
                 if (currentFilter === 'participate') return log.result === 'participate';
                 return log.result === currentFilter;
             });
@@ -692,7 +764,7 @@
 
             const startVal = document.getElementById('log-date-start').value;
             const endVal = document.getElementById('log-date-end').value;
-            const tabLabel = currentTab === 'gimpo' ? '김포' : '디톡스';
+            const tabLabel = { detox: '디톡스', online: '디톡스_온라인', offline: '디톡스_오프라인', gimpo: '김포' }[currentTab] || currentTab;
             const filename = `게임로그_${tabLabel}_${startVal}_${endVal}.xlsx`;
 
             XLSX.writeFile(wb, filename);

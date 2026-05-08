@@ -858,13 +858,16 @@ router.post('/visit', async (req, res) => {
         if (!type || !userId) return res.status(400).json({ success: false, error: 'type and userId are required' });
 
         const db = getDB();
-        const nowKST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
-        const dateStr = nowKST.toISOString().slice(0, 10);
+        const nowUTC = new Date(); // 실제 UTC 기준 현재 시각
+        // KST = UTC+9, 날짜 문자열은 KST 기준으로 계산
+        const kstOffset = 9 * 60 * 60 * 1000;
+        const nowKST = new Date(nowUTC.getTime() + kstOffset);
+        const dateStr = nowKST.toISOString().slice(0, 10); // 'YYYY-MM-DD' KST 기준
 
         await db.collection('game_visits').updateOne(
             { type, userId, date: dateStr },
             {
-                $setOnInsert: { isMember: !!isMember, createdAt: nowKST },
+                $setOnInsert: { isMember: !!isMember, createdAt: nowUTC }, // MongoDB엔 UTC로 저장
                 $inc: { visitCount: 1 }
             },
             { upsert: true }
@@ -898,6 +901,249 @@ router.get('/admin/visits', async (req, res) => {
     } catch (err) {
         console.error('[game-visit] 방문 기록 조회 오류:', err);
         res.status(500).json({ success: false, error: '서버 에러' });
+    }
+});
+
+// ============================================================
+// 오프라인 디톡스 전용 라우트 (game_detox_offline_* 컬렉션)
+// game_off.html 전용 - 오프라인 매장에서 사용
+// ============================================================
+
+// GET /api/game/detox-offline/config
+router.get('/detox-offline/config', async (req, res) => {
+    try {
+        const db = getDB();
+        const config = await db.collection('game_detox_offline_config').findOne({ type: 'success_criteria' });
+        if (config) {
+            res.json({ success: true, minTime: config.minTime, maxTime: config.maxTime, missions: config.missions || [], baseHearts: config.baseHearts !== undefined ? config.baseHearts : 2 });
+        } else {
+            res.json({ success: true, minTime: 10000, maxTime: 11000, missions: [], baseHearts: 2 });
+        }
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: '서버 에러' });
+    }
+});
+
+// POST /api/game/detox-offline/config
+router.post('/detox-offline/config', async (req, res) => {
+    try {
+        const { minTime, maxTime, baseHearts, missions } = req.body;
+        const db = getDB();
+        await db.collection('game_detox_offline_config').updateOne(
+            { type: 'success_criteria' },
+            { $set: { minTime: parseInt(minTime), maxTime: parseInt(maxTime), baseHearts: parseInt(baseHearts) || 2, missions: missions || [], updatedAt: new Date() } },
+            { upsert: true }
+        );
+        res.json({ success: true, minTime, maxTime, baseHearts, missions });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: '서버 에러' });
+    }
+});
+
+// GET /api/game/detox-offline/status
+router.get('/detox-offline/status', async (req, res) => {
+    try {
+        const { memberId, guestId } = req.query;
+        const db = getDB();
+        const userId = memberId || guestId;
+        if (!userId) return res.status(400).json({ success: false, error: 'userId is required' });
+
+        const user = await db.collection('game_detox_offline_users').findOne({ userId });
+        const config = await db.collection('game_detox_offline_config').findOne({ type: 'success_criteria' });
+        const baseHeartsForMember = (config && config.baseHearts !== undefined) ? config.baseHearts : 2;
+
+        let hearts = 0, hasReceivedCoupon = false, completedMissions = [], downloadedCoupons = [];
+
+        if (user) {
+            hearts = user.hearts;
+            hasReceivedCoupon = user.hasReceivedCoupon || false;
+            completedMissions = user.completedMissions || [];
+            downloadedCoupons = user.downloadedCoupons || [];
+            if (memberId && completedMissions.length === 0 && hearts > baseHeartsForMember) {
+                hearts = baseHeartsForMember;
+                await db.collection('game_detox_offline_users').updateOne({ userId }, { $set: { hearts: baseHeartsForMember, isMember: true, updatedAt: new Date() } });
+            } else if (memberId && !user.isMember) {
+                await db.collection('game_detox_offline_users').updateOne({ userId }, { $set: { isMember: true, updatedAt: new Date() } });
+            }
+        } else {
+            hearts = memberId ? baseHeartsForMember : 1;
+            await db.collection('game_detox_offline_users').insertOne({
+                userId, isMember: !!memberId, hearts, hasReceivedCoupon: false,
+                completedMissions: [], downloadedCoupons: [], createdAt: new Date(), updatedAt: new Date()
+            });
+        }
+
+        res.json({ success: true, hearts, hasReceivedCoupon, hasReceivedOnlineCoupon: false, hasReceivedSecretCoupon: false, completedMissions, downloadedCoupons });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: '서버 에러' });
+    }
+});
+
+// POST /api/game/detox-offline/success
+router.post('/detox-offline/success', async (req, res) => {
+    try {
+        const { memberId, guestId, recordTime } = req.body;
+        const db = getDB();
+        const userId = memberId || guestId;
+        if (!userId) return res.status(400).json({ success: false, error: 'userId is required' });
+
+        await db.collection('game_detox_offline_logs').insertOne({
+            userId, isMember: !!memberId, result: 'success', recordTime: recordTime || null, createdAt: new Date()
+        });
+
+        const user = await db.collection('game_detox_offline_users').findOne({ userId });
+        res.json({ success: true, hearts: user ? user.hearts : 0, hasReceivedCoupon: user ? user.hasReceivedCoupon || false : false, hasReceivedOnlineCoupon: false });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: '서버 에러' });
+    }
+});
+
+// POST /api/game/detox-offline/fail
+router.post('/detox-offline/fail', async (req, res) => {
+    try {
+        const { memberId, guestId, recordTime } = req.body;
+        const db = getDB();
+        const userId = memberId || guestId;
+        if (!userId) return res.status(400).json({ success: false, error: 'userId is required' });
+
+        await db.collection('game_detox_offline_logs').insertOne({
+            userId, isMember: !!memberId, result: 'fail', recordTime: recordTime || null, createdAt: new Date()
+        });
+
+        const updated = await db.collection('game_detox_offline_users').findOneAndUpdate(
+            { userId }, { $set: { updatedAt: new Date() } }, { returnDocument: 'after' }
+        );
+        res.json({ success: true, hearts: updated ? Math.max(updated.hearts, 0) : 0 });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: '서버 에러' });
+    }
+});
+
+// POST /api/game/detox-offline/play
+router.post('/detox-offline/play', async (req, res) => {
+    try {
+        const { memberId, guestId } = req.body;
+        const db = getDB();
+        const userId = memberId || guestId;
+        if (!userId) return res.status(400).json({ success: false, error: 'userId is required' });
+
+        const user = await db.collection('game_detox_offline_users').findOne({ userId });
+        if (!user || user.hearts <= 0) return res.json({ success: false, error: 'lack_of_hearts', hearts: 0 });
+
+        const updated = await db.collection('game_detox_offline_users').findOneAndUpdate(
+            { userId }, { $inc: { hearts: -1 }, $set: { updatedAt: new Date() } }, { returnDocument: 'after' }
+        );
+        res.json({ success: true, hearts: updated ? Math.max(updated.hearts, 0) : 0 });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: '서버 에러' });
+    }
+});
+
+// POST /api/game/detox-offline/claim - 오프라인 직원 확인
+router.post('/detox-offline/claim', async (req, res) => {
+    try {
+        const { memberId, guestId, type } = req.body;
+        const db = getDB();
+        const userId = memberId || guestId;
+        if (!userId) return res.status(400).json({ success: false, error: 'userId is required' });
+
+        const user = await db.collection('game_detox_offline_users').findOne({ userId });
+        if (user && user.hasReceivedCoupon) {
+            return res.json({ success: false, error: 'already_claimed' });
+        }
+
+        await db.collection('game_detox_offline_users').findOneAndUpdate(
+            { userId },
+            { $set: { hasReceivedCoupon: true, claimType: type || 'offline', updatedAt: new Date() } },
+            { returnDocument: 'after', upsert: true }
+        );
+
+        await db.collection('game_detox_offline_logs').insertOne({
+            userId, isMember: !!memberId, result: 'claim', claimType: type || 'offline', createdAt: new Date()
+        });
+
+        res.json({ success: true, hasReceivedCoupon: true });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: '서버 에러' });
+    }
+});
+
+// POST /api/game/detox-offline/mission
+router.post('/detox-offline/mission', async (req, res) => {
+    try {
+        const { memberId, missionIdx, reward } = req.body;
+        const db = getDB();
+        if (!memberId) return res.status(400).json({ success: false, error: '회원만 미션을 이용할 수 있습니다.' });
+
+        const user = await db.collection('game_detox_offline_users').findOne({ userId: memberId });
+        if (missionIdx !== 0 && user && user.completedMissions && user.completedMissions.includes(missionIdx)) {
+            return res.json({ success: false, error: 'already_completed', completedMissions: user.completedMissions });
+        }
+
+        const updated = await db.collection('game_detox_offline_users').findOneAndUpdate(
+            { userId: memberId },
+            { $addToSet: { completedMissions: missionIdx }, $inc: { hearts: reward }, $set: { updatedAt: new Date() } },
+            { returnDocument: 'after', upsert: true }
+        );
+        const newHearts = updated ? updated.hearts : (user ? user.hearts + reward : reward);
+        res.json({ success: true, hearts: newHearts, completedMissions: updated ? updated.completedMissions : [missionIdx] });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: '서버 에러' });
+    }
+});
+
+// GET /api/game/detox-offline/admin/logs
+router.get('/detox-offline/admin/logs', async (req, res) => {
+    try {
+        const { startDate, endDate, date } = req.query;
+        const db = getDB();
+        const query = {};
+        if (startDate || endDate || date) {
+            const start = new Date(`${startDate || date}T00:00:00+09:00`);
+            const end = new Date(`${endDate || date}T23:59:59.999+09:00`);
+            query.createdAt = { $gte: start, $lte: end };
+        }
+        const logs = await db.collection('game_detox_offline_logs').find(query).sort({ createdAt: -1 }).toArray();
+        res.json({ success: true, logs });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: '서버 에러' });
+    }
+});
+
+// GET /api/game/detox-offline/successList
+router.get('/detox-offline/successList', async (req, res) => {
+    try {
+        const { memberId } = req.query;
+        const db = getDB();
+        const totalSuccessCount = await db.collection('game_detox_offline_logs').countDocuments({ isMember: true, result: 'success' });
+        const aggregateLogs = await db.collection('game_detox_offline_logs').aggregate([
+            { $match: { isMember: true, result: 'success' } },
+            { $group: { _id: '$userId', count: { $sum: 1 }, latestSuccess: { $max: '$createdAt' } } },
+            { $sort: { count: -1, latestSuccess: -1 } }
+        ]).toArray();
+
+        let myCount = 0, myRank = null;
+        if (memberId) {
+            const myIndex = aggregateLogs.findIndex(log => log._id === memberId);
+            if (myIndex !== -1) { myRank = myIndex + 1; myCount = aggregateLogs[myIndex].count; }
+        }
+        const list = aggregateLogs.slice(0, 50).map(log => {
+            const id = log._id;
+            return { id: id.length > 3 ? id.slice(0, 3) + '***' : id + '***', count: log.count };
+        });
+        res.json({ success: true, list, totalSuccessCount, myCount, myRank });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, list: [], totalSuccessCount: 0, myCount: 0, myRank: null });
     }
 });
 

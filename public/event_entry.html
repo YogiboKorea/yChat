@@ -119,6 +119,12 @@
             border-color: #4bc8d8;
         }
 
+        .tab-btn.active-offline {
+            background: #e84887;
+            color: white;
+            border-color: #e84887;
+        }
+
         .tab-btn.active-gimpo {
             background: #e84887;
             color: white;
@@ -150,7 +156,9 @@
 
         <div class="tab-bar">
             <div class="tab-btn active" id="tab-detox" onclick="switchTab('detox')">🎮 디톡스 (기존)</div>
-            <div class="tab-btn" id="tab-gimpo" onclick="switchTab('gimpo')">🏪 김포 매장</div>
+            <div class="tab-btn" id="tab-online" onclick="switchTab('online')">🌐 디톡스 (온라인)</div>
+            <div class="tab-btn" id="tab-offline" onclick="switchTab('offline')">🏪 디톡스 (오프라인)</div>
+            <div class="tab-btn" id="tab-gimpo" onclick="switchTab('gimpo')">📍 김포 매장</div>
         </div>
 
         <div>
@@ -192,15 +200,45 @@
     <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
     <script>
         const API_BASE_URL = 'https://port-0-ychat-lzgmwhc4d9883c97.sel4.cloudtype.app';
-        let currentTab = 'detox'; // 'detox' or 'gimpo'
+        let currentTab = 'detox'; // 'detox' | 'online' | 'offline' | 'gimpo'
         let allLogs = [];
+
+        // type 파라미터: game_visits 컬렉션의 type 필드와 매핑
+        function getVisitType() {
+            if (currentTab === 'online') return 'detox';       // game.html → type:'detox'
+            if (currentTab === 'offline') return 'detox-offline'; // game_off.html → type:'detox-offline'
+            if (currentTab === 'gimpo') return 'gimpo';
+            return 'detox'; // 기존
+        }
 
         function switchTab(tab) {
             currentTab = tab;
-            document.getElementById('tab-detox').className = 'tab-btn' + (tab === 'detox' ? ' active' : '');
-            document.getElementById('tab-gimpo').className = 'tab-btn' + (tab === 'gimpo' ? ' active-gimpo' : '');
-            document.getElementById('page-title').innerText = tab === 'gimpo' ? '📈 김포 매장 방문자 통계' : '📈 디톡스 방문자 통계';
-            
+
+            // 모든 탭 초기화
+            ['detox', 'online', 'offline', 'gimpo'].forEach(t => {
+                const el = document.getElementById('tab-' + t);
+                if (el) el.className = 'tab-btn';
+            });
+
+            // 활성 스타일
+            const activeClass = {
+                detox: 'tab-btn active',
+                online: 'tab-btn active',
+                offline: 'tab-btn active-offline',
+                gimpo: 'tab-btn active-gimpo'
+            };
+            const el = document.getElementById('tab-' + tab);
+            if (el) el.className = activeClass[tab] || 'tab-btn active';
+
+            // 페이지 제목
+            const titles = {
+                detox: '📈 디톡스 (기존) 방문자 통계',
+                online: '🌐 디톡스 온라인 방문자 통계',
+                offline: '🏪 디톡스 오프라인 방문자 통계',
+                gimpo: '📍 김포 매장 방문자 통계'
+            };
+            document.getElementById('page-title').innerText = titles[tab] || '📈 방문자 통계';
+
             loadLogs();
         }
 
@@ -236,7 +274,7 @@
                 return;
             }
 
-            const queryParam = `?type=${currentTab}&startDate=${startVal}&endDate=${endVal}`;
+            const queryParam = `?type=${getVisitType()}&startDate=${startVal}&endDate=${endVal}`;
 
             fetch(`${API_BASE_URL}/api/game/admin/visits${queryParam}`)
                 .then(r => fetchSafeJson(r))
@@ -244,9 +282,10 @@
                     if (data.success) {
                         allLogs = data.visits || [];
                         renderLogs(allLogs);
-                        
-                        // 방문자 수 계산 (userId 기준으로 중복 제거)
-                        const uniqueUsers = new Set(allLogs.map(l => l.userId));
+
+                        // 방문자 수 계산 (회원만, userId 기준으로 중복 제거)
+                        const memberLogs = allLogs.filter(l => l.isMember);
+                        const uniqueUsers = new Set(memberLogs.map(l => l.userId));
                         document.getElementById('total-visitor-count').innerText = uniqueUsers.size.toLocaleString();
                     }
                 })
@@ -265,19 +304,17 @@
             }
 
             logs.forEach(log => {
+                // 비회원(게스트)은 화면에 노출하지 않음
+                if (!log.isMember) return;
+
                 const tr = document.createElement('tr');
                 const d = new Date(log.createdAt);
                 const dateStr = d.toLocaleString('ko-KR');
 
-                const isMember = log.isMember;
-                const badgeHtml = isMember 
-                    ? '<span class="badge badge-member">회원</span>' 
-                    : '<span class="badge badge-guest">게스트 (비회원)</span>';
-
                 tr.innerHTML = `
                     <td><strong>${log.date}</strong></td>
                     <td>${log.userId}</td>
-                    <td>${badgeHtml}</td>
+                    <td><span class="badge badge-member">회원</span></td>
                     <td><strong style="color: #007bff;">${log.visitCount || 1}</strong> 회</td>
                     <td><span style="color: #666; font-size: 13px;">${dateStr}</span></td>
                 `;
@@ -291,14 +328,14 @@
                 return;
             }
 
-            const rows = allLogs.map(log => {
+            // 엑셀 다운로드도 회원만 포함
+            const rows = allLogs.filter(log => log.isMember).map(log => {
                 const d = new Date(log.createdAt);
                 const dateStr = d.toLocaleString('ko-KR');
 
                 return {
                     '접속 일자': log.date,
-                    '회원/게스트 ID': log.userId || '',
-                    '회원 여부': log.isMember ? '회원' : '게스트',
+                    '회원 ID': log.userId || '',
                     '누적 방문 횟수(해당일)': log.visitCount || 1,
                     '최초 접속 일시': dateStr
                 };
@@ -310,7 +347,7 @@
 
             const startVal = document.getElementById('log-date-start').value;
             const endVal = document.getElementById('log-date-end').value;
-            const tabLabel = currentTab === 'gimpo' ? '김포' : '디톡스';
+            const tabLabel = { detox: '디톡스', online: '디톡스_온라인', offline: '디톡스_오프라인', gimpo: '김포' }[currentTab] || currentTab;
             const filename = `방문자로그_${tabLabel}_${startVal}_${endVal}.xlsx`;
 
             XLSX.writeFile(wb, filename);

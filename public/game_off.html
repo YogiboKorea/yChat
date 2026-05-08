@@ -5,7 +5,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>10초 디톡스 게임</title>
+    <title>10초 디톡스 게임 (오프라인 전용)</title>
     <style>
         * {
             box-sizing: border-box;
@@ -1432,23 +1432,23 @@
         </div>
     </div>
 
-    <!-- 성공 적립금 지급 팝업 -->
-    <div id="success-reward-modal"
+    <!-- 오프라인 전용: 매장 직원 확인 쿠폰 팝업 -->
+    <div id="offline-reward-modal"
         style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); z-index: 100000; justify-content: center; align-items: center;">
         <div
             style="background: white; border-radius: 24px; width: 85%; max-width: 320px; padding: 35px 24px 28px; text-align: center; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.25);">
-            <div onclick="closeSuccessRewardModal()"
+            <div onclick="closeOfflineRewardModal()"
                 style="position: absolute; top: 15px; right: 20px; font-size: 24px; font-weight: bold; color: #999; cursor: pointer;">
                 ✕</div>
-            <div style="font-size: 52px; margin-bottom: 12px;">🎉</div>
-            <h3 style="color: #333; margin-bottom: 10px; font-size: 22px; font-weight: 900; line-height: 1.3;">10초 디톡스 성공!</h3>
-            <div style="background: linear-gradient(135deg, #fff5f9, #fef0fc); border-radius: 16px; padding: 18px; margin-bottom: 20px; border: 2px solid #e84887;">
+            <div style="font-size: 52px; margin-bottom: 12px;">🏪</div>
+            <h3 style="color: #333; margin-bottom: 10px; font-size: 22px; font-weight: 900; line-height: 1.3;">매장 전용 혜택</h3>
+            <div style="background: linear-gradient(135deg, #fff5f9, #fef0fc); border-radius: 16px; padding: 18px; margin-bottom: 8px; border: 2px solid #e84887;">
                 <p style="font-size: 28px; font-weight: 900; color: #e84887; margin: 0 0 4px;">5,000원</p>
-                <p style="font-size: 14px; color: #555; margin: 0; font-weight: 600;">공식몰 적립금이 지급되었습니다!</p>
+                <p style="font-size: 14px; color: #555; margin: 0; font-weight: 600;">즉시 할인권</p>
             </div>
-            <p style="font-size: 13px; color: #888; margin-bottom: 20px; line-height: 1.5;">마이페이지 &gt; 적립금에서 확인하세요</p>
-            <button onclick="closeSuccessRewardModal(); goHome();"
-                style="background: linear-gradient(135deg, #e84887, #c0306d); color: white; border: none; border-radius: 30px; padding: 15px 0; width: 100%; font-size: 16px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(232,72,135,0.35);">확인</button>
+            <p style="font-size: 13px; color: #e84887; margin-bottom: 20px; font-weight: bold;">매장 직원이 직접 눌러요</p>
+            <button onclick="confirmEmployee()"
+                style="background: linear-gradient(135deg, #e84887, #c0306d); color: white; border: none; border-radius: 30px; padding: 15px 0; width: 100%; font-size: 16px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(232,72,135,0.35);">직원 확인</button>
         </div>
     </div>
 
@@ -1671,7 +1671,7 @@
 
             const mId = typeof memberId !== 'undefined' && memberId ? memberId : '';
 
-            fetch(`${API_BASE_URL}/api/game/detox/successList?memberId=${mId}`)
+            fetch(`${API_BASE_URL}/api/game/detox-offline/successList?memberId=${mId}`)
                 .then(r => r.json())
                 .then(data => {
                     const subtitle = document.querySelector('#myeongjeon-modal .myeongjeon-subtitle');
@@ -1740,7 +1740,7 @@
 
             // 회원인 경우 DB에 미션 완료 기록
             if (memberId) {
-                fetch(`${API_BASE_URL}/api/game/detox/mission`, {
+                fetch(`${API_BASE_URL}/api/game/detox-offline/mission`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ memberId, missionIdx: idx, reward })
@@ -1829,7 +1829,7 @@
 
         document.addEventListener('DOMContentLoaded', function () {
             // 성공 초수(config) 우선 가져오기
-            fetch(`${API_BASE_URL}/api/game/detox/config`)
+            fetch(`${API_BASE_URL}/api/game/detox-offline/config`)
                 .then(r => r.json())
                 .then(data => {
                     if (data.success) {
@@ -1925,7 +1925,7 @@
         function fetchGameStatus() {
             const mId = memberId || '';
             const gId = STATE.guestId || '';
-            fetch(`${API_BASE_URL}/api/game/detox/status?memberId=${mId}&guestId=${gId}`)
+            fetch(`${API_BASE_URL}/api/game/detox-offline/status?memberId=${mId}&guestId=${gId}`)
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) {
@@ -2155,7 +2155,7 @@
                 CAFE24API.getMemberID(function (res) {
                     memberId = res ? res : null;
                     STATE.guestId = getFinalId();
-                    fetch(`${API_BASE_URL}/api/game/detox/status?memberId=${memberId || ''}&guestId=${STATE.guestId || ''}`)
+                    fetch(`${API_BASE_URL}/api/game/detox-offline/status?memberId=${memberId || ''}&guestId=${STATE.guestId || ''}`)
                         .then(r => r.json())
                         .then(data => {
                             if (data.success) {
@@ -2193,7 +2193,7 @@
                     return;
                 }
 
-                fetch(`${API_BASE_URL}/api/game/detox/play`, {
+                fetch(`${API_BASE_URL}/api/game/detox-offline/play`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -2250,7 +2250,7 @@
                     }
 
                     // 항상 최신 게임 상태 동기화 후 진행
-                    fetch(`${API_BASE_URL}/api/game/detox/status?memberId=${memberId || ''}&guestId=${STATE.guestId || ''}`)
+                    fetch(`${API_BASE_URL}/api/game/detox-offline/status?memberId=${memberId || ''}&guestId=${STATE.guestId || ''}`)
                         .then(r => r.json())
                         .then(data => {
                             if (data.success) {
@@ -2275,15 +2275,6 @@
             }
         });
 
-        function skipAdVideo() {
-            const videoEl = document.getElementById('ad-video');
-            if (videoEl) {
-                videoEl.pause();
-                videoEl.currentTime = 0;
-            }
-            document.getElementById('ad-video-modal').style.display = 'none';
-            startGameUI();
-        }
 
         function checkAdAndStart() {
             if (!memberId) {
@@ -2296,9 +2287,7 @@
                         console.warn('Video play blocked:', e);
                         skipAdVideo();
                     });
-                    videoEl.onended = () => {
-                        skipAdVideo();
-                    };
+                    videoEl.onended = () => { skipAdVideo(); };
                     return;
                 }
             }
@@ -2448,7 +2437,7 @@
             clearDistractors();
 
             const isSuccess = finalTime >= STATE.config.minTime && finalTime <= STATE.config.maxTime;
-            const endpoint = isSuccess ? '/api/game/detox/success' : '/api/game/detox/fail';
+            const endpoint = isSuccess ? '/api/game/detox-offline/success' : '/api/game/detox-offline/fail';
 
             fetch(`${API_BASE_URL}${endpoint}`, {
                 method: 'POST',
@@ -2502,24 +2491,14 @@
                     textBox.innerHTML = '축하합니다~<br>요기보에 누울 자격 획득!';
                 }
 
-                if (!memberId) {
-                    // --- 비로그인 + 성공 ---
-                    const loginUrl = getLoginUrlWithReturn({ action: 'claim_success' });
-                    btnWrapper.innerHTML = `
-                        <button class="btn-result-text online" onclick="location.href='${loginUrl}'">🌐 간편회원가입하고 게임 더 즐기기<br>적립금 5,000원 혜택 받기</button>
-                    `;
+                // 오프라인 전용: 직원 확인 쿠폰 버튼
+                if (STATE.hasReceivedCoupon) {
+                    btnWrapper.innerHTML = `<button class="btn-result-text online" onclick="goHome()">🎮 게임 더 하기</button>`;
                 } else {
-                    // --- 로그인 + 성공 ---
-                    if (STATE.hasReceivedCoupon) {
-                        // 이미 5,000원 적립금 수령한 경우
-                        btnWrapper.innerHTML = `<button class="btn-result-text online" onclick="goHome()">🎮 게임 더 하기</button>`;
-                    } else {
-                        // 미수령 - 버튼 클릭 시 지급
-                        btnWrapper.innerHTML = `
-                            <button class="btn-result-text" style="background: linear-gradient(135deg,#e84887,#c0306d); color:#fff;" onclick="grantSuccessReward(this)">🎁 적립금 5,000원 받기</button>
-                            <button class="btn-result-text online" onclick="goHome()">🎮 게임 더 하기</button>
-                        `;
-                    }
+                    btnWrapper.innerHTML = `
+                        <button class="btn-result-text" style="background: linear-gradient(135deg,#e84887,#c0306d); color:#fff;" onclick="openOfflineRewardModal()">🏪 매장 할인 5,000원 쿠폰 받기</button>
+                        <button class="btn-result-text online" onclick="goHome()">🎮 게임 더 하기</button>
+                    `;
                 }
             } else {
                 // ===== 실패 =====
@@ -2529,18 +2508,8 @@
                 textBox.innerHTML = '아쉬워요...<br>도파민 디톡스에 실패했어요';
                 retryCountNum.innerText = STATE.currentLives;
 
-                if (!memberId) {
-                    // --- 비로그인 + 실패 ---
-                    failExtraUi.style.display = 'flex';
-                    const loginUrl = getLoginUrlWithReturn();
-                    btnWrapper.innerHTML = `
-                        <button class="btn-result-text online" onclick="location.href='${loginUrl}'">🌐 회원가입하고 재도전 기회 받기</button>
-                    `;
-                } else {
-                    // --- 로그인 + 실패 ---
-                    failExtraUi.style.display = 'none';
-                    btnWrapper.innerHTML = `<button class="btn-result-text online" onclick="goHome()">🎮 재도전하기</button>`;
-                }
+                failExtraUi.style.display = 'none';
+                btnWrapper.innerHTML = `<button class="btn-result-text online" onclick="goHome()">🎮 재도전하기</button>`;
             }
 
             switchScreen('result');
@@ -2564,48 +2533,42 @@
         function openModal() { document.getElementById('info-modal').style.display = 'flex'; }
         function closeModal() { document.getElementById('info-modal').style.display = 'none'; }
 
-        // 성공 적립금 팝업
-        function openSuccessRewardModal() { document.getElementById('success-reward-modal').style.display = 'flex'; }
-        function closeSuccessRewardModal() { document.getElementById('success-reward-modal').style.display = 'none'; }
+        // 오프라인 직원 확인 쿠폰 팝업
+        function openOfflineRewardModal() { document.getElementById('offline-reward-modal').style.display = 'flex'; }
+        function closeOfflineRewardModal() { document.getElementById('offline-reward-modal').style.display = 'none'; }
 
-        // 성공 시 5,000원 적립금 버튼 클릭 지급 함수
-        function grantSuccessReward(btn) {
-            if (!memberId) return;
-            if (STATE.hasReceivedCoupon) {
-                openSuccessRewardModal();
-                return;
-            }
-
-            // 버튼 중복 클릭 방지
-            if (btn) { btn.disabled = true; btn.textContent = '처리 중...'; }
-
-            fetch(`${API_BASE_URL}/api/event/detox-reward`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ memberId })
-            })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success) {
-                        STATE.hasReceivedCoupon = true;
-                        openSuccessRewardModal();
-                    } else if (data.alreadyDone) {
-                        STATE.hasReceivedCoupon = true;
-                        openSuccessRewardModal();
-                    } else {
-                        alert(data.message || '적립금 지급에 실패했습니다. 잠시 후 다시 시도해주세요.');
-                        if (btn) { btn.disabled = false; btn.textContent = '🎁 적립금 5,000원 받기'; }
-                    }
+        // 오프라인 직원 확인 처리
+        function confirmEmployee() {
+            if (confirm('직원 확인 시 5,000원 즉시 할인 쿠폰이 지급되며, 이후 추가 보상 수령은 불가합니다!')) {
+                fetch(`${API_BASE_URL}/api/game/detox/claim`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ memberId: memberId || null, guestId: STATE.guestId, type: 'offline' })
                 })
-                .catch(err => {
-                    console.error('적립금 지급 오류:', err);
-                    alert('서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
-                    if (btn) { btn.disabled = false; btn.textContent = '🎁 적립금 5,000원 받기'; }
-                });
+                    .then(res => res.json())
+                    .then(data => {
+                        closeOfflineRewardModal();
+                        if (data.success) {
+                            STATE.hasReceivedCoupon = true;
+                            STATE.currentLives = 0;
+                            renderLives();
+                            alert('상품 지급 확인이 완료되었습니다.');
+                            const isSuccess = document.getElementById('screen-result').classList.contains('success');
+                            showResult(isSuccess, 0);
+                        } else if (data.error === 'already_claimed') {
+                            alert('이미 오프라인 혜택을 수령하셨습니다.');
+                        } else {
+                            alert('처리에 실패하였습니다.');
+                        }
+                    })
+                    .catch(() => {
+                        closeOfflineRewardModal();
+                        alert('서버 오류가 발생했습니다.');
+                    });
+            }
         }
 
-        // (레거시 함수 - 호환성 유지용 빈 함수)
-        function confirmEmployee() {}
+        // (레거시 호환성 유지)
         function confirmOnlineCoupon() {}
         // --- 방문자 트래킹 스크립트 ---
         document.addEventListener('DOMContentLoaded', () => {
@@ -2614,7 +2577,7 @@
                     fetch(`${API_BASE_URL}/api/game/visit`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ type: 'detox', userId: uid, isMember: isMem })
+                        body: JSON.stringify({ type: 'detox-offline', userId: uid, isMember: isMem })
                     }).catch(e => console.error('visit log err:', e));
                 };
 

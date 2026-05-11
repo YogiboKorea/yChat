@@ -151,6 +151,11 @@ const mountEventRoutes = (basePath) => {
       const doc = {
         mallId: MALL_ID, title: payload.title.trim(), content, images: payload.images || [],
         gridSize: payload.gridSize ?? null, layoutType: payload.layoutType || 'none', classification: payload.classification || {},
+        // eventTemp 신규 스키마: sections(블록 배열) + couponNos(이벤트 적용 쿠폰) + imageUrl + eventType
+        sections: Array.isArray(payload.sections) ? payload.sections : undefined,
+        couponNos: Array.isArray(payload.couponNos) ? payload.couponNos : [],
+        imageUrl: payload.imageUrl || undefined,
+        eventType: payload.eventType || undefined,
         createdAt: now, updatedAt: now,
       };
       const result = await runDb(db => db.collection(EVENT_COLL).insertOne(doc));
@@ -189,6 +194,11 @@ const mountEventRoutes = (basePath) => {
     if (p.gridSize !== undefined) set.gridSize = p.gridSize;
     if (p.layoutType) set.layoutType = p.layoutType;
     if (p.classification) set.classification = p.classification;
+    // eventTemp 신규 스키마 필드 — 그대로 보존해 widget.js 가 sections 우선으로 렌더할 수 있게.
+    if (Array.isArray(p.sections)) set.sections = p.sections;
+    if (Array.isArray(p.couponNos)) set.couponNos = p.couponNos;
+    if (p.imageUrl) set.imageUrl = p.imageUrl;
+    if (p.eventType) set.eventType = p.eventType;
 
     try {
       const r = await runDb(db => db.collection(EVENT_COLL).updateOne({ _id: new ObjectId(id), mallId: MALL_ID }, { $set: set }));
@@ -378,18 +388,112 @@ router.get('/api/:_any/products', async (req, res) => {
     const params = { shop_no: 1, limit: parseInt(req.query.limit) || 1000, offset: parseInt(req.query.offset) || 0 };
     if (req.query.q) params['search[product_name]'] = req.query.q;
     const data = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/products`, {}, params);
-    res.json({ products: data.products?.map(p => ({ product_no: p.product_no, product_name: p.product_name, price: p.price, list_image: p.list_image })) || [], total: data.total_count });
+    res.json({
+      products: (data.products || []).map(p => ({
+        product_no: p.product_no,
+        product_code: p.product_code,
+        product_name: p.product_name,
+        price: p.price,
+        list_image: p.list_image,
+        // admin 미리보기에서 요약/영문이름 노출에 필요
+        eng_product_name: p.eng_product_name || '',
+        summary_description: p.summary_description || '',
+        simple_description: p.simple_description || '',
+      })),
+      total: data.total_count,
+    });
   } catch (err) { res.status(500).json({ error: '상품 조회 실패' }); }
 });
 
+// 상품 단건 조회 — admin 미리보기 / widget.js 가 사용.
+// summary_description(영문 요약) / eng_product_name / 가격(즉시할인가/쿠폰할인가) / 데코 아이콘 / hover 이미지 등 풀세트 응답.
 router.get('/api/:_any/products/:product_no', async (req, res) => {
   const { product_no } = req.params;
   try {
-    const data = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${product_no}`, {}, { shop_no: 1 });
-    const p = data.product || (data.products && data.products[0]);
+    const shop_no = 1;
+    const coupon_query = req.query.coupon_no || '';
+    const coupon_nos = coupon_query.split(',').map(s => s.trim()).filter(Boolean);
+
+    // 1) 기본 상품 정보
+    const prodData = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${product_no}`, {}, { shop_no });
+    const p = prodData.product || (prodData.products && prodData.products[0]);
     if (!p) return res.status(404).json({ error: '상품을 찾을 수 없습니다.' });
-    res.json({ product_no: p.product_no, product_name: p.product_name, price: p.price, list_image: p.list_image });
-  } catch (err) { res.status(500).json({ error: '상품 단건 조회 실패' }); }
+
+    // 2) 즉시 할인가 (pc_discount_price)
+    let sale_price = null;
+    try {
+      const disData = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${product_no}/discountprice`, {}, { shop_no });
+      const raw = disData?.discountprice?.pc_discount_price;
+      if (raw != null) {
+        const n = parseFloat(raw);
+        if (isFinite(n)) sale_price = n;
+      }
+    } catch (e) { /* 즉시할인가가 없는 상품도 있음 — skip */ }
+
+    // 3) 쿠폰 적용가 (benefit_price) — 다중 쿠폰 중 최대 할인을 채택
+    let benefit_price = null;
+    let benefit_percentage = null;
+    if (coupon_nos.length > 0) {
+      const coupons = await Promise.all(coupon_nos.map(async no => {
+        try {
+          const { coupons: arr } = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/coupons`, {}, {
+            shop_no,
+            coupon_no: no,
+            fields: 'coupon_no,available_product,available_product_list,available_category,available_category_list,benefit_amount,benefit_percentage',
+          });
+          return arr && arr[0] ? arr[0] : null;
+        } catch (e) { return null; }
+      }));
+
+      const orig = parseFloat(p.price);
+      coupons.filter(Boolean).forEach(coupon => {
+        const pList = coupon.available_product_list || [];
+        const ok = coupon.available_product === 'U'
+          || (coupon.available_product === 'I' && pList.includes(parseInt(product_no, 10)))
+          || (coupon.available_product === 'E' && !pList.includes(parseInt(product_no, 10)));
+        if (!ok) return;
+        const pct = parseFloat(coupon.benefit_percentage || 0);
+        const amt = parseFloat(coupon.benefit_amount || 0);
+        let bPrice = null;
+        if (pct > 0) bPrice = +(orig * (100 - pct) / 100).toFixed(2);
+        else if (amt > 0) bPrice = +(orig - amt).toFixed(2);
+        if (bPrice != null && pct > (benefit_percentage || 0)) {
+          benefit_price = bPrice;
+          benefit_percentage = pct;
+        }
+      });
+    }
+
+    // 4) 풀세트 응답 — widget.js / admin renderGrid 가 필요로 하는 모든 필드 포함
+    res.json({
+      product_no: p.product_no,
+      product_code: p.product_code,
+      product_name: p.product_name,
+      // 영문/요약
+      eng_product_name: p.eng_product_name || '',
+      summary_description: p.summary_description || '',
+      simple_description: p.simple_description || '',
+      // 이미지 (hover/세부 페이지 등에서 사용)
+      list_image: p.list_image,
+      image_medium: p.image_medium || null,
+      image_small: p.image_small || null,
+      tiny_image: p.tiny_image || null,
+      detail_image: p.detail_image || null,
+      // 가격/할인
+      price: p.price,
+      sale_price,
+      benefit_price,
+      benefit_percentage,
+      // 데코 아이콘 (Premium / NEW / BEST / SALE 등)
+      decoration_icon_url: p.decoration_icon_url || null,
+      icons: p.icons || null,
+      additional_icons: p.additional_icons || [],
+      product_tags: p.product_tags || '',
+    });
+  } catch (err) {
+    console.error('[PRODUCT DETAIL ERROR]', err?.message || err);
+    res.status(500).json({ error: '상품 단건 조회 실패' });
+  }
 });
 
 // ───────────────────────────────────────────────

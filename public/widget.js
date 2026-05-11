@@ -540,8 +540,11 @@
         console.error('widget.js: SELF_BASE 추출 실패');
         return;
       }
-      // mallId 를 함께 전달 — 서버가 cafe24 detail 로 summary_description 등을 보강.
-      const response = await fetch(`${SELF_BASE}/api/events/${pageId}?mallId=${encodeURIComponent(mallId)}`);
+      // ychat 의 실제 라우트는 `/api/{mallId}/events/{id}`. eventTemp 의 `/api/events/{id}` 도 함께 폴백.
+      let response = await fetch(`${SELF_BASE}/api/${encodeURIComponent(mallId)}/events/${pageId}`);
+      if (!response.ok) {
+        response = await fetch(`${SELF_BASE}/api/events/${pageId}?mallId=${encodeURIComponent(mallId)}`);
+      }
       if (!response.ok) throw new Error('Event data fetch failed');
       const json = await response.json();
       // 우리 서버 응답 형태: { success, data }

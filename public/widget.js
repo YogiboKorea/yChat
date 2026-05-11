@@ -512,16 +512,28 @@
       letter-spacing: -0.03em;
       width: 100%;
     }
-    /* 가격 영역 — 쿠폰 뱃지(order 1) → 정가 취소선(order 2) → 최종가(order 3) */
+    /* 가격 영역 — 쿠폰 적용 시 2줄 구성
+       (1) 정가(취소선) 한 줄 차지, 우측 정렬
+       (2) 10% 뱃지(좌) + 최종가(우) */
     .main_Grid_${pageId} .prd_price {
       display: flex;
       align-items: center;
-      gap: 8px;
       margin-top: 10px;
       flex-wrap: wrap;
     }
-    .main_Grid_${pageId} .prd_percent {
+    .main_Grid_${pageId} .prd_original {
       order: 1;
+      width: 100%;
+      text-align: right;
+      color: #CACFD8;
+      font-size: 10px;
+      font-weight: 400;
+      letter-spacing: 0;
+      text-decoration: line-through;
+      margin-top: 5px;
+    }
+    .main_Grid_${pageId} .prd_percent {
+      order: 2;
       background: #06BEDE;
       color: #fff;
       width: 48px;
@@ -533,20 +545,9 @@
       border-radius: 50px;
       float: none;
     }
-    .main_Grid_${pageId} .prd_original {
-      order: 2;
-      color: #CACFD8;
-      font-size: 10px;
-      font-weight: 400;
-      letter-spacing: 0;
-      vertical-align: middle;
-      margin-top: 5px;
-      text-decoration: line-through;
-      display: inline-block;
-      text-align: right;
-    }
     .main_Grid_${pageId} .prd_final {
       order: 3;
+      margin-left: auto;
       font-size: 16px;
       font-weight: 400;
       color: #090909;

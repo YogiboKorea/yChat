@@ -134,6 +134,9 @@ router.post('/api/:_any/uploads/image', upload.single('file'), async (req, res) 
 // Event Temple API
 // ───────────────────────────────────────────────
 const EVENT_COLL = 'eventTemple';
+// eventTemp(이전 명칭: design) 컬렉션과의 호환을 위해 GET / list 시 양쪽 모두 조회.
+// 신규 저장은 EVENT_COLL 한 곳으로만.
+const EVENT_FALLBACK_COLLS = ['design'];
 function normalizeBlocks(blocks = []) {
   if (!Array.isArray(blocks)) return [];
   return blocks.map(b => (b?.type === 'video') ? { ...b, autoplay: b?.autoplay === true || b?.autoplay === 'true' || b?.autoplay === 1 || b?.autoplay === '1' } : b);
@@ -165,8 +168,32 @@ const mountEventRoutes = (basePath) => {
 
   router.get(`/api/:_any${basePath}`, async (req, res) => {
     try {
-      const list = await runDb(db => db.collection(EVENT_COLL).find({ mallId: MALL_ID }).sort({ createdAt: -1 }).toArray());
-      return res.json(list);
+      // EVENT_COLL + 모든 fallback 컬렉션에서 동시에 조회 후 합쳐서 반환.
+      // 옛 'design' 컬렉션에 만들어진 이벤트도 admin / widget 에서 그대로 보이게 함.
+      const merged = await runDb(async db => {
+        const colls = [EVENT_COLL, ...EVENT_FALLBACK_COLLS];
+        const lists = await Promise.all(
+          colls.map(c =>
+            db.collection(c)
+              // 옛 컬렉션에는 mallId 가 없을 수 있어 두 케이스 모두 매칭
+              .find({ $or: [{ mallId: MALL_ID }, { mallId: { $exists: false } }] })
+              .sort({ createdAt: -1 })
+              .toArray()
+              .catch(() => [])
+          )
+        );
+        // _id 중복 제거 (혹시 양쪽 컬렉션 모두에 같은 _id 가 있을 경우 EVENT_COLL 우선)
+        const seen = new Set();
+        const result = [];
+        lists.flat().forEach(doc => {
+          const key = String(doc._id);
+          if (seen.has(key)) return;
+          seen.add(key);
+          result.push(doc);
+        });
+        return result.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+      });
+      return res.json(merged);
     } catch (err) { return res.status(500).json({ error: '이벤트 목록 조회에 실패했습니다.' }); }
   });
 
@@ -174,7 +201,22 @@ const mountEventRoutes = (basePath) => {
     const { id } = req.params;
     if (!ObjectId.isValid(id)) return res.status(400).json({ error: '잘못된 이벤트 ID입니다.' });
     try {
-      const ev = await runDb(db => db.collection(EVENT_COLL).findOne({ _id: new ObjectId(id), mallId: MALL_ID }));
+      // EVENT_COLL 에서 먼저 찾고, 없으면 fallback 컬렉션들을 순차 조회.
+      // 옛 'design' 에 저장된 이벤트도 widget.js 에서 그대로 동작.
+      let ev = await runDb(db =>
+        db.collection(EVENT_COLL).findOne({ _id: new ObjectId(id), mallId: MALL_ID })
+      );
+      if (!ev) {
+        for (const coll of EVENT_FALLBACK_COLLS) {
+          ev = await runDb(db =>
+            db.collection(coll).findOne({
+              _id: new ObjectId(id),
+              $or: [{ mallId: MALL_ID }, { mallId: { $exists: false } }],
+            })
+          );
+          if (ev) break;
+        }
+      }
       if (!ev) return res.status(404).json({ error: '이벤트를 찾을 수 없습니다.' });
       return res.json(ev);
     } catch (err) { return res.status(500).json({ error: '이벤트 조회에 실패했습니다.' }); }

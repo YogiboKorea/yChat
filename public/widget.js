@@ -466,7 +466,7 @@
     .tabs_${pageId} button { flex: 1; padding: 8px; font-size: 16px; border: 1px solid #d9d9d9; background: #f5f5f5; color: #333; cursor: pointer; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tabs_${pageId} button.active { font-weight: 600; }
 
-    /* === 상품 카드 — 사이트 라이브 디자인 매칭 === */
+    /* === 상품 카드 — 사이트 라이브 디자인 매칭 (사장님 지정 스펙) === */
     .main_Grid_${pageId} li { list-style: none; }
     .main_Grid_${pageId} .prd_link { display: block; text-decoration: none; color: inherit; }
     /* 이미지 영역 — 둥근 모서리 + 데코 아이콘 absolute 컨테이너 */
@@ -478,55 +478,84 @@
       border-radius: 12px;
     }
     .main_Grid_${pageId} .prd_thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    /* 이미지 좌상단 데코 아이콘 (Premium / NEW / BEST / SALE 등) */
+    /* 이미지 우상단 데코 아이콘 (Premium / NEW / BEST / SALE 등) */
     .main_Grid_${pageId} .prd_iconsData {
       position: absolute;
       top: 12px;
-      left: 12px;
+      right: 12px;
       display: flex;
       gap: 4px;
       z-index: 2;
       pointer-events: none;
     }
     .main_Grid_${pageId} .prd_iconsData img {
-      max-height: 28px;
+      max-height: 56px;
       width: auto;
       display: block;
     }
-    /* 영문 상품명(요약) — 민트/청록색 (디자인 매칭) */
+    /* 영문 상품명(요약) — #goods_name */
     .main_Grid_${pageId} .prd_desc {
-      font-size: 13px;
-      color: #4FC3D7;
-      line-height: 1.2;
-      font-weight: 500;
-      margin: 12px 0 4px;
-    }
-    /* 상품명 — 굵게 */
-    .main_Grid_${pageId} .prd_name {
-      font-size: 16px;
-      font-weight: 700;
-      color: #222;
+      font-size: 11px;
+      color: #ABB0BA;
+      margin-top: 12px;
       line-height: 1.3;
-      margin-top: 2px;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      letter-spacing: -0.03em;
     }
-    /* 가격 영역 — 10% 뱃지 + 정가(취소선) + 최종가 */
-    .main_Grid_${pageId} .prd_price { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-    .main_Grid_${pageId} .prd_percent { background: #4FC3D7; color: #fff; padding: 3px 10px; border-radius: 14px; font-size: 12px; font-weight: 600; line-height: 1; }
-    .main_Grid_${pageId} .prd_original { color: #999; text-decoration: line-through; font-size: 13px; }
-    .main_Grid_${pageId} .prd_final { font-size: 18px; font-weight: 700; color: #111; margin-left: auto; }
+    /* 한글 상품명 — .name */
+    .main_Grid_${pageId} .prd_name {
+      display: inline-block;
+      font-size: 16px;
+      color: #090909;
+      font-weight: 400;
+      margin-top: 5px;
+      line-height: 1.3;
+      letter-spacing: -0.03em;
+      width: 100%;
+    }
+    /* 가격 영역 — 쿠폰 뱃지(order 1) → 정가 취소선(order 2) → 최종가(order 3) */
+    .main_Grid_${pageId} .prd_price {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    .main_Grid_${pageId} .prd_percent {
+      order: 1;
+      background: #06BEDE;
+      color: #fff;
+      width: 48px;
+      height: 20px;
+      line-height: 20px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 13px;
+      border-radius: 50px;
+      float: none;
+    }
+    .main_Grid_${pageId} .prd_original {
+      order: 2;
+      color: #CACFD8;
+      font-size: 10px;
+      font-weight: 400;
+      letter-spacing: 0;
+      vertical-align: middle;
+      margin-top: 5px;
+      text-decoration: line-through;
+      display: inline-block;
+      text-align: right;
+    }
+    .main_Grid_${pageId} .prd_final {
+      order: 3;
+      font-size: 16px;
+      font-weight: 400;
+      color: #090909;
+    }
 
     @media (max-width: 400px) {
       .main_Grid_${pageId} { width: 96%; margin: 0 auto; }
-      .main_Grid_${pageId} .prd_desc { font-size: 12px; }
-      .main_Grid_${pageId} .prd_name { font-size: 15px; }
-      .main_Grid_${pageId} .prd_final { font-size: 16px; }
-      .main_Grid_${pageId} .prd_iconsData { top: 8px; left: 8px; }
-      .main_Grid_${pageId} .prd_iconsData img { max-height: 22px; }
+      .main_Grid_${pageId} .prd_iconsData { top: 8px; right: 8px; }
+      .main_Grid_${pageId} .prd_iconsData img { max-height: 44px; }
     }
   `;
   document.head.appendChild(style);

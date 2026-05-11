@@ -562,31 +562,35 @@
       color: #090909;
     }
 
-    /* 이미지 좌상단 % 뱃지 오버레이 — 3-col 모드에서만 노출 */
+    /* 이미지 좌상단 % 뱃지 오버레이 — 기본은 숨김. 모바일 + 3-col 일 때만 노출. */
     .main_Grid_${pageId} .prd_percent_overlay { display: none; }
 
-    /* === 3-col 모바일 레이아웃 === */
-    .main_Grid_${pageId}[data-grid-size="3"] .prd_percent {
-      display: none;                /* 가격 영역의 뱃지는 숨김 */
-    }
-    .main_Grid_${pageId}[data-grid-size="3"] .prd_percent_overlay {
-      display: block;
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 3;
-      background: #06BEDE;
-      color: #fff;
-      width: 42px;
-      height: 22px;
-      line-height: 22px;
-      text-align: center;
-      font-weight: 700;
-      font-size: 12px;
-      border-radius: 50px;
-    }
-    .main_Grid_${pageId}[data-grid-size="3"] .prd_final {
-      margin-left: 0;               /* 좌측 정렬 */
+    /* === 모바일 (≤500px) + 3-col 레이아웃 ===
+       - 가격 영역 뱃지 숨김 → 이미지 좌상단 오버레이 뱃지로 노출
+       - 최종가 좌측 정렬 */
+    @media (max-width: 500px) {
+      .main_Grid_${pageId}[data-grid-size="3"] .prd_percent {
+        display: none;
+      }
+      .main_Grid_${pageId}[data-grid-size="3"] .prd_percent_overlay {
+        display: block;
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 3;
+        background: #06BEDE;
+        color: #fff;
+        width: 42px;
+        height: 22px;
+        line-height: 22px;
+        text-align: center;
+        font-weight: 700;
+        font-size: 12px;
+        border-radius: 50px;
+      }
+      .main_Grid_${pageId}[data-grid-size="3"] .prd_final {
+        margin-left: 0;
+      }
     }
 
     @media (max-width: 400px) {

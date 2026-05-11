@@ -241,7 +241,10 @@
         panel.style.display = i === 0 ? 'block' : 'none';
         const ul = document.createElement('ul');
         ul.className = `main_Grid_${pageId}`;
-        ul.dataset.gridSize = block.gridSize;
+        // 탭별 그리드 사이즈 우선, 없으면 block.gridSize 사용.
+        ul.dataset.gridSize = (block.tabGridSizes && block.tabGridSizes[i] != null)
+          ? block.tabGridSizes[i]
+          : block.gridSize;
         if (block.registerMode === 'direct') {
           const tabDirect = (block.tabDirectProducts?.[i] || []);
           const directNos = tabDirect.map(p => p.product_no).join(',');
@@ -371,7 +374,11 @@
   //   .prd_name        : 상품명 (굵게)
   //   .prd_price       : 가격 영역 (10% 뱃지 + 정가 취소선 + 최종가)
   function renderProducts(ul, products, cols) {
-    ul.style.cssText = `display:grid; grid-template-columns:repeat(${cols},1fr); gap:24px; max-width:800px; margin:24px auto; list-style:none; padding:0;`;
+    const safeCols = Math.max(1, Math.min(4, parseInt(cols, 10) || 2));
+    // 1×1 은 단일 상품만 중앙에 좁게 노출
+    const maxWidth = safeCols === 1 ? 400 : 800;
+    products = safeCols === 1 ? (products || []).slice(0, 1) : (products || []);
+    ul.style.cssText = `display:grid; grid-template-columns:repeat(${safeCols},1fr); gap:24px; max-width:${maxWidth}px; margin:24px auto; list-style:none; padding:0;`;
 
     const formatKRW = val => `${(Number(val) || 0).toLocaleString('ko-KR')}원`;
     const parseNumber = v => {
@@ -437,18 +444,20 @@
       // 영문 상품명 → 요약설명 → 브리핑설명 순으로 fallback (이름 위 민트색 텍스트)
       const subText = p.eng_product_name || p.summary_description || p.simple_description || '';
 
+      const percentText = displayPercent && displayPercent > 0 ? `${displayPercent}%` : '';
       return `
         <li>
           <a href="${productLink}" class="prd_link" data-track-click="product" data-product-no="${p.product_no}" target="_blank" rel="noopener noreferrer">
             <div class="prd_thumb">
               ${initialImg ? `<img src="${initialImg}" ${hoverAttrs} alt="${escapeHtml(p.product_name || '')}" />` : ''}
               ${iconHtml ? `<div class="prd_iconsData">${iconHtml}</div>` : ''}
+              ${percentText ? `<span class="prd_percent_overlay">${percentText}</span>` : ''}
             </div>
             ${subText ? `<div class="prd_desc">${escapeHtml(subText)}</div>` : ''}
             <div class="prd_name">${escapeHtml(p.product_name || '')}</div>
           </a>
           <div class="prd_price">
-            ${displayPercent && displayPercent > 0 ? `<span class="prd_percent">${displayPercent}%</span>` : ''}
+            ${percentText ? `<span class="prd_percent">${percentText}</span>` : ''}
             ${showOriginal ? `<span class="prd_original">${priceText}</span>` : ''}
             <span class="prd_final">${finalPrice}</span>
           </div>
@@ -553,10 +562,40 @@
       color: #090909;
     }
 
+    /* 이미지 좌상단 % 뱃지 오버레이 — 3-col 모드에서만 노출 */
+    .main_Grid_${pageId} .prd_percent_overlay { display: none; }
+
+    /* === 3-col 모바일 레이아웃 === */
+    .main_Grid_${pageId}[data-grid-size="3"] .prd_percent {
+      display: none;                /* 가격 영역의 뱃지는 숨김 */
+    }
+    .main_Grid_${pageId}[data-grid-size="3"] .prd_percent_overlay {
+      display: block;
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 3;
+      background: #06BEDE;
+      color: #fff;
+      width: 42px;
+      height: 22px;
+      line-height: 22px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 12px;
+      border-radius: 50px;
+    }
+    .main_Grid_${pageId}[data-grid-size="3"] .prd_final {
+      margin-left: 0;               /* 좌측 정렬 */
+    }
+
     @media (max-width: 400px) {
       .main_Grid_${pageId} { width: 96%; margin: 0 auto; }
       .main_Grid_${pageId} .prd_iconsData { top: 8px; right: 8px; }
       .main_Grid_${pageId} .prd_iconsData img { max-height: 44px; }
+      .main_Grid_${pageId}[data-grid-size="3"] .prd_percent_overlay {
+        top: 8px; left: 8px; width: 36px; height: 20px; line-height: 20px; font-size: 11px;
+      }
     }
   `;
   document.head.appendChild(style);

@@ -1034,6 +1034,48 @@
             transform: scale(0.9);
         }
 
+        .myeongjeon-speech-bubble-btn {
+            position: absolute;
+            top: -28px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #fff;
+            border-radius: 12px;
+            padding: 4px 8px;
+            font-size: 11px;
+            font-weight: 800;
+            color: #d12e69;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            animation: pulse-bubble-btn 2s ease-in-out infinite;
+            pointer-events: none;
+            border: 1px solid #f8a5c2;
+            z-index: 10;
+        }
+
+        .myeongjeon-speech-bubble-btn::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 5px 5px 0;
+            border-style: solid;
+            border-color: #fff transparent transparent transparent;
+        }
+
+        @keyframes pulse-bubble-btn {
+
+            0%,
+            100% {
+                transform: translateX(-50%) scale(1);
+            }
+
+            50% {
+                transform: translateX(-50%) scale(1.05);
+            }
+        }
+
         /* --- 명전 모달 --- */
         #myeongjeon-modal {
             display: none;
@@ -1254,6 +1296,45 @@
             background: #4bc8d8;
             color: #fff;
         }
+
+        /* --- 롤링 배너 --- */
+        .result-rolling-banner {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(232, 72, 135, 0.95);
+            color: #fff;
+            padding: 12px 0;
+            overflow: hidden;
+            cursor: pointer;
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .result-rolling-banner .rolling-text {
+            display: flex;
+            white-space: nowrap;
+            animation: rolling-banner-anim 15s linear infinite;
+        }
+
+        .result-rolling-banner .rolling-text span {
+            font-size: 15px;
+            font-weight: 800;
+            padding: 0 20px;
+        }
+
+        @keyframes rolling-banner-anim {
+            0% {
+                transform: translateX(0);
+            }
+
+            100% {
+                transform: translateX(-50%);
+            }
+        }
     </style>
 
 
@@ -1330,8 +1411,11 @@
                 <div class="start-action-wrapper">
                     <img src="http://yogibo.kr/game/게임설명무름표.png" class="btn-info-circle" onclick="openModal()" alt="설명">
                     <img src="http://yogibo.kr/game/시작하기버튼.png" class="btn-game-start" id="btn-game-start" alt="시작하기">
-                    <img src="http://yogibo.kr/game/명전.png" class="btn-myeongjeon" onclick="openMyeongjeonModal()"
-                        alt="명전">
+                    <div style="position: relative; display: flex; justify-content: center;">
+                        <div class="myeongjeon-speech-bubble-btn">명예의 전당</div>
+                        <img src="http://yogibo.kr/game/명전.png" class="btn-myeongjeon" onclick="openMyeongjeonModal()"
+                            alt="명전">
+                    </div>
                 </div>
             </div>
         </div>
@@ -1378,6 +1462,14 @@
         </div>
 
         <div id="screen-result" class="screen">
+            <div class="result-rolling-banner" onclick="openRecordShareModal()">
+                <div class="rolling-text">
+                    <span>🏆 명예의 전당에서 내 기록 공유하고 빈백 응모하기!</span>
+                    <span>🏆 명예의 전당에서 내 기록 공유하고 빈백 응모하기!</span>
+                    <span>🏆 명예의 전당에서 내 기록 공유하고 빈백 응모하기!</span>
+                    <span>🏆 명예의 전당에서 내 기록 공유하고 빈백 응모하기!</span>
+                </div>
+            </div>
             <!--
             <div class="result-home-btn" onclick="goHome()">🏠 홈 화면 가기</div>
 -->
@@ -1441,10 +1533,14 @@
                 style="position: absolute; top: 15px; right: 20px; font-size: 24px; font-weight: bold; color: #999; cursor: pointer;">
                 ✕</div>
             <div id="reward-modal-icon" style="font-size: 52px; margin-bottom: 12px;">🎉</div>
-            <h3 id="reward-modal-title" style="color: #333; margin-bottom: 10px; font-size: 22px; font-weight: 900; line-height: 1.3;">적립금 지급 완료!</h3>
-            <div style="background: linear-gradient(135deg, #fff5f9, #fef0fc); border-radius: 16px; padding: 18px; margin-bottom: 12px; border: 2px solid #e84887;">
+            <h3 id="reward-modal-title"
+                style="color: #333; margin-bottom: 10px; font-size: 22px; font-weight: 900; line-height: 1.3;">적립금 지급
+                완료!</h3>
+            <div
+                style="background: linear-gradient(135deg, #fff5f9, #fef0fc); border-radius: 16px; padding: 18px; margin-bottom: 12px; border: 2px solid #e84887;">
                 <p style="font-size: 28px; font-weight: 900; color: #e84887; margin: 0 0 4px;">5,000원</p>
-                <p id="reward-modal-msg" style="font-size: 14px; color: #555; margin: 0; font-weight: 600;">온라인 전용 적립금이 지급되었습니다!</p>
+                <p id="reward-modal-msg" style="font-size: 14px; color: #555; margin: 0; font-weight: 600;">온라인 전용 적립금이
+                    지급되었습니다!</p>
             </div>
             <p style="font-size: 13px; color: #888; margin-bottom: 20px; line-height: 1.5;">마이페이지 &gt; 적립금에서 확인하세요</p>
             <button onclick="closeSuccessRewardModal();"
@@ -1458,12 +1554,26 @@
             <div><img src="http://yogibo.kr/game/명전.png" class="myeongjeon-trophy-img" alt="명예의 전당"
                     onerror="this.onerror=null; this.style.fontSize='50px'; this.style.display='block';"></div>
             <div class="myeongjeon-title">명예의 전당</div>
-            <div class="myeongjeon-subtitle">도파민 10초 디톡스 성공</div>
+
+            <div class="myeongjeon-my-record-wrapper"
+                style="background: rgba(255,255,255,0.08); border-radius: 12px; padding: 12px; margin: 10px 0 15px; width: 85%; text-align: center; border: 1px solid rgba(255, 208, 96, 0.3);">
+                <div style="color: rgba(255,255,255,0.8); font-size: 13px; margin-bottom: 6px; font-weight: 700;">나의 기록
+                    <span id="myeongjeon-my-id" style="color: #ffd060;"></span>
+                </div>
+                <div class="myeongjeon-subtitle" style="margin:0; font-size: 15px; color: #fff;">현재까지 0번 성공 ! 현재순위 0위
+                </div>
+            </div>
+
             <div class="myeongjeon-divider"></div>
             <div class="myeongjeon-ticker-wrap">
                 <div class="myeongjeon-ticker" id="myeongjeon-ticker"></div>
             </div>
             <div class="myeongjeon-count-text" id="myeongjeon-count-text"></div>
+
+            <button class="myeongjeon-share-open-btn" onclick="openRecordShareModal()"
+                style="margin-top: 20px; background: linear-gradient(135deg, #e84887, #c0306d); color: white; border: none; border-radius: 30px; padding: 14px 20px; font-size: 15px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(232,72,135,0.35); width: 85%;">
+                내 기록 자랑하고 피라미드 받기
+            </button>
         </div>
     </div>
 
@@ -1478,6 +1588,41 @@
 
             <div class="mission-list" id="mission-list-container">
             </div>
+        </div>
+    </div>
+
+    <!-- 명전 기록 공유 팝업 -->
+    <style>
+        #record-share-subtitle span {
+            color: #ffaa00 !important;
+        }
+    </style>
+    <div id="record-share-modal"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.72); z-index: 100000; justify-content: center; align-items: center;">
+        <div
+            style="background: white; border-radius: 20px; width: 85%; max-width: 320px; padding: 40px 24px 30px; text-align: center; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.25);">
+            <div onclick="closeRecordShareModal()"
+                style="position: absolute; top: 15px; right: 20px; font-size: 26px; font-weight: 300; color: #999; cursor: pointer; line-height: 1;">
+                ✕</div>
+
+            <h3
+                style="color: #222; margin-bottom: 12px; font-size: 19px; font-weight: 900; line-height: 1.4; letter-spacing: -0.5px;">
+                내 기록을 카카오톡으로 공유하면<br>피라미드 빈백 추첨 응모 완료!
+            </h3>
+            <p style="font-size: 14px; color: #999; margin-bottom: 25px; letter-spacing: -0.5px;">(공유만 해도 자동 응모됩니다.)</p>
+
+            <div
+                style="background: #ffffff; border-radius: 16px; padding: 20px 15px; margin-bottom: 25px; border: 2px solid #ffcc00; box-shadow: 0 4px 10px rgba(255, 204, 0, 0.1);">
+                <p style="font-size: 14px; font-weight: 800; color: #555; margin-bottom: 8px;">나의 기록</p>
+                <p id="record-share-subtitle"
+                    style="font-size: 17px; color: #e84887; margin: 0; font-weight: 900; letter-spacing: -0.5px;">현재까지
+                    0번 성공 ! 현재순위 0위</p>
+            </div>
+
+            <button onclick="executeKakaoRecordShare();"
+                style="background: #fee500; color: #191919; border: none; border-radius: 30px; padding: 16px 0; width: 100%; font-size: 17px; font-weight: 900; cursor: pointer; box-shadow: 0 4px 12px rgba(254,229,0,0.3); display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <img src="http://yogibo.kr/game/sns_logo.png" style="width: 22px;" alt="kakao"> 공유하기
+            </button>
         </div>
     </div>
 
@@ -1675,10 +1820,12 @@
                 .then(r => r.json())
                 .then(data => {
                     const subtitle = document.querySelector('#myeongjeon-modal .myeongjeon-subtitle');
+                    const myIdEl = document.getElementById('myeongjeon-my-id');
+                    if (myIdEl) myIdEl.textContent = `[${mId || '게스트'}]`;
                     if (data.myCount && data.myCount > 0) {
                         subtitle.innerHTML = `현재까지 <span style="color:#ffd060;">${data.myCount}</span>번 성공! 현재순위 <span style="color:#ffd060;">${data.myRank}</span>위 🏆`;
                     } else {
-                        subtitle.innerHTML = '도파민 10초 디톡스 성공';
+                        subtitle.innerHTML = '현재까지 0번 성공 ! 현재순위 0위';
                     }
 
                     const list = (data.list && data.list.length > 0) ? data.list : MYEONGJEON_DUMMY;
@@ -1720,6 +1867,78 @@
             if (countEl) {
                 const displayCount = totalCount !== undefined ? totalCount : list.length;
                 countEl.textContent = `현재까지 ${displayCount}번 성공했습니다! 🎉`;
+            }
+        }
+
+        let currentRecordText = '도파민 10초 디톡스에 도전해보세요!';
+
+        function openRecordShareModal() {
+            const mId = typeof memberId !== 'undefined' && memberId ? memberId : '';
+            const apiUrl = window.location.pathname.includes('game_off.html')
+                ? `${API_BASE_URL}/api/game/detox-offline/successList?memberId=${mId}`
+                : `${API_BASE_URL}/api/game/detox/successList?memberId=${mId}`;
+
+            fetch(apiUrl)
+                .then(r => r.json())
+                .then(data => {
+                    let subtitleHtml, subtitleText;
+                    if (data.myCount && data.myCount > 0) {
+                        subtitleHtml = `현재까지 <span style="color:#ffd060;">${data.myCount}</span>번 성공! 현재순위 <span style="color:#ffd060;">${data.myRank}</span>위 🏆`;
+                        subtitleText = `현재까지 ${data.myCount}번 성공! 현재순위 ${data.myRank}위 🏆`;
+                    } else {
+                        subtitleHtml = '현재까지 0번 성공 ! 현재순위 0위';
+                        subtitleText = '현재까지 0번 성공 ! 현재순위 0위';
+                    }
+                    document.getElementById('record-share-subtitle').innerHTML = subtitleHtml;
+                    currentRecordText = `나의 기록: ${subtitleText}`;
+
+                    const modalSubtitle = document.querySelector('#myeongjeon-modal .myeongjeon-subtitle');
+                    if (modalSubtitle) modalSubtitle.innerHTML = subtitleHtml;
+
+                    document.getElementById('record-share-modal').style.display = 'flex';
+                })
+                .catch(() => {
+                    document.getElementById('record-share-modal').style.display = 'flex';
+                });
+        }
+
+        function closeRecordShareModal() {
+            document.getElementById('record-share-modal').style.display = 'none';
+        }
+
+        function executeKakaoRecordShare() {
+            try {
+                const kakaoModule = typeof Kakao.Share !== 'undefined' ? Kakao.Share : (typeof Kakao.Link !== 'undefined' ? Kakao.Link : null);
+                if (!kakaoModule) {
+                    alert('카카오톡 공유 기능을 불러오지 못했습니다.');
+                    return;
+                }
+                kakaoModule.sendDefault({
+                    objectType: 'feed',
+                    content: {
+                        title: '🏆 도파민 10초 디톡스 명예의 전당',
+                        description: currentRecordText + '\\n나도 도전하고 피라미드 빈백 받기!',
+                        imageUrl: 'https://yogibo.kr/game/%EB%AA%85%EC%A0%84.png',
+                        link: {
+                            mobileWebUrl: window.location.href,
+                            webUrl: window.location.href,
+                        },
+                    },
+                    buttons: [
+                        {
+                            title: '내 기록 도전하기',
+                            link: {
+                                mobileWebUrl: window.location.href,
+                                webUrl: window.location.href,
+                            },
+                        },
+                    ]
+                });
+
+                setTimeout(closeRecordShareModal, 1000);
+
+            } catch (e) {
+                console.error('카카오 공유 실패', e);
             }
         }
 
@@ -2506,20 +2725,20 @@
                     // --- 비로그인 + 성공 ---
                     const loginUrl = getLoginUrlWithReturn({ action: 'claim_success' });
                     btnWrapper.innerHTML = `
-                        <button class="btn-result-text online" onclick="location.href='${loginUrl}'">🌐 간편회원가입하고 게임 더 즐기기<br>적립금 5,000원 혜택 받기</button>
+                        <button class="btn-result-text online" onclick="location.href='${loginUrl}'">🌐 회원가입 하고 게임 더 즐기기</button>
                     `;
                 } else {
                     // --- 로그인 + 성공 ---
                     // 이미 수령 여부와 무관하게 항상 버튼 표시 (클릭 시 팝업으로 상태 안내)
                     const rewardBtnLabel = STATE.hasReceivedCoupon
                         ? '✅ 적립금 지급 완료 (확인하기)'
-                        : '🎁 온라인 전용 혜택 받기';
+                        : '🎁 온라인 전용 혜택 받기 (바로 사용 가능한 적립금 5,000원)';
                     const rewardBtnStyle = STATE.hasReceivedCoupon
                         ? 'background: #888; color:#fff;'
                         : 'background: linear-gradient(135deg,#e84887,#c0306d); color:#fff;';
                     btnWrapper.innerHTML = `
                         <button class="btn-result-text" style="${rewardBtnStyle}" onclick="grantSuccessReward(this)">${rewardBtnLabel}</button>
-                        <button class="btn-result-text online" onclick="goHome()">🎮 게임 더 하기</button>
+                        <button class="btn-result-text online" onclick="goHome()">🎮게임 더 즐기고 내 기록 자랑하기</button>
                     `;
                 }
             } else {
@@ -2527,7 +2746,7 @@
                 resultScreen.classList.add('fail');
                 banner.src = 'http://yogibo.kr/game/실패_텍스트.png';
                 charImg.src = d.fail;
-                textBox.innerHTML = '아쉬워요...<br>도파민 디톡스에 실패했어요';
+                textBox.innerHTML = '아쉬워요...<br>성공하면 오늘 결제 금액에서 5,000원 할인!';
                 retryCountNum.innerText = STATE.currentLives;
 
                 if (!memberId) {
@@ -2609,19 +2828,19 @@
                         if (btn) { btn.textContent = '✅ 적립금 지급 완료 (확인하기)'; btn.style.background = '#888'; btn.disabled = false; }
                     } else {
                         alert(data.message || '적립금 지급에 실패했습니다. 잠시 후 다시 시도해주세요.');
-                        if (btn) { btn.disabled = false; btn.textContent = '🎁 온라인 전용 혜택 받기'; }
+                        if (btn) { btn.disabled = false; btn.textContent = '🎁 온라인 전용 혜택 받기(바로 사용 가능한 적립금 5,000원)'; }
                     }
                 })
                 .catch(err => {
                     console.error('적립금 지급 오류:', err);
                     alert('서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
-                    if (btn) { btn.disabled = false; btn.textContent = '🎁 온라인 전용 혜택 받기'; }
+                    if (btn) { btn.disabled = false; btn.textContent = '🎁 온라인 전용 혜택 받기 (바로 사용 가능한 적립금 5,000원)'; }
                 });
         }
 
         // (레거시 함수 - 호환성 유지용 빈 함수)
-        function confirmEmployee() {}
-        function confirmOnlineCoupon() {}
+        function confirmEmployee() { }
+        function confirmOnlineCoupon() { }
         // --- 방문자 트래킹 스크립트 ---
         document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {

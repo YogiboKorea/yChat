@@ -113,7 +113,7 @@ app.post('/api/event/detox-reward', async (req, res) => {
         order_id: null,
         amount: amount,
         type: 'increase',
-        reason: '도파민 디톡스 3,000원 적립금 지급'
+        reason: '도파민 디톡스 5,000원 적립금 지급'
       }
     };
 

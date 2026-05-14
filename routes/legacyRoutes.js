@@ -414,15 +414,144 @@ router.get('/api/:_any/coupons', async (req, res) => {
 });
 
 // Category Products logic
+// 1) /categories/:no/products 는 mappings(product_no, sequence, display) 만 반환하므로
+//    2) /admin/products?product_no=A,B,C 로 풀 디테일 일괄 조회 후
+//    3) 즉시할인가(pc_discount_price)/쿠폰 혜택가(benefit_price)를 보강해 응답한다.
+//    widget.js renderProducts 와 admin renderGrid 가 단건 상품 응답과 동일한 모양을 기대.
+async function mapWithConcurrency(items, mapper, concurrency = 8) {
+  const results = new Array(items.length);
+  let idx = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (true) {
+      const i = idx++;
+      if (i >= items.length) break;
+      try { results[i] = await mapper(items[i], i); } catch (_) { results[i] = null; }
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 router.get('/api/:_any/categories/:category_no/products', async (req, res) => {
   const { category_no } = req.params;
-  const limit = parseInt(req.query.limit, 10) || 100;
+  const limit = Math.min(parseInt(req.query.limit, 10) || 100, 500);
   const offset = parseInt(req.query.offset, 10) || 0;
+  const shop_no = 1;
+  const coupon_query = req.query.coupon_no || '';
+  const coupon_nos = coupon_query.split(',').map(s => s.trim()).filter(Boolean);
+
   try {
+    // 1) 카테고리 → product_no 매핑 (노출 상품만, sequence 순)
     const urlCats = `https://${MALL_ID}.cafe24api.com/api/v2/admin/categories/${category_no}/products`;
-    const catRes = await apiRequest('GET', urlCats, {}, { shop_no: 1, limit, offset });
-    res.json(catRes.products || []); // ⚠️ 기연결 단순화 - 전체 디테일 요청을 생략 (필요에 따라 보강 필요)
-  } catch (err) { res.status(500).json({ error: '카테고리 상품 실패' }); }
+    const catRes = await apiRequest('GET', urlCats, {}, { shop_no, limit, offset, display: 'T' });
+    const mappings = (catRes && catRes.products) ? catRes.products : [];
+    if (!mappings.length) return res.json([]);
+    mappings.sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
+    const productNos = mappings.map(m => m.product_no);
+
+    // 2) 풀 디테일 일괄 조회 — cafe24 admin /products 가 product_no=A,B,C 필터 지원
+    const prodFields = [
+      'product_no', 'product_code', 'product_name',
+      'eng_product_name', 'summary_description', 'simple_description',
+      'list_image', 'image_medium', 'image_small', 'tiny_image', 'detail_image',
+      'price', 'decoration_icon_url', 'icons', 'additional_icons', 'product_tags',
+    ].join(',');
+    const prodData = await apiRequest('GET',
+      `https://${MALL_ID}.cafe24api.com/api/v2/admin/products`,
+      {},
+      { shop_no, product_no: productNos.join(','), limit: productNos.length, fields: prodFields },
+    );
+    const fetched = (prodData && prodData.products) ? prodData.products : [];
+    const byNo = new Map(fetched.map(p => [String(p.product_no), p]));
+    const orderedProds = productNos.map(no => byNo.get(String(no))).filter(Boolean);
+
+    // 3) 즉시할인가 — 상품별 호출이라 N+1, 동시성 제한해서 cafe24 rate-limit 회피
+    const salePrices = await mapWithConcurrency(orderedProds, async (p) => {
+      try {
+        const disData = await apiRequest('GET',
+          `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${p.product_no}/discountprice`,
+          {}, { shop_no },
+        );
+        const raw = disData?.discountprice?.pc_discount_price;
+        const n = raw != null ? parseFloat(raw) : null;
+        return isFinite(n) ? n : null;
+      } catch (_) { return null; }
+    }, 8);
+
+    // 4) 쿠폰 메타 — 카테고리 전체에 한 번만 조회
+    let couponDetails = [];
+    if (coupon_nos.length > 0) {
+      const coupons = await Promise.all(coupon_nos.map(async no => {
+        try {
+          const { coupons: arr } = await apiRequest('GET',
+            `https://${MALL_ID}.cafe24api.com/api/v2/admin/coupons`,
+            {},
+            {
+              shop_no, coupon_no: no,
+              fields: 'coupon_no,available_product,available_product_list,available_category,available_category_list,benefit_amount,benefit_percentage',
+            },
+          );
+          return arr && arr[0] ? arr[0] : null;
+        } catch (_) { return null; }
+      }));
+      couponDetails = coupons.filter(Boolean);
+    }
+
+    // 5) 풀세트 응답 — products/:product_no 핸들러와 동일한 shape
+    const enriched = orderedProds.map((p, idx) => {
+      const sale_price = salePrices[idx];
+      const orig = parseFloat(p.price);
+      let benefit_price = null;
+      let benefit_percentage = null;
+      couponDetails.forEach(coupon => {
+        const pList = coupon.available_product_list || [];
+        const ok = coupon.available_product === 'U'
+          || (coupon.available_product === 'I' && pList.includes(parseInt(p.product_no, 10)))
+          || (coupon.available_product === 'E' && !pList.includes(parseInt(p.product_no, 10)));
+        if (!ok) return;
+        const pct = parseFloat(coupon.benefit_percentage || 0);
+        const amt = parseFloat(coupon.benefit_amount || 0);
+        let bPrice = null;
+        if (pct > 0) bPrice = +(orig * (100 - pct) / 100).toFixed(2);
+        else if (amt > 0) bPrice = +(orig - amt).toFixed(2);
+        if (bPrice != null && pct > (benefit_percentage || 0)) {
+          benefit_price = bPrice;
+          benefit_percentage = pct;
+        }
+      });
+      return {
+        product_no: p.product_no,
+        product_code: p.product_code,
+        product_name: p.product_name,
+        eng_product_name: p.eng_product_name || '',
+        summary_description: p.summary_description || '',
+        simple_description: p.simple_description || '',
+        list_image: p.list_image,
+        image_medium: p.image_medium || null,
+        image_small: p.image_small || null,
+        tiny_image: p.tiny_image || null,
+        detail_image: p.detail_image || null,
+        price: p.price,
+        sale_price,
+        benefit_price,
+        benefit_percentage,
+        decoration_icon_url: p.decoration_icon_url || null,
+        icons: p.icons || null,
+        additional_icons: p.additional_icons || [],
+        product_tags: p.product_tags || '',
+      };
+    });
+
+    res.json(enriched);
+  } catch (err) {
+    const upstream = err?.response?.data;
+    const detail = upstream || err?.message || String(err);
+    console.error('[CATEGORY PRODUCTS ERROR]', { category_no, status: err?.response?.status, detail });
+    res.status(500).json({
+      error: '카테고리 상품 실패',
+      detail: typeof detail === 'string' ? detail : detail,
+    });
+  }
 });
 
 router.get('/api/:_any/products', async (req, res) => {

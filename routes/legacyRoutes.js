@@ -442,10 +442,11 @@ router.get('/api/:_any/categories/:category_no/products', async (req, res) => {
 
   try {
     // 1) 카테고리 → product_no 매핑.
-    // cafe24 admin /categories/{no}/products 는 display 쿼리 필터를 지원하지 않아 (422 반환)
-    // 응답을 받은 뒤 display='T' 만 골라낸다. sequence 순 정렬도 응답 후 처리.
+    // cafe24 admin /categories/{no}/products 는 display_group(숫자) 를 요구한다.
+    // 안 보내면 422 ("parameter.display_group can only contain numbers"). 1 = 기본 진열 그룹.
+    // display='T'/'F' 필터는 지원 안 됨 → 응답 후 클라이언트 사이드로 필터링.
     const urlCats = `https://${MALL_ID}.cafe24api.com/api/v2/admin/categories/${category_no}/products`;
-    const catRes = await apiRequest('GET', urlCats, {}, { shop_no, limit, offset });
+    const catRes = await apiRequest('GET', urlCats, {}, { shop_no, limit, offset, display_group: 1 });
     const allMappings = (catRes && catRes.products) ? catRes.products : [];
     const mappings = allMappings.filter(m => !m.display || m.display === 'T');
     if (!mappings.length) return res.json([]);

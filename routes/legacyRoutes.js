@@ -441,10 +441,13 @@ router.get('/api/:_any/categories/:category_no/products', async (req, res) => {
   const coupon_nos = coupon_query.split(',').map(s => s.trim()).filter(Boolean);
 
   try {
-    // 1) 카테고리 → product_no 매핑 (노출 상품만, sequence 순)
+    // 1) 카테고리 → product_no 매핑.
+    // cafe24 admin /categories/{no}/products 는 display 쿼리 필터를 지원하지 않아 (422 반환)
+    // 응답을 받은 뒤 display='T' 만 골라낸다. sequence 순 정렬도 응답 후 처리.
     const urlCats = `https://${MALL_ID}.cafe24api.com/api/v2/admin/categories/${category_no}/products`;
-    const catRes = await apiRequest('GET', urlCats, {}, { shop_no, limit, offset, display: 'T' });
-    const mappings = (catRes && catRes.products) ? catRes.products : [];
+    const catRes = await apiRequest('GET', urlCats, {}, { shop_no, limit, offset });
+    const allMappings = (catRes && catRes.products) ? catRes.products : [];
+    const mappings = allMappings.filter(m => !m.display || m.display === 'T');
     if (!mappings.length) return res.json([]);
     mappings.sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
     const productNos = mappings.map(m => m.product_no);

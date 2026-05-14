@@ -566,27 +566,36 @@
     .main_Grid_${pageId} .prd_percent_overlay { display: none; }
 
     /* === 모바일 (≤500px) + 3-col 레이아웃 ===
-       - 가격 영역 뱃지 숨김 → 이미지 좌상단 오버레이 뱃지로 노출
+       - 카드 간격 좁힘 / 상품명 폰트 축소
+       - 가격 영역 뱃지 숨김 → 이미지 좌상단 코너 오버레이 뱃지로 노출 (모서리 붙음 + 우하단만 라운드)
        - 최종가 좌측 정렬 */
     @media (max-width: 500px) {
+      .main_Grid_${pageId}[data-grid-size="3"] {
+        /* renderProducts 가 ul.style.gap 을 인라인으로 24px 박아두므로 !important 로 오버라이드 */
+        gap: 10px !important;
+      }
+      .main_Grid_${pageId}[data-grid-size="3"] .prd_name {
+        font-size: 13px;
+      }
       .main_Grid_${pageId}[data-grid-size="3"] .prd_percent {
         display: none;
       }
       .main_Grid_${pageId}[data-grid-size="3"] .prd_percent_overlay {
         display: block;
         position: absolute;
-        top: 10px;
-        left: 10px;
+        top: 0;
+        left: 0;
         z-index: 3;
         background: #06BEDE;
         color: #fff;
-        width: 42px;
-        height: 22px;
-        line-height: 22px;
+        width: 46px;
+        height: 18px;
+        line-height: 18px;
         text-align: center;
         font-weight: 700;
         font-size: 12px;
-        border-radius: 50px;
+        border-radius: 0;
+        border-bottom-right-radius: 10px;
       }
       .main_Grid_${pageId}[data-grid-size="3"] .prd_final {
         margin-left: 0;
@@ -597,9 +606,6 @@
       .main_Grid_${pageId} { width: 96%; margin: 0 auto; }
       .main_Grid_${pageId} .prd_iconsData { top: 8px; right: 8px; }
       .main_Grid_${pageId} .prd_iconsData img { max-height: 44px; }
-      .main_Grid_${pageId}[data-grid-size="3"] .prd_percent_overlay {
-        top: 8px; left: 8px; width: 36px; height: 20px; line-height: 20px; font-size: 11px;
-      }
     }
   `;
   document.head.appendChild(style);

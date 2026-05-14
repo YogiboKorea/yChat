@@ -23,9 +23,13 @@
   const PRODUCT_API_BASE = script.dataset.apiBase || '';
   const pageId = script.dataset.pageId;
   const mallId = script.dataset.mallId || 'yogibo';
-  const couponNos = script.dataset.couponNos || '';
-  const couponQSStart = couponNos ? `?coupon_no=${couponNos}` : '';
-  const couponQSAppend = couponNos ? `&coupon_no=${couponNos}` : '';
+  // 쿠폰 번호 — embed 스크립트 태그의 data-coupon-nos 가 초기값.
+  // initializePage 에서 이벤트 데이터의 ev.couponNos 가 있으면 그걸로 덮어써서
+  // cafe24 HTML 재배포 없이 admin 편집만으로 실시간 반영되게 한다.
+  let couponNos = script.dataset.couponNos || '';
+  // 매 호출 시점 최신 couponNos 로 쿼리스트링 생성 — 동적 갱신 대비.
+  const couponQSStart = () => couponNos ? `?coupon_no=${couponNos}` : '';
+  const couponQSAppend = () => couponNos ? `&coupon_no=${couponNos}` : '';
 
   // ────────────────────────────────────────────────────────────────
   // 1) 유틸/트래킹 (ychat 의 /api/{mallId}/track 그대로 사용)
@@ -305,11 +309,11 @@
       const ids = directNosAttr.split(',').map(s => s.trim()).filter(Boolean);
       if (ids.length === 0) return [];
       const results = await Promise.all(ids.map(no =>
-        fetchWithRetry(`${PRODUCT_API_BASE}/api/${mallId}/products/${no}${couponQSStart}`, fetchOpts).then(r => r.json())
+        fetchWithRetry(`${PRODUCT_API_BASE}/api/${mallId}/products/${no}${couponQSStart()}`, fetchOpts).then(r => r.json())
       ));
       return results.map(p => (p && p.product_no) ? p : {}).map(mapProductData);
     } else if (category) {
-      const prodUrl = `${PRODUCT_API_BASE}/api/${mallId}/categories/${category}/products?limit=${limit}${couponQSAppend}`;
+      const prodUrl = `${PRODUCT_API_BASE}/api/${mallId}/categories/${category}/products?limit=${limit}${couponQSAppend()}`;
       const rawProducts = await fetchWithRetry(prodUrl, fetchOpts).then(r => r.json()).then(json => Array.isArray(json) ? json : (json.products || []));
       return rawProducts.map(p => (typeof p === 'object' ? p : {})).map(mapProductData);
     }
@@ -598,7 +602,13 @@
         border-bottom-right-radius: 10px;
       }
       .main_Grid_${pageId}[data-grid-size="3"] .prd_final {
-        margin-left: 0;
+        order: 2;
+        margin-left: auto;
+        font-size: 14px;
+        font-weight: 400;
+        color: #090909;
+        width: 100%;
+        text-align: right;
       }
     }
 
@@ -628,6 +638,12 @@
       const json = await response.json();
       // 우리 서버 응답 형태: { success, data }
       const ev = json && json.data ? json.data : json;
+
+      // 이벤트 데이터에 couponNos 가 있으면 script 태그의 data-coupon-nos 를 덮어쓴다.
+      // 이 덕에 admin 의 이벤트 편집만으로 라이브 쿠폰이 실시간 반영됨 — HTML 재배포 불필요.
+      if (Array.isArray(ev.couponNos)) {
+        couponNos = ev.couponNos.map(String).filter(Boolean).join(',');
+      }
 
       const root = getRootContainer();
 

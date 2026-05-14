@@ -518,9 +518,11 @@ router.get('/api/:_any/categories/:category_no/products', async (req, res) => {
         let bPrice = null;
         if (pct > 0) bPrice = +(orig * (100 - pct) / 100).toFixed(2);
         else if (amt > 0) bPrice = +(orig - amt).toFixed(2);
-        if (bPrice != null && pct > (benefit_percentage || 0)) {
+        if (bPrice == null) return;
+        // 최저가 비교 — pct 단순비교는 정액쿠폰(=pct 0) 을 누락시킴.
+        if (benefit_price == null || bPrice < benefit_price) {
           benefit_price = bPrice;
-          benefit_percentage = pct;
+          benefit_percentage = pct > 0 ? pct : (orig > 0 ? Math.round((1 - bPrice / orig) * 100) : 0);
         }
       });
       return {
@@ -632,9 +634,12 @@ router.get('/api/:_any/products/:product_no', async (req, res) => {
         let bPrice = null;
         if (pct > 0) bPrice = +(orig * (100 - pct) / 100).toFixed(2);
         else if (amt > 0) bPrice = +(orig - amt).toFixed(2);
-        if (bPrice != null && pct > (benefit_percentage || 0)) {
+        if (bPrice == null) return;
+        // 최저가 비교 — pct 단순비교는 정액쿠폰(=pct 0) 을 누락시킴.
+        // 정액쿠폰은 실제 할인율로 역산해서 표시용 percentage 도 넣어준다.
+        if (benefit_price == null || bPrice < benefit_price) {
           benefit_price = bPrice;
-          benefit_percentage = pct;
+          benefit_percentage = pct > 0 ? pct : (orig > 0 ? Math.round((1 - bPrice / orig) * 100) : 0);
         }
       });
     }

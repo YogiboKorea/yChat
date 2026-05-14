@@ -482,55 +482,25 @@ router.get('/api/:_any/categories/:category_no/products', async (req, res) => {
       } catch (_) { return null; }
     }, 8);
 
-    // 4) 쿠폰 메타 — 두 소스를 합쳐 best discount 자동 발굴
-    //    (a) 이벤트가 명시적으로 전달한 coupon_no — 비활성/숨김 쿠폰도 강제 적용 가능
-    //    (b) cafe24 의 모든 활성 쿠폰 — 이벤트 편집에서 안 골랐어도 자동 표시.
-    //    중복은 coupon_no 로 제거.
-    const fetchCouponByNo = async (no) => {
-      try {
-        const { coupons: arr } = await apiRequest('GET',
-          `https://${MALL_ID}.cafe24api.com/api/v2/admin/coupons`,
-          {},
-          {
-            shop_no, coupon_no: no,
-            fields: 'coupon_no,available_product,available_product_list,available_category,available_category_list,benefit_amount,benefit_percentage',
-          },
-        );
-        return arr && arr[0] ? arr[0] : null;
-      } catch (_) { return null; }
-    };
-
+    // 4) 쿠폰 메타 — 이벤트가 명시한 coupon_no 만 적용.
+    // 자동 발굴(cafe24 의 모든 활성 쿠폰 스캔) 은 비공개/내부용 쿠폰까지 잡혀서 라이브와 어긋남.
+    // 라이브에 표시할 쿠폰은 이벤트 편집 페이지에서 명시적으로 등록.
     let couponDetails = [];
-    try {
-      // (b) 활성 쿠폰 전체 페이징 — 상한 500 으로 안전.
-      const fields = 'coupon_no,available_product,available_product_list,available_category,available_category_list,benefit_amount,benefit_percentage,use_coupon';
-      let cOff = 0;
-      const cLim = 100;
-      const all = [];
-      while (cOff < 500) {
-        const { coupons: page = [] } = await apiRequest('GET',
-          `https://${MALL_ID}.cafe24api.com/api/v2/admin/coupons`,
-          {},
-          { shop_no, limit: cLim, offset: cOff, fields },
-        );
-        if (!page.length) break;
-        all.push(...page);
-        if (page.length < cLim) break;
-        cOff += page.length;
-      }
-      couponDetails = all.filter(c => c && (c.use_coupon === 'T' || c.use_coupon == null));
-    } catch (e) {
-      console.warn('[CATEGORY PRODUCTS] active coupons fetch failed:', e?.message);
-    }
-
-    // (a) 이벤트가 명시한 coupon_no 중 자동 발굴 목록에 없는 것 추가
     if (coupon_nos.length > 0) {
-      const have = new Set(couponDetails.map(c => String(c.coupon_no)));
-      const missing = coupon_nos.filter(no => !have.has(String(no)));
-      if (missing.length > 0) {
-        const extra = await Promise.all(missing.map(fetchCouponByNo));
-        couponDetails.push(...extra.filter(Boolean));
-      }
+      const coupons = await Promise.all(coupon_nos.map(async no => {
+        try {
+          const { coupons: arr } = await apiRequest('GET',
+            `https://${MALL_ID}.cafe24api.com/api/v2/admin/coupons`,
+            {},
+            {
+              shop_no, coupon_no: no,
+              fields: 'coupon_no,available_product,available_product_list,available_category,available_category_list,benefit_amount,benefit_percentage',
+            },
+          );
+          return arr && arr[0] ? arr[0] : null;
+        } catch (_) { return null; }
+      }));
+      couponDetails = coupons.filter(Boolean);
     }
 
     // 5) 풀세트 응답 — products/:product_no 핸들러와 동일한 shape
@@ -639,54 +609,24 @@ router.get('/api/:_any/products/:product_no', async (req, res) => {
       }
     } catch (e) { /* 즉시할인가가 없는 상품도 있음 — skip */ }
 
-    // 3) 쿠폰 적용가 (benefit_price)
-    //    카테고리 핸들러와 동일하게 cafe24 의 모든 활성 쿠폰을 자동 발굴 + 이벤트가 명시한
-    //    coupon_no 도 합쳐 best discount 채택. 이벤트 편집에 쿠폰을 안 걸어도 라이브와 동일하게 표시.
+    // 3) 쿠폰 적용가 (benefit_price) — 이벤트가 명시한 쿠폰만 적용.
+    // 자동 발굴은 비공개/내부 쿠폰까지 잡혀 라이브와 어긋나 되돌림.
     let benefit_price = null;
     let benefit_percentage = null;
-    {
-      const couponFields = 'coupon_no,available_product,available_product_list,available_category,available_category_list,benefit_amount,benefit_percentage,use_coupon';
-
-      let activeCoupons = [];
-      try {
-        let cOff = 0;
-        const cLim = 100;
-        const all = [];
-        while (cOff < 500) {
-          const { coupons: page = [] } = await apiRequest('GET',
-            `https://${MALL_ID}.cafe24api.com/api/v2/admin/coupons`,
-            {},
-            { shop_no, limit: cLim, offset: cOff, fields: couponFields },
-          );
-          if (!page.length) break;
-          all.push(...page);
-          if (page.length < cLim) break;
-          cOff += page.length;
-        }
-        activeCoupons = all.filter(c => c && (c.use_coupon === 'T' || c.use_coupon == null));
-      } catch (e) { /* swallow — 이벤트 쿠폰 fallback 으로 대체 */ }
-
-      // 이벤트가 명시한 coupon_no 중 자동 발굴 목록에 없는 것 추가
-      if (coupon_nos.length > 0) {
-        const have = new Set(activeCoupons.map(c => String(c.coupon_no)));
-        const missing = coupon_nos.filter(no => !have.has(String(no)));
-        if (missing.length > 0) {
-          const extras = await Promise.all(missing.map(async no => {
-            try {
-              const { coupons: arr } = await apiRequest('GET',
-                `https://${MALL_ID}.cafe24api.com/api/v2/admin/coupons`,
-                {},
-                { shop_no, coupon_no: no, fields: couponFields },
-              );
-              return arr && arr[0] ? arr[0] : null;
-            } catch (_) { return null; }
-          }));
-          activeCoupons.push(...extras.filter(Boolean));
-        }
-      }
+    if (coupon_nos.length > 0) {
+      const coupons = await Promise.all(coupon_nos.map(async no => {
+        try {
+          const { coupons: arr } = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/coupons`, {}, {
+            shop_no,
+            coupon_no: no,
+            fields: 'coupon_no,available_product,available_product_list,available_category,available_category_list,benefit_amount,benefit_percentage',
+          });
+          return arr && arr[0] ? arr[0] : null;
+        } catch (e) { return null; }
+      }));
 
       const orig = parseFloat(p.price);
-      activeCoupons.forEach(coupon => {
+      coupons.filter(Boolean).forEach(coupon => {
         const pList = coupon.available_product_list || [];
         const ok = coupon.available_product === 'U'
           || (coupon.available_product === 'I' && pList.includes(parseInt(product_no, 10)))
@@ -698,6 +638,7 @@ router.get('/api/:_any/products/:product_no', async (req, res) => {
         if (pct > 0) bPrice = +(orig * (100 - pct) / 100).toFixed(2);
         else if (amt > 0) bPrice = +(orig - amt).toFixed(2);
         if (bPrice == null) return;
+        // 최저가 비교 — pct 단순비교는 정액쿠폰(=pct 0) 을 누락시킴.
         if (benefit_price == null || bPrice < benefit_price) {
           benefit_price = bPrice;
           benefit_percentage = pct > 0 ? pct : (orig > 0 ? Math.round((1 - bPrice / orig) * 100) : 0);

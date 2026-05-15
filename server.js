@@ -27,7 +27,8 @@ const allowedOrigins = [
   'https://port-0-ychat-lzgmwhc4d9883c97.sel4.cloudtype.app',
   'https://design-six-zeta.vercel.app',
   'http://localhost:3000',
-  'https://design-8m6dyzko3-yogibos-projects.vercel.app'
+  'https://design-8m6dyzko3-yogibos-projects.vercel.app',
+  'https://vmd-img.vercel.app'
 ];
 app.use(cors({
   origin: function (origin, callback) {

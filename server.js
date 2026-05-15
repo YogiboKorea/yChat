@@ -28,7 +28,9 @@ const allowedOrigins = [
   'https://design-six-zeta.vercel.app',
   'http://localhost:3000',
   'https://design-8m6dyzko3-yogibos-projects.vercel.app',
-  'https://vmd-img.vercel.app'
+  'https://vmd-img.vercel.app',
+  'https://vmd-img-yogibos-projects.vercel.app'
+  
 ];
 app.use(cors({
   origin: function (origin, callback) {

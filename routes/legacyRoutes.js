@@ -584,6 +584,52 @@ router.get('/api/:_any/products', async (req, res) => {
   } catch (err) { res.status(500).json({ error: '상품 조회 실패' }); }
 });
 
+// 전체 상품 일괄 조회 — VMD 자동매핑용. 페이지네이션 내부 처리 + detail_image까지 포함.
+// :product_no 라우트 위에 두어야 'all' 이 `:product_no = 'all'` 로 매칭되지 않음.
+// 응답: { products: [...], total: N }
+router.get('/api/:_any/products/all', async (req, res) => {
+  try {
+    const shop_no = 1;
+    const PAGE = 100;
+    const MAX_PAGES = 100; // 안전 한도 10000개
+    const fields = [
+      'product_no', 'product_code', 'product_name',
+      'list_image', 'detail_image', 'image_medium',
+      'price', 'eng_product_name',
+    ].join(',');
+
+    const all = [];
+    let offset = 0;
+    for (let i = 0; i < MAX_PAGES; i++) {
+      const { products = [] } = await apiRequest(
+        'GET',
+        `https://${MALL_ID}.cafe24api.com/api/v2/admin/products`,
+        {},
+        { shop_no, limit: PAGE, offset, fields },
+      );
+      if (!products.length) break;
+      all.push(...products.map(p => ({
+        product_no: p.product_no,
+        product_code: p.product_code,
+        product_name: p.product_name,
+        list_image: p.list_image,
+        detail_image: p.detail_image,
+        image_medium: p.image_medium,
+        price: p.price,
+        eng_product_name: p.eng_product_name || '',
+      })));
+      if (products.length < PAGE) break;
+      offset += PAGE;
+    }
+
+    res.set('Cache-Control', 'public, max-age=600'); // CDN/브라우저 10분 캐시
+    res.json({ products: all, total: all.length });
+  } catch (err) {
+    console.error('[PRODUCTS ALL ERROR]', err?.message || err);
+    res.status(500).json({ error: '전체 상품 조회 실패' });
+  }
+});
+
 // 상품 단건 조회 — admin 미리보기 / widget.js 가 사용.
 // summary_description(영문 요약) / eng_product_name / 가격(즉시할인가/쿠폰할인가) / 데코 아이콘 / hover 이미지 등 풀세트 응답.
 router.get('/api/:_any/products/:product_no', async (req, res) => {

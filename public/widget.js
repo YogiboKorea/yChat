@@ -512,10 +512,11 @@
       border-radius: 12px;
     }
     .main_Grid_${pageId} .prd_thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    /* 이미지 우상단 데코 아이콘 (Premium / NEW / BEST / SALE 등) */
+    /* 이미지 우하단 데코 아이콘 (Premium / NEW / BEST / SALE / 커스텀 등).
+       썸네일 오른쪽 아래 모서리. 폭은 최대 40px, 비율 유지. */
     .main_Grid_${pageId} .prd_iconsData {
       position: absolute;
-      top: 12px;
+      bottom: 12px;
       right: 12px;
       display: flex;
       gap: 4px;
@@ -523,8 +524,9 @@
       pointer-events: none;
     }
     .main_Grid_${pageId} .prd_iconsData img {
-      max-height: 56px;
-      width: auto;
+      width: 100%;
+      max-width: 40px;
+      height: auto;
       display: block;
     }
     /* 영문 상품명(요약) — #goods_name */
@@ -635,8 +637,8 @@
 
     @media (max-width: 400px) {
       .main_Grid_${pageId} { width: 96%; margin: 0 auto; }
-      .main_Grid_${pageId} .prd_iconsData { top: 8px; right: 8px; }
-      .main_Grid_${pageId} .prd_iconsData img { max-height: 44px; }
+      .main_Grid_${pageId} .prd_iconsData { bottom: 8px; right: 8px; }
+      .main_Grid_${pageId} .prd_iconsData img { max-width: 36px; }
     }
   `;
   document.head.appendChild(style);

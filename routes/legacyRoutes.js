@@ -432,9 +432,22 @@ async function mapWithConcurrency(items, mapper, concurrency = 8) {
   return results;
 }
 
-// cafe24 아이콘 코드북 캐시 — 같은 요청 안에서 여러 상품이 공유하므로 한 번만 조회.
-// 응답: [{ code: 'icon_new', image_url: '...', ... }, ...]
-// code → image_url 맵을 반환.
+// cafe24 가 image_path 를 상대경로 (/web/upload/custom_xxx.png) 로 주는 경우,
+// widget 이 외부 도메인에서 동작하므로 절대 URL 로 prefix 해줘야 한다.
+// list_image 가 https://yogibo.kr/web/product/... 형태로 오니 같은 도메인 사용.
+const MALL_ASSET_BASE = process.env.MALL_ASSET_BASE || `https://${MALL_ID}.kr`;
+function normalizeAssetUrl(path) {
+  if (!path) return null;
+  const s = String(path).trim();
+  if (!s) return null;
+  if (/^https?:\/\//i.test(s)) return s;
+  if (s.startsWith('//')) return 'https:' + s;
+  if (s.startsWith('/')) return MALL_ASSET_BASE + s;
+  return s;
+}
+
+// cafe24 아이콘 코드북 — 응답 구조 확인됨: { icons: [{ code, path }, ...] }
+// path 는 보통 이미 절대 URL 이지만 일부 케이스 대비 normalize.
 async function fetchIconCodebook(shop_no) {
   try {
     const data = await apiRequest('GET',
@@ -444,33 +457,49 @@ async function fetchIconCodebook(shop_no) {
     const list = (data && data.icons) ? data.icons : [];
     const map = {};
     list.forEach(it => {
-      if (it && it.code && it.image_url) map[it.code] = it.image_url;
+      if (!it || !it.code) return;
+      const url = normalizeAssetUrl(it.path || it.image_url || it.image_path);
+      if (url) map[it.code] = url;
     });
     return map;
   } catch (_) { return {}; }
 }
 
-// 상품별 아이콘 정보 — image_path(데코 아이콘 직접 URL) + icon_codes(코드북 키 배열)
-// 코드북 맵을 받아 icon_codes 를 icons {icon_new:url, ...} 로 변환해 함께 반환.
+// 상품별 아이콘 — 실제 cafe24 응답 구조:
+//   { icons: { use_show_date, show_start_date, show_end_date, image_list: [{ code, path }] } }
+// image_list 각 항목을 widget 의 additional_icons 형식 ({icon_url, icon_alt}) 으로 변환.
+// codebook 은 image_list 의 path 가 비어 있을 때 fallback.
 async function fetchProductIcons(product_no, shop_no, codebook) {
   try {
     const data = await apiRequest('GET',
       `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${product_no}/icons`,
       {}, { shop_no },
     );
-    const icon = data && data.icon ? data.icon : null;
-    if (!icon) return { decoration_icon_url: null, icons: null };
-    const codes = Array.isArray(icon.icon_codes) ? icon.icon_codes : [];
-    const icons = {};
-    codes.forEach(code => {
-      if (codebook[code]) icons[code] = codebook[code];
-    });
-    return {
-      decoration_icon_url: icon.image_path || null,
-      icons: Object.keys(icons).length > 0 ? icons : null,
-    };
+    const iconsObj = data && data.icons ? data.icons : null;
+    if (!iconsObj) return { additional_icons: [] };
+
+    // use_show_date='T' 일 때만 시간 제한 적용. 'F' 면 항상 노출.
+    if (iconsObj.use_show_date === 'T') {
+      const now = Date.now();
+      const start = iconsObj.show_start_date ? new Date(iconsObj.show_start_date).getTime() : 0;
+      const end = iconsObj.show_end_date ? new Date(iconsObj.show_end_date).getTime() : Number.POSITIVE_INFINITY;
+      if (isFinite(start) && now < start) return { additional_icons: [] };
+      if (isFinite(end) && now > end) return { additional_icons: [] };
+    }
+
+    const imageList = Array.isArray(iconsObj.image_list) ? iconsObj.image_list : [];
+    const additional_icons = imageList
+      .map(it => {
+        if (!it) return null;
+        const url = normalizeAssetUrl(it.path || (it.code && codebook[it.code]));
+        if (!url) return null;
+        return { icon_url: url, icon_alt: it.code || '' };
+      })
+      .filter(Boolean);
+
+    return { additional_icons };
   } catch (_) {
-    return { decoration_icon_url: null, icons: null };
+    return { additional_icons: [] };
   }
 }
 
@@ -608,9 +637,9 @@ router.get('/api/:_any/categories/:category_no/products', async (req, res) => {
         sale_price,
         benefit_price,
         benefit_percentage,
-        decoration_icon_url: (iconInfos[idx] && iconInfos[idx].decoration_icon_url) || p.decoration_icon_url || null,
-        icons: (iconInfos[idx] && iconInfos[idx].icons) || p.icons || null,
-        additional_icons: p.additional_icons || [],
+        decoration_icon_url: null,
+        icons: null,
+        additional_icons: (iconInfos[idx] && iconInfos[idx].additional_icons) || [],
         product_tags: p.product_tags || '',
       };
     });
@@ -782,10 +811,11 @@ router.get('/api/:_any/products/:product_no', async (req, res) => {
       sale_price,
       benefit_price,
       benefit_percentage,
-      // 데코 아이콘 (Premium / NEW / BEST / SALE 등) — sub-resource 에서 보강
-      decoration_icon_url: iconInfo.decoration_icon_url || p.decoration_icon_url || null,
-      icons: iconInfo.icons || p.icons || null,
-      additional_icons: p.additional_icons || [],
+      // 데코 아이콘 (Premium / NEW / BEST / SALE / 커스텀 등) — sub-resource 에서 보강.
+      // 모든 아이콘은 additional_icons 배열로 통일 — widget 이 그 형식을 기본 렌더링.
+      decoration_icon_url: null,
+      icons: null,
+      additional_icons: iconInfo.additional_icons || [],
       product_tags: p.product_tags || '',
     });
   } catch (err) {

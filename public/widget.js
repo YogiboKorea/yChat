@@ -171,6 +171,27 @@
         btn.onclick = () => window.downloadCoupon(r.coupon);
         btn.style.cssText = `position:absolute; left:${l}%; top:${t}%; width:${w}%; height:${h}%; border:none; cursor:pointer; background:transparent;`;
         wrap.appendChild(btn);
+      } else if (r.tabTarget && r.tabTarget.blockId != null && r.tabTarget.tabIndex != null) {
+        // 탭 이동 region — 클릭 시 해당 product_group 의 i 번째 탭을 활성화하고 스크롤.
+        const btn = document.createElement('button');
+        btn.dataset.tabBlockId = r.tabTarget.blockId;
+        btn.dataset.tabIndex = String(r.tabTarget.tabIndex);
+        btn.onclick = () => {
+          const targetPanelId = `${r.tabTarget.blockId}-tab-${r.tabTarget.tabIndex}`;
+          const panel = document.getElementById(targetPanelId);
+          if (!panel) return;
+          // 같은 group-wrapper 안의 탭 버튼을 찾아 클릭 (활성화 + showTab 호출)
+          const groupWrapper = panel.parentElement;
+          const tabBtns = groupWrapper ? groupWrapper.querySelectorAll(`.tabs_${pageId} button`) : null;
+          const targetBtn = tabBtns ? tabBtns[r.tabTarget.tabIndex] : null;
+          if (targetBtn && typeof targetBtn.click === 'function') {
+            targetBtn.click();
+          }
+          // 부드러운 스크롤로 해당 탭 패널 상단으로 이동
+          panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        };
+        btn.style.cssText = `position:absolute; left:${l}%; top:${t}%; width:${w}%; height:${h}%; border:none; cursor:pointer; background:transparent;`;
+        wrap.appendChild(btn);
       } else if (r.href) {
         const safeHref = normalizeHref(r.href);
         if (!safeHref) return;

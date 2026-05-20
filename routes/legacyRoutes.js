@@ -432,6 +432,48 @@ async function mapWithConcurrency(items, mapper, concurrency = 8) {
   return results;
 }
 
+// cafe24 아이콘 코드북 캐시 — 같은 요청 안에서 여러 상품이 공유하므로 한 번만 조회.
+// 응답: [{ code: 'icon_new', image_url: '...', ... }, ...]
+// code → image_url 맵을 반환.
+async function fetchIconCodebook(shop_no) {
+  try {
+    const data = await apiRequest('GET',
+      `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/icons`,
+      {}, { shop_no, limit: 200 },
+    );
+    const list = (data && data.icons) ? data.icons : [];
+    const map = {};
+    list.forEach(it => {
+      if (it && it.code && it.image_url) map[it.code] = it.image_url;
+    });
+    return map;
+  } catch (_) { return {}; }
+}
+
+// 상품별 아이콘 정보 — image_path(데코 아이콘 직접 URL) + icon_codes(코드북 키 배열)
+// 코드북 맵을 받아 icon_codes 를 icons {icon_new:url, ...} 로 변환해 함께 반환.
+async function fetchProductIcons(product_no, shop_no, codebook) {
+  try {
+    const data = await apiRequest('GET',
+      `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${product_no}/icons`,
+      {}, { shop_no },
+    );
+    const icon = data && data.icon ? data.icon : null;
+    if (!icon) return { decoration_icon_url: null, icons: null };
+    const codes = Array.isArray(icon.icon_codes) ? icon.icon_codes : [];
+    const icons = {};
+    codes.forEach(code => {
+      if (codebook[code]) icons[code] = codebook[code];
+    });
+    return {
+      decoration_icon_url: icon.image_path || null,
+      icons: Object.keys(icons).length > 0 ? icons : null,
+    };
+  } catch (_) {
+    return { decoration_icon_url: null, icons: null };
+  }
+}
+
 router.get('/api/:_any/categories/:category_no/products', async (req, res) => {
   const { category_no } = req.params;
   const limit = Math.min(parseInt(req.query.limit, 10) || 100, 500);
@@ -503,6 +545,12 @@ router.get('/api/:_any/categories/:category_no/products', async (req, res) => {
       couponDetails = coupons.filter(Boolean);
     }
 
+    // 4.5) 아이콘 — 코드북은 한 번, 상품별 아이콘은 동시성 8 로 병렬 조회
+    const iconCodebook = await fetchIconCodebook(shop_no);
+    const iconInfos = await mapWithConcurrency(orderedProds, async (p) => {
+      return fetchProductIcons(p.product_no, shop_no, iconCodebook);
+    }, 8);
+
     // 5) 풀세트 응답 — products/:product_no 핸들러와 동일한 shape
     const enriched = orderedProds.map((p, idx) => {
       const sale_price = salePrices[idx];
@@ -543,8 +591,8 @@ router.get('/api/:_any/categories/:category_no/products', async (req, res) => {
         sale_price,
         benefit_price,
         benefit_percentage,
-        decoration_icon_url: p.decoration_icon_url || null,
-        icons: p.icons || null,
+        decoration_icon_url: (iconInfos[idx] && iconInfos[idx].decoration_icon_url) || p.decoration_icon_url || null,
+        icons: (iconInfos[idx] && iconInfos[idx].icons) || p.icons || null,
         additional_icons: p.additional_icons || [],
         product_tags: p.product_tags || '',
       };
@@ -692,6 +740,11 @@ router.get('/api/:_any/products/:product_no', async (req, res) => {
       });
     }
 
+    // 3.5) 아이콘 — 데코 아이콘(image_path) + 표준 코드북 아이콘(icon_new/best/sale 등)
+    //   cafe24 admin /products/{no} 는 아이콘 필드를 직접 안 주므로 별도 sub-resource 조회.
+    const iconCodebook = await fetchIconCodebook(shop_no);
+    const iconInfo = await fetchProductIcons(product_no, shop_no, iconCodebook);
+
     // 4) 풀세트 응답 — widget.js / admin renderGrid 가 필요로 하는 모든 필드 포함
     res.json({
       product_no: p.product_no,
@@ -712,9 +765,9 @@ router.get('/api/:_any/products/:product_no', async (req, res) => {
       sale_price,
       benefit_price,
       benefit_percentage,
-      // 데코 아이콘 (Premium / NEW / BEST / SALE 등)
-      decoration_icon_url: p.decoration_icon_url || null,
-      icons: p.icons || null,
+      // 데코 아이콘 (Premium / NEW / BEST / SALE 등) — sub-resource 에서 보강
+      decoration_icon_url: iconInfo.decoration_icon_url || p.decoration_icon_url || null,
+      icons: iconInfo.icons || p.icons || null,
       additional_icons: p.additional_icons || [],
       product_tags: p.product_tags || '',
     });

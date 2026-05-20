@@ -474,6 +474,23 @@ async function fetchProductIcons(product_no, shop_no, codebook) {
   }
 }
 
+// 디버그 — cafe24 admin 의 아이콘 sub-resource 응답 직접 확인 용도.
+// /api/yogibo/_debug/icons/2602 → 상품 2602 의 아이콘 설정 + 코드북 후보 2개 raw 응답 모두 반환.
+router.get('/api/:_any/_debug/icons/:product_no', async (req, res) => {
+  const { product_no } = req.params;
+  const shop_no = 1;
+  const out = {};
+  const tryGet = async (key, url, params) => {
+    try { out[key] = await apiRequest('GET', url, {}, params || { shop_no }); }
+    catch (e) { out[key] = { __error: e?.response?.status, body: e?.response?.data || e?.message }; }
+  };
+  await tryGet('product_icons', `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${product_no}/icons`);
+  await tryGet('codebook_v1', `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/icons`, { shop_no, limit: 200 });
+  await tryGet('codebook_v2', `https://${MALL_ID}.cafe24api.com/api/v2/admin/icons`, { shop_no, limit: 200 });
+  await tryGet('product_full', `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${product_no}`, { shop_no, embed: 'icons,additional_information' });
+  res.json(out);
+});
+
 router.get('/api/:_any/categories/:category_no/products', async (req, res) => {
   const { category_no } = req.params;
   const limit = Math.min(parseInt(req.query.limit, 10) || 100, 500);

@@ -221,6 +221,60 @@
     root.appendChild(wrapper);
   }
 
+  // 이벤트 유의사항 — 토글 버튼 + 슬라이드 다운으로 펼쳐지는 콘텐츠 (이미지 + 본문).
+  // 초기 상태 collapsed. 클릭 시 max-height 트랜지션으로 부드럽게 펼침/접힘.
+  function renderEventNoticeBlock(block, root) {
+    const title = block.noticeTitle || '이벤트 유의사항';
+    const noticeImg = block.noticeImage || '';
+    const noticeText = block.noticeText || '';
+    if (!noticeImg && !noticeText) return;
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'max-width:800px; margin:24px auto; font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,sans-serif;';
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.style.cssText = 'width:100%; padding:16px 20px; background:#f5f5f5; border:1px solid #e0e0e0; border-radius:6px; font-size:15px; font-weight:600; color:#333; cursor:pointer; display:flex; justify-content:space-between; align-items:center; text-align:left;';
+    btn.innerHTML = `<span>${escapeHtml(title)}</span><span class="evt-notice-caret" style="transition:transform 0.3s ease; font-size:12px;">▾</span>`;
+
+    const panel = document.createElement('div');
+    panel.style.cssText = 'overflow:hidden; max-height:0; transition:max-height 0.4s ease; border-radius:0 0 6px 6px;';
+
+    const inner = document.createElement('div');
+    inner.style.cssText = 'padding:16px 20px; background:#fafafa; border:1px solid #e0e0e0; border-top:none;';
+    if (noticeImg) {
+      const img = document.createElement('img');
+      img.src = noticeImg;
+      img.alt = title;
+      img.style.cssText = 'max-width:100%; display:block; border-radius:4px;' + (noticeText ? 'margin-bottom:14px;' : '');
+      inner.appendChild(img);
+    }
+    if (noticeText) {
+      const txt = document.createElement('div');
+      txt.style.cssText = 'font-size:14px; color:#444; line-height:1.7; white-space:pre-wrap;';
+      txt.textContent = noticeText;
+      inner.appendChild(txt);
+    }
+    panel.appendChild(inner);
+
+    let open = false;
+    btn.addEventListener('click', () => {
+      open = !open;
+      const caret = btn.querySelector('.evt-notice-caret');
+      if (open) {
+        panel.style.maxHeight = inner.scrollHeight + 32 + 'px';
+        if (caret) caret.style.transform = 'rotate(180deg)';
+      } else {
+        panel.style.maxHeight = '0';
+        if (caret) caret.style.transform = 'rotate(0deg)';
+      }
+    });
+
+    wrap.appendChild(btn);
+    wrap.appendChild(panel);
+    root.appendChild(wrap);
+  }
+
   function renderVideoBlock(block, root) {
     const ratio = block.ratio || { w: 16, h: 9 };
     if (!block.youtubeId) return;
@@ -245,6 +299,12 @@
       const activeColor = block.activeColor || '#1890ff';
       const tabsContainer = document.createElement('div');
       tabsContainer.className = `tabs_${pageId}`;
+      // tabsPerRow 가 2 이상이면 grid 로 줄바꿈 (인라인 스타일이 .tabs_${pageId} 의 display:flex 를 덮어씀)
+      if (block.tabsPerRow && Number(block.tabsPerRow) >= 2) {
+        const n = Number(block.tabsPerRow);
+        tabsContainer.style.display = 'grid';
+        tabsContainer.style.gridTemplateColumns = `repeat(${n}, 1fr)`;
+      }
       (block.tabs || []).forEach((t, i) => {
         const btn = document.createElement('button');
         if (i === 0) {
@@ -683,6 +743,7 @@
           case 'video': renderVideoBlock(block, root); break;
           case 'text': renderTextBlock(block, root); break;
           case 'product_group': renderProductBlock(block, root); break;
+          case 'event_notice': renderEventNoticeBlock(block, root); break;
           default: break;
         }
       });

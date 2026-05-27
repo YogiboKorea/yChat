@@ -256,8 +256,17 @@
     const panel = document.createElement('div');
     panel.style.cssText = 'overflow:hidden; max-height:0; transition:max-height 0.4s ease;';
 
+    // 본문 영역 스타일 — admin 에서 지정한 값 우선, 없으면 기본값.
+    const ns = block.noticeStyle || {};
+    const padding = (typeof ns.padding === 'number') ? ns.padding : 16;
+    const bg = ns.background || 'transparent';
+    const color = ns.color || '#444';
+    const fontSize = (typeof ns.fontSize === 'number') ? ns.fontSize : 14;
+    const lineHeight = (typeof ns.lineHeight === 'number') ? ns.lineHeight : 1.7;
+    const letterSpacing = (typeof ns.letterSpacing === 'number') ? `${ns.letterSpacing}px` : '0';
+
     const inner = document.createElement('div');
-    inner.style.cssText = 'padding:16px 4px; font-size:14px; color:#444; line-height:1.7; white-space:pre-wrap;';
+    inner.style.cssText = `padding:${padding}px; background:${bg}; font-size:${fontSize}px; color:${color}; line-height:${lineHeight}; letter-spacing:${letterSpacing}; white-space:pre-wrap;`;
     inner.textContent = noticeText || '';
     panel.appendChild(inner);
 

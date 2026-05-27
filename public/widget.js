@@ -221,8 +221,9 @@
     root.appendChild(wrapper);
   }
 
-  // 이벤트 유의사항 — 토글 버튼 + 슬라이드 다운으로 펼쳐지는 콘텐츠 (이미지 + 본문).
-  // 초기 상태 collapsed. 클릭 시 max-height 트랜지션으로 부드럽게 펼침/접힘.
+  // 이벤트 유의사항 — 이미지 자체가 클릭 트리거.
+  // 이미지 클릭 시 하단에 본문 텍스트가 슬라이드 다운으로 나타남.
+  // 이미지는 일반 image 블록과 동일한 레이아웃 (간격/라운드 없이 화면 가득).
   function renderEventNoticeBlock(block, root) {
     const title = block.noticeTitle || '이벤트 유의사항';
     const noticeImg = block.noticeImage || '';
@@ -230,37 +231,40 @@
     if (!noticeImg && !noticeText) return;
 
     const wrap = document.createElement('div');
-    wrap.style.cssText = 'max-width:800px; margin:24px auto; font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,sans-serif;';
+    wrap.style.cssText = 'position:relative; margin:0 auto; width:100%; max-width:800px; font-size:0; font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,sans-serif;';
 
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.style.cssText = 'width:100%; padding:16px 20px; background:#f5f5f5; border:1px solid #e0e0e0; border-radius:6px; font-size:15px; font-weight:600; color:#333; cursor:pointer; display:flex; justify-content:space-between; align-items:center; text-align:left;';
-    btn.innerHTML = `<span>${escapeHtml(title)}</span><span class="evt-notice-caret" style="transition:transform 0.3s ease; font-size:12px;">▾</span>`;
-
-    const panel = document.createElement('div');
-    panel.style.cssText = 'overflow:hidden; max-height:0; transition:max-height 0.4s ease; border-radius:0 0 6px 6px;';
-
-    const inner = document.createElement('div');
-    inner.style.cssText = 'padding:16px 20px; background:#fafafa; border:1px solid #e0e0e0; border-top:none;';
+    let trigger;
     if (noticeImg) {
+      // 이미지를 트리거로 — 일반 image 블록과 똑같은 외관 (간격/라운드/배경 없음)
+      trigger = document.createElement('button');
+      trigger.type = 'button';
+      trigger.style.cssText = 'width:100%; padding:0; margin:0; border:0; background:transparent; cursor:pointer; display:block; font-size:0;';
+      trigger.setAttribute('aria-label', title);
       const img = document.createElement('img');
       img.src = noticeImg;
       img.alt = title;
-      img.style.cssText = 'max-width:100%; display:block; border-radius:4px;' + (noticeText ? 'margin-bottom:14px;' : '');
-      inner.appendChild(img);
+      img.style.cssText = 'max-width:100%; height:auto; display:block; margin:0 auto;';
+      trigger.appendChild(img);
+    } else {
+      // 이미지 없으면 텍스트 버튼 폴백
+      trigger = document.createElement('button');
+      trigger.type = 'button';
+      trigger.style.cssText = 'width:100%; padding:16px 20px; background:#f5f5f5; border:1px solid #e0e0e0; border-radius:6px; font-size:15px; font-weight:600; color:#333; cursor:pointer; display:flex; justify-content:space-between; align-items:center; text-align:left; margin:24px 0;';
+      trigger.innerHTML = `<span>${escapeHtml(title)}</span><span class="evt-notice-caret" style="transition:transform 0.3s ease; font-size:12px;">▾</span>`;
     }
-    if (noticeText) {
-      const txt = document.createElement('div');
-      txt.style.cssText = 'font-size:14px; color:#444; line-height:1.7; white-space:pre-wrap;';
-      txt.textContent = noticeText;
-      inner.appendChild(txt);
-    }
+
+    const panel = document.createElement('div');
+    panel.style.cssText = 'overflow:hidden; max-height:0; transition:max-height 0.4s ease;';
+
+    const inner = document.createElement('div');
+    inner.style.cssText = 'padding:16px 4px; font-size:14px; color:#444; line-height:1.7; white-space:pre-wrap;';
+    inner.textContent = noticeText || '';
     panel.appendChild(inner);
 
     let open = false;
-    btn.addEventListener('click', () => {
+    trigger.addEventListener('click', () => {
       open = !open;
-      const caret = btn.querySelector('.evt-notice-caret');
+      const caret = trigger.querySelector('.evt-notice-caret');
       if (open) {
         panel.style.maxHeight = inner.scrollHeight + 32 + 'px';
         if (caret) caret.style.transform = 'rotate(180deg)';
@@ -270,8 +274,8 @@
       }
     });
 
-    wrap.appendChild(btn);
-    wrap.appendChild(panel);
+    wrap.appendChild(trigger);
+    if (noticeText) wrap.appendChild(panel);
     root.appendChild(wrap);
   }
 

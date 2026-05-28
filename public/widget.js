@@ -222,7 +222,7 @@
     overlay.style.cssText = 'position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,0.7); display:flex; align-items:center; justify-content:center; padding:20px; box-sizing:border-box;';
 
     const box = document.createElement('div');
-    box.style.cssText = 'position:relative; max-width:600px; width:100%; max-height:90vh; overflow:hidden;';
+    box.style.cssText = 'position:relative; max-width:480px; width:100%; max-height:100vh; overflow:hidden;';
 
     const slide = document.createElement('div');
     slide.style.cssText = 'position:relative; width:100%;';
@@ -277,17 +277,22 @@
       imgEls.forEach((el, i) => { el.style.display = i === idx ? 'block' : 'none'; });
     };
 
-    const closeBtn = document.createElement('button');
-    closeBtn.type = 'button';
-    closeBtn.innerHTML = '&times;';
-    closeBtn.setAttribute('aria-label', '닫기');
-    closeBtn.style.cssText = 'position:absolute; top:8px; right:8px; z-index:2; width:36px; height:36px; border:none; border-radius:50%; background:rgba(0,0,0,0.6); color:#fff; font-size:22px; line-height:36px; cursor:pointer;';
-    const close = () => { if (timer) clearInterval(timer); overlay.remove(); };
+    const prevBodyOverflow = document.body.style.overflow;
+    const close = () => { if (timer) clearInterval(timer); overlay.remove(); document.body.style.overflow = prevBodyOverflow || 'visible'; };
     closeFn = close;
-    closeBtn.onclick = (e) => { e.stopPropagation(); close(); };
 
     box.appendChild(slide);
-    box.appendChild(closeBtn);
+
+    // 우상단 X 닫기 버튼 (선택). 끄면 닫기 영역으로만 닫힘.
+    if (popup.showCloseButton !== false) {
+      const closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.innerHTML = '&times;';
+      closeBtn.setAttribute('aria-label', '닫기');
+      closeBtn.style.cssText = 'position:absolute; top:8px; right:8px; z-index:2; width:36px; height:36px; border:none; border-radius:50%; background:rgba(0,0,0,0.6); color:#fff; font-size:22px; line-height:36px; cursor:pointer;';
+      closeBtn.onclick = (e) => { e.stopPropagation(); close(); };
+      box.appendChild(closeBtn);
+    }
 
     let timer = null;
     if (imgEls.length > 1) {
@@ -311,6 +316,7 @@
 
     overlay.appendChild(box);
     document.body.appendChild(overlay);
+    document.body.style.overflow = 'hidden';
   };
 
   function renderTextBlock(block, root) {

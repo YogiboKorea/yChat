@@ -162,6 +162,9 @@
     const wrap = document.createElement('div');
     wrap.style.cssText = `position:relative; margin:0 auto; width:100%; max-width:${pageMaxWidth}px; font-size:0;`;
     const img = document.createElement('img');
+    // 배너 이미지는 우선 로드 — 상품 데이터 fetch 보다 먼저 빠르게 표시되도록.
+    img.decoding = 'async';
+    try { img.fetchPriority = 'high'; } catch (e) { /* 일부 브라우저 미지원 */ }
     img.src = block.src;
     img.style.cssText = 'max-width:100%; height:auto; display:block; margin:0 auto;';
     wrap.appendChild(img);
@@ -537,6 +540,9 @@
   }
 
   async function loadPanel(ul) {
+    // 중복 로드 방지 — IntersectionObserver 와 showTab 양쪽에서 호출될 수 있음.
+    if (!ul || ul.dataset.loaded === '1' || ul.dataset.loading === '1') return;
+    ul.dataset.loading = '1';
     const cols = parseInt(ul.dataset.gridSize, 10) || 2;
     let spinner = null;
 
@@ -570,6 +576,7 @@
         };
       });
       renderProducts(ul, merged, cols);
+      ul.dataset.loaded = '1';
     } catch (err) {
       console.error('상품 로드 실패:', err);
       if (ul.parentNode) {
@@ -582,6 +589,7 @@
     } finally {
       clearTimeout(spinnerTimer);
       if (spinner) spinner.remove();
+      ul.dataset.loading = '';
     }
   }
 
@@ -675,7 +683,7 @@
         <li>
           <a href="${productLink}" class="prd_link" data-track-click="product" data-product-no="${p.product_no}" target="_blank" rel="noopener noreferrer">
             <div class="prd_thumb">
-              ${initialImg ? `<img src="${initialImg}" ${hoverAttrs} alt="${escapeHtml(p.product_name || '')}" />` : ''}
+              ${initialImg ? `<img src="${initialImg}" ${hoverAttrs} loading="lazy" decoding="async" alt="${escapeHtml(p.product_name || '')}" />` : ''}
               ${iconHtml ? `<div class="prd_iconsData">${iconHtml}</div>` : ''}
               ${percentText ? `<span class="prd_percent_overlay">${percentText}</span>` : ''}
             </div>
@@ -893,7 +901,23 @@
         }
       });
 
-      document.querySelectorAll(`ul.main_Grid_${pageId}`).forEach(ul => loadPanel(ul));
+      // 상품 그리드는 한꺼번에 불러오지 않고, 뷰포트에 가까워질 때만 지연 로드한다.
+      // → 첫 화면에서 배너 이미지가 상품 데이터 fetch 와 경쟁하지 않고 먼저 빠르게 뜨고,
+      //   화면 밖/숨겨진 탭의 상품은 필요할 때만 요청 → 동시 호출 폭주(500) 완화.
+      const grids = document.querySelectorAll(`ul.main_Grid_${pageId}`);
+      if ('IntersectionObserver' in window) {
+        const gridObserver = new IntersectionObserver((entries, obs) => {
+          entries.forEach(entry => {
+            if (entry.isIntersecting) {
+              obs.unobserve(entry.target);
+              loadPanel(entry.target);
+            }
+          });
+        }, { rootMargin: '300px 0px' });
+        grids.forEach(ul => gridObserver.observe(ul));
+      } else {
+        grids.forEach(ul => loadPanel(ul));
+      }
     } catch (err) {
       console.error('EVENT LOAD ERROR', err);
       const root = getRootContainer();
@@ -916,8 +940,12 @@
     btn.style.borderColor = activeColor;
     const contentParent = parent.parentElement;
     contentParent.querySelectorAll('.tab-content_' + pageId).forEach(el => {
-      if (el.id === id) { el.style.display = 'block'; }
-      else { el.style.display = 'none'; }
+      if (el.id === id) {
+        el.style.display = 'block';
+        // 지연 로딩: 탭이 처음 열릴 때 그 탭의 상품만 로드 (이미 로드됐으면 no-op).
+        const ul = el.querySelector('ul.main_Grid_' + pageId);
+        if (ul) loadPanel(ul);
+      } else { el.style.display = 'none'; }
     });
   };
 

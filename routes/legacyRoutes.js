@@ -525,6 +525,62 @@ router.get('/api/:_any/_debug/icons/:product_no', async (req, res) => {
   res.json(out);
 });
 
+// ───────────────────────────────────────────────
+// 상품 데이터 캐시 — 방문자 폭주 시 cafe24 rate-limit/500 방지.
+//  · 메모리(1차) + MongoDB(2차, 재시작 후 스냅샷 복원)
+//  · TTL 안에서는 캐시 그대로 → cafe24 호출 0
+//  · single-flight: 동시 미스가 cafe24 를 중복 호출하지 않게 1회만 빌드
+//  · stale-while-revalidate: 만료돼도 옛 데이터 즉시 반환 + 백그라운드 갱신
+//  · cafe24 오류 + 캐시 있음 → 옛 데이터 반환(500 대신 "상품 노출 유지")
+// ───────────────────────────────────────────────
+const PRODUCT_CACHE_TTL_MS = 5 * 60 * 1000; // 5분
+const PRODUCT_CACHE_COLL = 'product_cache';
+const _memCache = new Map();   // key -> { data, cachedAt(ms) }
+const _inflight = new Map();   // key -> Promise
+
+async function _cacheLoad(key) {
+  if (_memCache.has(key)) return _memCache.get(key);
+  try {
+    const doc = await runDb(db => db.collection(PRODUCT_CACHE_COLL).findOne({ _id: key }));
+    if (doc) {
+      const entry = { data: doc.data, cachedAt: new Date(doc.cachedAt).getTime() };
+      _memCache.set(key, entry);
+      return entry;
+    }
+  } catch (_) { /* Mongo 실패 시 캐시 없음으로 처리 */ }
+  return null;
+}
+
+function _cacheStore(key, data) {
+  _memCache.set(key, { data, cachedAt: Date.now() });
+  runDb(db => db.collection(PRODUCT_CACHE_COLL).updateOne(
+    { _id: key }, { $set: { data, cachedAt: new Date() } }, { upsert: true }
+  )).catch(() => { /* 영속화 실패는 무시 */ });
+}
+
+// builder(): cafe24 에서 새로 만들어 반환하는 async 함수.
+// 반환: 신선하면 신선 데이터, 만료면 옛 데이터(백그라운드 갱신), 캐시 없으면 빌드 대기.
+async function cachedProductFetch(key, builder) {
+  const cached = await _cacheLoad(key);
+  const fresh = cached && (Date.now() - cached.cachedAt < PRODUCT_CACHE_TTL_MS);
+  if (fresh) return cached.data;
+
+  let p = _inflight.get(key);
+  if (!p) {
+    p = (async () => {
+      try { const data = await builder(); _cacheStore(key, data); return data; }
+      finally { _inflight.delete(key); }
+    })();
+    _inflight.set(key, p);
+  }
+
+  if (cached) {
+    p.catch(() => { /* 백그라운드 갱신 실패는 다음 요청에서 재시도 */ });
+    return cached.data; // stale-while-revalidate
+  }
+  return p; // 캐시 전무 → 빌드 대기 (single-flight 로 1회만)
+}
+
 router.get('/api/:_any/categories/:category_no/products', async (req, res) => {
   const { category_no } = req.params;
   const limit = Math.min(parseInt(req.query.limit, 10) || 100, 500);
@@ -532,8 +588,10 @@ router.get('/api/:_any/categories/:category_no/products', async (req, res) => {
   const shop_no = 1;
   const coupon_query = req.query.coupon_no || '';
   const coupon_nos = coupon_query.split(',').map(s => s.trim()).filter(Boolean);
+  const cacheKey = `catprod:${MALL_ID}:${category_no}:${limit}:${offset}:${coupon_nos.slice().sort().join('+')}`;
 
   try {
+    const enriched = await cachedProductFetch(cacheKey, async () => {
     // 1) 카테고리 → product_no 매핑.
     // cafe24 admin /categories/{no}/products 는 display_group(숫자) 를 요구한다.
     // 안 보내면 422 ("parameter.display_group can only contain numbers"). 1 = 기본 진열 그룹.
@@ -542,7 +600,7 @@ router.get('/api/:_any/categories/:category_no/products', async (req, res) => {
     const catRes = await apiRequest('GET', urlCats, {}, { shop_no, limit, offset, display_group: 1 });
     const allMappings = (catRes && catRes.products) ? catRes.products : [];
     const mappings = allMappings.filter(m => !m.display || m.display === 'T');
-    if (!mappings.length) return res.json([]);
+    if (!mappings.length) return [];
     mappings.sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
     const productNos = mappings.map(m => m.product_no);
 
@@ -603,7 +661,7 @@ router.get('/api/:_any/categories/:category_no/products', async (req, res) => {
     }, 8);
 
     // 5) 풀세트 응답 — products/:product_no 핸들러와 동일한 shape
-    const enriched = orderedProds.map((p, idx) => {
+    return orderedProds.map((p, idx) => {
       const sale_price = salePrices[idx];
       const orig = parseFloat(p.price);
       let benefit_price = null;
@@ -647,6 +705,7 @@ router.get('/api/:_any/categories/:category_no/products', async (req, res) => {
         additional_icons: (iconInfos[idx] && iconInfos[idx].additional_icons) || [],
         product_tags: p.product_tags || '',
       };
+    });
     });
 
     res.json(enriched);
@@ -733,15 +792,17 @@ router.get('/api/:_any/products/all', async (req, res) => {
 // summary_description(영문 요약) / eng_product_name / 가격(즉시할인가/쿠폰할인가) / 데코 아이콘 / hover 이미지 등 풀세트 응답.
 router.get('/api/:_any/products/:product_no', async (req, res) => {
   const { product_no } = req.params;
+  const coupon_query = req.query.coupon_no || '';
+  const coupon_nos = coupon_query.split(',').map(s => s.trim()).filter(Boolean);
+  const cacheKey = `prod:${MALL_ID}:${product_no}:${coupon_nos.slice().sort().join('+')}`;
   try {
+    const result = await cachedProductFetch(cacheKey, async () => {
     const shop_no = 1;
-    const coupon_query = req.query.coupon_no || '';
-    const coupon_nos = coupon_query.split(',').map(s => s.trim()).filter(Boolean);
 
     // 1) 기본 상품 정보
     const prodData = await apiRequest('GET', `https://${MALL_ID}.cafe24api.com/api/v2/admin/products/${product_no}`, {}, { shop_no });
     const p = prodData.product || (prodData.products && prodData.products[0]);
-    if (!p) return res.status(404).json({ error: '상품을 찾을 수 없습니다.' });
+    if (!p) return { __notFound: true };
 
     // 2) 즉시 할인가 (pc_discount_price)
     let sale_price = null;
@@ -797,7 +858,7 @@ router.get('/api/:_any/products/:product_no', async (req, res) => {
     const iconInfo = await fetchProductIcons(product_no, shop_no, iconCodebook);
 
     // 4) 풀세트 응답 — widget.js / admin renderGrid 가 필요로 하는 모든 필드 포함
-    res.json({
+    return {
       product_no: p.product_no,
       product_code: p.product_code,
       product_name: p.product_name,
@@ -822,7 +883,10 @@ router.get('/api/:_any/products/:product_no', async (req, res) => {
       icons: null,
       additional_icons: iconInfo.additional_icons || [],
       product_tags: p.product_tags || '',
+    };
     });
+    if (result && result.__notFound) return res.status(404).json({ error: '상품을 찾을 수 없습니다.' });
+    res.json(result);
   } catch (err) {
     console.error('[PRODUCT DETAIL ERROR]', err?.message || err);
     res.status(500).json({ error: '상품 단건 조회 실패' });

@@ -159,6 +159,7 @@ const mountEventRoutes = (basePath) => {
         couponNos: Array.isArray(payload.couponNos) ? payload.couponNos : [],
         imageUrl: payload.imageUrl || undefined,
         eventType: payload.eventType || undefined,
+        pageMaxWidth: Number(payload.pageMaxWidth) > 0 ? Number(payload.pageMaxWidth) : undefined,
         createdAt: now, updatedAt: now,
       };
       const result = await runDb(db => db.collection(EVENT_COLL).insertOne(doc));
@@ -241,6 +242,10 @@ const mountEventRoutes = (basePath) => {
     if (Array.isArray(p.couponNos)) set.couponNos = p.couponNos;
     if (p.imageUrl) set.imageUrl = p.imageUrl;
     if (p.eventType) set.eventType = p.eventType;
+    // 페이지 최대 너비 — 0/빈값이면 null(기본 800), 양수면 그 값으로.
+    if (p.pageMaxWidth === null || p.pageMaxWidth === '' || p.pageMaxWidth === undefined) { /* 변경 안 함 */ }
+    else if (Number(p.pageMaxWidth) > 0) set.pageMaxWidth = Number(p.pageMaxWidth);
+    else set.pageMaxWidth = null;
 
     try {
       const r = await runDb(db => db.collection(EVENT_COLL).updateOne({ _id: new ObjectId(id), mallId: MALL_ID }, { $set: set }));

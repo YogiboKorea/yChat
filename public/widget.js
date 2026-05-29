@@ -30,6 +30,8 @@
   // 매 호출 시점 최신 couponNos 로 쿼리스트링 생성 — 동적 갱신 대비.
   const couponQSStart = () => couponNos ? `?coupon_no=${couponNos}` : '';
   const couponQSAppend = () => couponNos ? `&coupon_no=${couponNos}` : '';
+  // 이벤트 페이지 전체 콘텐츠 최대 너비(px). initializePage 에서 ev.pageMaxWidth 로 덮어씀.
+  let pageMaxWidth = 800;
 
   // ────────────────────────────────────────────────────────────────
   // 1) 유틸/트래킹 (ychat 의 /api/{mallId}/track 그대로 사용)
@@ -158,7 +160,7 @@
 
   function renderImageBlock(block, root) {
     const wrap = document.createElement('div');
-    wrap.style.cssText = 'position:relative; margin:0 auto; width:100%; max-width:800px; font-size:0;';
+    wrap.style.cssText = `position:relative; margin:0 auto; width:100%; max-width:${pageMaxWidth}px; font-size:0;`;
     const img = document.createElement('img');
     img.src = block.src;
     img.style.cssText = 'max-width:100%; height:auto; display:block; margin:0 auto;';
@@ -344,7 +346,7 @@
     if (!noticeImg && !noticeText) return;
 
     const wrap = document.createElement('div');
-    wrap.style.cssText = 'position:relative; margin:0 auto; width:100%; max-width:800px; font-size:0; font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,sans-serif;';
+    wrap.style.cssText = `position:relative; margin:0 auto; width:100%; max-width:${pageMaxWidth}px; font-size:0; font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,sans-serif;`;
 
     let trigger;
     if (noticeImg) {
@@ -406,7 +408,7 @@
     if (!block.youtubeId) return;
     const src = buildYouTubeSrc(block.youtubeId, toBool(block.autoplay), toBool(block.loop));
     const wrap = document.createElement('div');
-    wrap.style.cssText = `position:relative; width:100%; max-width:800px; margin:16px auto; aspect-ratio:${ratio.w}/${ratio.h};`;
+    wrap.style.cssText = `position:relative; width:100%; max-width:${pageMaxWidth}px; margin:16px auto; aspect-ratio:${ratio.w}/${ratio.h};`;
     const iframe = document.createElement('iframe');
     iframe.src = src;
     iframe.title = `youtube-${block.youtubeId}`;
@@ -423,6 +425,8 @@
 
     if (block.layoutType === 'tabs') {
       const activeColor = block.activeColor || '#1890ff';
+      // 콘텐츠 너비 모드: default(800px 가운데) | wide(95% 가운데) | full(100% 꽉 채움)
+      const widthMode = block.tabWidthMode || 'default';
       const tabsContainer = document.createElement('div');
       tabsContainer.className = `tabs_${pageId}`;
       // tabsPerRow 가 2 이상이면 grid 로 줄바꿈 (인라인 스타일이 .tabs_${pageId} 의 display:flex 를 덮어씀)
@@ -431,6 +435,10 @@
         tabsContainer.style.display = 'grid';
         tabsContainer.style.gridTemplateColumns = `repeat(${n}, 1fr)`;
       }
+      // 탭 버튼 줄 너비도 콘텐츠 너비에 맞춰 확장 (기본 CSS 의 max-width:800px 오버라이드)
+      if (widthMode === 'wide') { tabsContainer.style.maxWidth = '95%'; tabsContainer.style.width = '95%'; }
+      else if (widthMode === 'full') { tabsContainer.style.maxWidth = '100%'; tabsContainer.style.width = '100%'; }
+      else { tabsContainer.style.maxWidth = `${pageMaxWidth}px`; }
       (block.tabs || []).forEach((t, i) => {
         const btn = document.createElement('button');
         if (i === 0) {
@@ -456,6 +464,7 @@
         ul.dataset.gridSize = (block.tabGridSizes && block.tabGridSizes[i] != null)
           ? block.tabGridSizes[i]
           : block.gridSize;
+        ul.dataset.widthMode = widthMode;
         if (block.registerMode === 'direct') {
           const tabDirect = (block.tabDirectProducts?.[i] || []);
           const directNos = tabDirect.map(p => p.product_no).join(',');
@@ -587,9 +596,15 @@
   function renderProducts(ul, products, cols) {
     const safeCols = Math.max(1, Math.min(4, parseInt(cols, 10) || 2));
     // 1×1 은 단일 상품만 중앙에 좁게 노출
-    const maxWidth = safeCols === 1 ? 400 : 800;
+    const maxWidth = safeCols === 1 ? 400 : pageMaxWidth;
     products = safeCols === 1 ? (products || []).slice(0, 1) : (products || []);
-    ul.style.cssText = `display:grid; grid-template-columns:repeat(${safeCols},1fr); gap:24px; max-width:${maxWidth}px; margin:24px auto; list-style:none; padding:0;`;
+    // 탭 콘텐츠 너비 모드 — renderProductBlock 이 ul.dataset.widthMode 로 전달.
+    const widthMode = ul.dataset.widthMode || 'default';
+    let widthCss;
+    if (widthMode === 'wide') widthCss = 'width:95%; max-width:95%; margin:24px auto;';
+    else if (widthMode === 'full') widthCss = 'width:100%; max-width:100%; margin:24px 0;';
+    else widthCss = `max-width:${maxWidth}px; margin:24px auto;`;
+    ul.style.cssText = `display:grid; grid-template-columns:repeat(${safeCols},1fr); gap:24px; ${widthCss} list-style:none; padding:0;`;
 
     const formatKRW = val => `${(Number(val) || 0).toLocaleString('ko-KR')}원`;
     const parseNumber = v => {
@@ -853,6 +868,10 @@
       if (Array.isArray(ev.couponNos)) {
         couponNos = ev.couponNos.map(String).filter(Boolean).join(',');
       }
+      // 페이지 전체 최대 너비 — admin 에서 지정한 값이 있으면 사용 (없으면 기본 800).
+      if (Number(ev.pageMaxWidth) > 0) {
+        pageMaxWidth = Number(ev.pageMaxWidth);
+      }
 
       const root = getRootContainer();
 
@@ -902,18 +921,18 @@
     });
   };
 
-  // 원본 widget.js 의 쿠폰 다운로드 로직: 쿠폰별로 window.open 반복.
+  // 쿠폰 다운로드: 다중 쿠폰을 한 창에서 한꺼번에 발급.
   // - 콤마 구분 문자열 또는 배열 모두 허용
-  // - 다중 쿠폰은 각각 별도 창으로 IssueDownload 호출 (cafe24 표준)
+  // - cafe24 IssueDownload 는 coupon_no 파라미터를 반복으로 넘기면(coupon_no=A&coupon_no=B…)
+  //   한 번의 호출로 여러 쿠폰을 동시에 발급한다. (창 여러 개 띄우면 팝업 차단됨)
   window.downloadCoupon = (coupons) => {
     const list = Array.isArray(coupons)
       ? coupons.map(s => String(s).trim()).filter(Boolean)
       : String(coupons || '').split(',').map(s => s.trim()).filter(Boolean);
     if (list.length === 0) { alert('쿠폰 정보가 없습니다.'); return; }
-    list.forEach(cpn => {
-      const url = `/exec/front/newcoupon/IssueDownload?coupon_no=${encodeURIComponent(cpn)}&opener_url=${encodeURIComponent(location.href)}`;
-      window.open(url, '_blank');
-    });
+    const qs = list.map(cpn => `coupon_no=${encodeURIComponent(cpn)}`).join('&');
+    const url = `/exec/front/newcoupon/IssueDownload?${qs}&opener_url=${encodeURIComponent(location.href)}`;
+    window.open(url, '_blank');
   };
 
   initializePage();

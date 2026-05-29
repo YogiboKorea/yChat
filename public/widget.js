@@ -498,7 +498,7 @@
   // ────────────────────────────────────────────────────────────────
   // 4) 상품 데이터 로드 (cafe24 ychat 서버에서 fetch)
   // ────────────────────────────────────────────────────────────────
-  async function fetchProducts(directNosAttr, category, limit = 300) {
+  async function fetchProducts(directNosAttr, category, limit = 300, offset = 0) {
     if (!PRODUCT_API_BASE) return [];
     const fetchOpts = { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } };
 
@@ -532,64 +532,92 @@
       ));
       return results.map(p => (p && p.product_no) ? p : {}).map(mapProductData);
     } else if (category) {
-      const prodUrl = `${PRODUCT_API_BASE}/api/${mallId}/categories/${category}/products?limit=${limit}${couponQSAppend()}`;
+      const prodUrl = `${PRODUCT_API_BASE}/api/${mallId}/categories/${category}/products?limit=${limit}&offset=${offset}${couponQSAppend()}`;
       const rawProducts = await fetchWithRetry(prodUrl, fetchOpts).then(r => r.json()).then(json => Array.isArray(json) ? json : (json.products || []));
       return rawProducts.map(p => (typeof p === 'object' ? p : {})).map(mapProductData);
     }
     return [];
   }
 
+  // 상품 그리드 로드 — 제품이 많으면 화면에 보이는 만큼(첫 페이지)을 먼저 빠르게 렌더하고,
+  // 스크롤해서 그리드 아래 센티넬에 가까워지면 다음 페이지를 이어서 불러온다(점진 로딩).
   async function loadPanel(ul) {
     // 중복 로드 방지 — IntersectionObserver 와 showTab 양쪽에서 호출될 수 있음.
     if (!ul || ul.dataset.loaded === '1' || ul.dataset.loading === '1') return;
     ul.dataset.loading = '1';
     const cols = parseInt(ul.dataset.gridSize, 10) || 2;
-    let spinner = null;
+    const safeCols = applyGridStyle(ul, cols);
+    const directIds = (ul.dataset.directNos || '').split(',').map(s => s.trim()).filter(Boolean);
+    const cate = ul.dataset.cate;
 
+    // savedProducts(저장 시점 값) 맵 — direct 모드 누락 필드 fallback.
+    let savedMap = {};
+    if (ul.dataset.savedProducts) {
+      try { (JSON.parse(ul.dataset.savedProducts) || []).forEach(p => { if (p && p.product_no != null) savedMap[String(p.product_no)] = p; }); }
+      catch (e) { /* skip */ }
+    }
+
+    let spinner = null;
     const spinnerTimer = setTimeout(() => {
       spinner = document.createElement('div');
       spinner.className = 'grid-spinner';
       if (ul.parentNode) ul.parentNode.insertBefore(spinner, ul);
     }, 2000);
+    const clearSpinner = () => { clearTimeout(spinnerTimer); if (spinner) { spinner.remove(); spinner = null; } };
 
-    try {
-      const products = await fetchProducts(ul.dataset.directNos, ul.dataset.cate, ul.dataset.count);
-      // runtime ychat 응답에서 summary_description / eng_product_name 등이 누락되는 경우를 대비해
-      // 저장 시점의 directProducts 값을 fallback 으로 병합 (가격/할인 정보는 fresh 데이터를 우선).
-      let savedMap = {};
-      if (ul.dataset.savedProducts) {
-        try {
-          const saved = JSON.parse(ul.dataset.savedProducts);
-          (saved || []).forEach(p => { if (p && p.product_no != null) savedMap[String(p.product_no)] = p; });
-        } catch (e) { /* skip */ }
-      }
-      const merged = products.map(p => {
-        const saved = savedMap[String(p.product_no)] || {};
-        return {
-          ...p,
-          summary_description: p.summary_description || saved.summary_description || '',
-          eng_product_name: p.eng_product_name || saved.eng_product_name || '',
-          simple_description: p.simple_description || saved.simple_description || '',
-          list_image: p.list_image || saved.list_image || '',
-          image_medium: p.image_medium || saved.image_medium || '',
-          product_name: p.product_name || saved.product_name || '',
-        };
-      });
-      renderProducts(ul, merged, cols);
-      ul.dataset.loaded = '1';
-    } catch (err) {
-      console.error('상품 로드 실패:', err);
-      if (ul.parentNode) {
-        const errDiv = document.createElement('div');
-        errDiv.style.textAlign = 'center';
-        errDiv.style.padding = '50px 0';
-        errDiv.innerHTML = `<p style="color:#666; font-size:14px; margin: 0;">상품 정보를 불러올 수 없습니다.</p>`;
-        ul.parentNode.insertBefore(errDiv, ul);
-      }
-    } finally {
-      clearTimeout(spinnerTimer);
-      if (spinner) spinner.remove();
-      ul.dataset.loading = '';
+    // 1×1 — 단일 상품만 노출, 점진 로딩 불필요.
+    if (safeCols === 1) {
+      try {
+        const products = directIds.length
+          ? await fetchProducts(directIds[0], null, 1)
+          : await fetchProducts(null, cate, 1);
+        renderProducts(ul, mergeSavedProducts(products, savedMap), cols);
+        ul.dataset.loaded = '1';
+      } catch (err) { console.error('상품 로드 실패:', err); showLoadError(ul); }
+      finally { clearSpinner(); ul.dataset.loading = ''; }
+      return;
+    }
+
+    // 점진 로딩 — 처음엔 ~2줄 분량만, 이후 스크롤 시 페이지 단위로 추가.
+    const PAGE = Math.max(safeCols * 2, 8);
+    let offset = 0, done = false, pageLoading = false;
+
+    async function loadNextPage() {
+      if (done || pageLoading) return;
+      pageLoading = true;
+      try {
+        let pageProducts = [];
+        if (directIds.length) {
+          const slice = directIds.slice(offset, offset + PAGE);
+          if (!slice.length) { done = true; return; }
+          pageProducts = await fetchProducts(slice.join(','), null);
+          offset += slice.length;
+          if (offset >= directIds.length) done = true;
+        } else if (cate) {
+          pageProducts = await fetchProducts(null, cate, PAGE, offset);
+          offset += PAGE;
+          if (!pageProducts || pageProducts.length === 0) done = true;
+        } else { done = true; return; }
+        appendProductCards(ul, mergeSavedProducts(pageProducts, savedMap));
+        if (pageProducts && pageProducts.length) ul.dataset.loaded = '1';
+      } finally { pageLoading = false; clearSpinner(); }
+    }
+
+    try { await loadNextPage(); }
+    catch (err) { console.error('상품 로드 실패:', err); showLoadError(ul); clearSpinner(); ul.dataset.loading = ''; return; }
+    ul.dataset.loading = '';
+
+    // 스크롤 센티넬 — 그리드 바로 아래에 두고, 가까워지면 다음 페이지 로드.
+    if (!done && 'IntersectionObserver' in window) {
+      const sentinel = document.createElement('div');
+      sentinel.style.cssText = 'width:100%; height:1px;';
+      if (ul.parentNode) ul.parentNode.insertBefore(sentinel, ul.nextSibling);
+      const moreObs = new IntersectionObserver(async (entries) => {
+        if (!entries[0].isIntersecting || pageLoading || done) return;
+        try { await loadNextPage(); } catch (e) { /* 마지막 정상 데이터 유지 */ }
+        if (done) { moreObs.disconnect(); sentinel.remove(); }
+      }, { rootMargin: '400px 0px' });
+      moreObs.observe(sentinel);
     }
   }
 
@@ -601,19 +629,21 @@
   //   .prd_desc        : 영문/요약 (민트/청록색 — 디자인 매칭)
   //   .prd_name        : 상품명 (굵게)
   //   .prd_price       : 가격 영역 (10% 뱃지 + 정가 취소선 + 최종가)
-  function renderProducts(ul, products, cols) {
+  // 그리드 컨테이너 스타일 (콘텐츠 너비 모드 반영). safeCols 반환.
+  function applyGridStyle(ul, cols) {
     const safeCols = Math.max(1, Math.min(4, parseInt(cols, 10) || 2));
-    // 1×1 은 단일 상품만 중앙에 좁게 노출
     const maxWidth = safeCols === 1 ? 400 : pageMaxWidth;
-    products = safeCols === 1 ? (products || []).slice(0, 1) : (products || []);
-    // 탭 콘텐츠 너비 모드 — renderProductBlock 이 ul.dataset.widthMode 로 전달.
     const widthMode = ul.dataset.widthMode || 'default';
     let widthCss;
     if (widthMode === 'wide') widthCss = 'width:95%; max-width:95%; margin:24px auto;';
     else if (widthMode === 'full') widthCss = 'width:100%; max-width:100%; margin:24px 0;';
     else widthCss = `max-width:${maxWidth}px; margin:24px auto;`;
     ul.style.cssText = `display:grid; grid-template-columns:repeat(${safeCols},1fr); gap:24px; ${widthCss} list-style:none; padding:0;`;
+    return safeCols;
+  }
 
+  // 상품 배열 → 카드 HTML 문자열.
+  function buildProductCardsHtml(products) {
     const formatKRW = val => `${(Number(val) || 0).toLocaleString('ko-KR')}원`;
     const parseNumber = v => {
       if (v == null) return null;
@@ -622,7 +652,7 @@
       return isFinite(n) ? n : null;
     };
 
-    ul.innerHTML = products.map(p => {
+    return (products || []).map(p => {
       const origPrice = parseNumber(p.price) || 0;
       const salePrice = parseNumber(p.sale_price);
       const benefitPrice = parseNumber(p.benefit_price);
@@ -697,10 +727,11 @@
           </div>
         </li>`;
     }).join('');
+  }
 
-    // hover 이미지 미리 로드 — 마우스를 올리는 순간 새로 받아오며 깜빡이는(빤짝) 현상 방지.
-    // 이 패널은 뷰포트에 들어왔을 때만 렌더되므로(지연 로딩) 여기서 preload 해도 부담이 적다.
-    products.forEach(p => {
+  // hover 이미지 미리 로드 — 마우스를 올리는 순간 새로 받아오며 깜빡이는(빤짝) 현상 방지.
+  function preloadHoverImgs(products) {
+    (products || []).forEach(p => {
       const hoverImg = p.image_thumbnail || p.image_small;
       const baseImg = p.image_medium || p.list_image;
       if (hoverImg && baseImg && hoverImg !== baseImg) {
@@ -708,6 +739,47 @@
         pre.src = hoverImg;
       }
     });
+  }
+
+  // 전체 교체 렌더 (단건/폴백). 1×1 은 1개만 노출.
+  function renderProducts(ul, products, cols) {
+    const safeCols = applyGridStyle(ul, cols);
+    const list = safeCols === 1 ? (products || []).slice(0, 1) : (products || []);
+    ul.innerHTML = buildProductCardsHtml(list);
+    preloadHoverImgs(list);
+  }
+
+  // 이어붙이기 렌더 (점진 로딩) — 기존 카드 뒤에 추가.
+  function appendProductCards(ul, products) {
+    if (!products || !products.length) return;
+    ul.insertAdjacentHTML('beforeend', buildProductCardsHtml(products));
+    preloadHoverImgs(products);
+  }
+
+  // savedProducts(저장 시점 값) 를 fresh 데이터에 병합 — 누락 필드 fallback.
+  function mergeSavedProducts(products, savedMap) {
+    return (products || []).map(p => {
+      const saved = (savedMap && savedMap[String(p.product_no)]) || {};
+      return {
+        ...p,
+        summary_description: p.summary_description || saved.summary_description || '',
+        eng_product_name: p.eng_product_name || saved.eng_product_name || '',
+        simple_description: p.simple_description || saved.simple_description || '',
+        list_image: p.list_image || saved.list_image || '',
+        image_medium: p.image_medium || saved.image_medium || '',
+        product_name: p.product_name || saved.product_name || '',
+      };
+    });
+  }
+
+  function showLoadError(ul) {
+    if (ul.parentNode) {
+      const errDiv = document.createElement('div');
+      errDiv.style.textAlign = 'center';
+      errDiv.style.padding = '50px 0';
+      errDiv.innerHTML = `<p style="color:#666; font-size:14px; margin: 0;">상품 정보를 불러올 수 없습니다.</p>`;
+      ul.parentNode.insertBefore(errDiv, ul);
+    }
   }
 
   // 스피너/탭만 위젯 자체에서 책임. 상품 카드 디자인은 자사몰 /css/goodsData.html 에 위임.

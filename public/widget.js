@@ -683,7 +683,7 @@
         <li>
           <a href="${productLink}" class="prd_link" data-track-click="product" data-product-no="${p.product_no}" target="_blank" rel="noopener noreferrer">
             <div class="prd_thumb">
-              ${initialImg ? `<img src="${initialImg}" ${hoverAttrs} loading="lazy" decoding="async" alt="${escapeHtml(p.product_name || '')}" />` : ''}
+              ${initialImg ? `<img src="${initialImg}" ${hoverAttrs} loading="lazy" alt="${escapeHtml(p.product_name || '')}" />` : ''}
               ${iconHtml ? `<div class="prd_iconsData">${iconHtml}</div>` : ''}
               ${percentText ? `<span class="prd_percent_overlay">${percentText}</span>` : ''}
             </div>
@@ -697,6 +697,17 @@
           </div>
         </li>`;
     }).join('');
+
+    // hover 이미지 미리 로드 — 마우스를 올리는 순간 새로 받아오며 깜빡이는(빤짝) 현상 방지.
+    // 이 패널은 뷰포트에 들어왔을 때만 렌더되므로(지연 로딩) 여기서 preload 해도 부담이 적다.
+    products.forEach(p => {
+      const hoverImg = p.image_thumbnail || p.image_small;
+      const baseImg = p.image_medium || p.list_image;
+      if (hoverImg && baseImg && hoverImg !== baseImg) {
+        const pre = new Image();
+        pre.src = hoverImg;
+      }
+    });
   }
 
   // 스피너/탭만 위젯 자체에서 책임. 상품 카드 디자인은 자사몰 /css/goodsData.html 에 위임.

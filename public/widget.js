@@ -1034,15 +1034,15 @@
 
   // 쿠폰 다운로드: 다중 쿠폰을 한 창에서 한꺼번에 발급.
   // - 콤마 구분 문자열 또는 배열 모두 허용
-  // - cafe24 IssueDownload 는 coupon_no 파라미터를 반복으로 넘기면(coupon_no=A&coupon_no=B…)
-  //   한 번의 호출로 여러 쿠폰을 동시에 발급한다. (창 여러 개 띄우면 팝업 차단됨)
+  // - cafe24 IssueDownload 는 coupon_no 에 "콤마 구분 단일 파라미터"(coupon_no=A,B,C) 형식으로
+  //   여러 쿠폰을 한 번에 발급한다. 반복 파라미터(coupon_no=A&coupon_no=B)는 마지막 1개만 적용되므로 금지.
   window.downloadCoupon = (coupons) => {
     const list = Array.isArray(coupons)
       ? coupons.map(s => String(s).trim()).filter(Boolean)
       : String(coupons || '').split(',').map(s => s.trim()).filter(Boolean);
     if (list.length === 0) { alert('쿠폰 정보가 없습니다.'); return; }
-    const qs = list.map(cpn => `coupon_no=${encodeURIComponent(cpn)}`).join('&');
-    const url = `/exec/front/newcoupon/IssueDownload?${qs}&opener_url=${encodeURIComponent(location.href)}`;
+    // 쿠폰 번호는 숫자라 콤마 그대로 안전. 인코딩하면 %2C 로 바뀌어 분리 실패할 수 있어 콤마는 그대로 둔다.
+    const url = `/exec/front/newcoupon/IssueDownload?coupon_no=${list.join(',')}&opener_url=${encodeURIComponent(location.href)}`;
     window.open(url, '_blank');
   };
 

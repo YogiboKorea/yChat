@@ -948,6 +948,24 @@
       } else {
         grids.forEach(ul => loadPanel(ul));
       }
+
+      // URL 진입 시 특정 탭 자동 활성화 — ?tabN 형식 (1-based, 첫 탭 블록의 N번째 탭).
+      // 예: /event.html?tab2 → 첫 상품 탭 블록의 2번째 탭이 열린 상태로 진입 + 그 영역으로 스크롤.
+      try {
+        let matchedN = null;
+        for (const key of new URLSearchParams(location.search).keys()) {
+          const m = key.match(/^tab(\d+)$/i);
+          if (m) { matchedN = parseInt(m[1], 10); break; }
+        }
+        if (matchedN && matchedN >= 1) {
+          const containers = document.querySelectorAll('.tabs_' + pageId);
+          const target = containers.length ? containers[0].querySelectorAll('button')[matchedN - 1] : null;
+          if (target) {
+            target.click();
+            setTimeout(() => { try { containers[0].scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (_) {} }, 60);
+          }
+        }
+      } catch (_) { /* URL 파싱 실패는 무시 */ }
     } catch (err) {
       console.error('EVENT LOAD ERROR', err);
       const root = getRootContainer();

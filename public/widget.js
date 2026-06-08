@@ -670,6 +670,7 @@
               ${initialImg ? `<img src="${initialImg}" ${hoverAttrs} loading="lazy" alt="${escapeHtml(p.product_name || '')}" />` : ''}
               ${iconHtml ? `<div class="prd_iconsData">${iconHtml}</div>` : ''}
               ${percentText ? `<span class="prd_percent_overlay">${percentText}</span>` : ''}
+              ${p.sold_out === 'T' ? `<div class="prd_sold_out_overlay">SOLD OUT</div>` : ''}
             </div>
             ${subText ? `<div class="prd_desc">${escapeHtml(subText)}</div>` : ''}
             <div class="prd_name">${escapeHtml(p.product_name || '')}</div>
@@ -751,6 +752,14 @@
       border-radius: 12px;
     }
     .main_Grid_${pageId} .prd_thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    /* 품절 오버레이 — sold_out === 'T' 인 상품의 썸네일을 반투명 회색으로 덮고 "품절" 텍스트 중앙 노출 */
+    .main_Grid_${pageId} .prd_sold_out_overlay {
+      position: absolute; inset: 0; background: rgba(0,0,0,0.45);
+      color: #fff; display: flex; align-items: center; justify-content: center;
+      font-size: 22px; font-weight: 700; letter-spacing: 3px;
+      border-radius: 12px; pointer-events: none; z-index: 3;
+      font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
     /* 이미지 우하단 데코 아이콘 (Premium / NEW / BEST / SALE / 커스텀 등).
        썸네일 오른쪽 아래 모서리. 폭은 최대 40px, 비율 유지. */
     .main_Grid_${pageId} .prd_iconsData {
@@ -892,11 +901,25 @@
         return;
       }
       // ychat 의 실제 라우트는 `/api/{mallId}/events/{id}`. eventTemp 의 `/api/events/{id}` 도 함께 폴백.
-      let response = await fetch(`${SELF_BASE}/api/${encodeURIComponent(mallId)}/events/${pageId}`);
-      if (!response.ok) {
-        response = await fetch(`${SELF_BASE}/api/events/${pageId}?mallId=${encodeURIComponent(mallId)}`);
+      // cloudtype cold start / 일시적 5xx / 네트워크 흔들림으로 한 번 실패하면 즉시
+      // "이벤트를 불러올 수 없습니다" 가 떠버리는 문제를 막기 위해 자동 재시도(3회, 백오프)한다.
+      const _eventUrls = [
+        `${SELF_BASE}/api/${encodeURIComponent(mallId)}/events/${pageId}`,
+        `${SELF_BASE}/api/events/${pageId}?mallId=${encodeURIComponent(mallId)}`,
+      ];
+      const _retryDelays = [0, 1200, 2500];
+      let response = null, _lastErr = null;
+      for (let attempt = 0; attempt < _retryDelays.length && !response; attempt++) {
+        if (_retryDelays[attempt]) await new Promise(r => setTimeout(r, _retryDelays[attempt]));
+        for (const url of _eventUrls) {
+          try {
+            const res = await fetch(url, { cache: 'no-store' });
+            if (res.ok) { response = res; break; }
+            _lastErr = new Error('HTTP ' + res.status);
+          } catch (e) { _lastErr = e; }
+        }
       }
-      if (!response.ok) throw new Error('Event data fetch failed');
+      if (!response) throw _lastErr || new Error('Event data fetch failed');
       const json = await response.json();
       // 우리 서버 응답 형태: { success, data }
       const ev = json && json.data ? json.data : json;

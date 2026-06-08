@@ -610,6 +610,7 @@ router.get('/api/:_any/categories/:category_no/products', async (req, res) => {
       'eng_product_name', 'summary_description', 'simple_description',
       'list_image', 'image_medium', 'image_small', 'tiny_image', 'detail_image',
       'price', 'decoration_icon_url', 'icons', 'additional_icons', 'product_tags',
+      'sold_out', // 품절 여부 (T/F) — 위젯 품절 뱃지 표시용
     ].join(',');
     const prodData = await apiRequest('GET',
       `https://${MALL_ID}.cafe24api.com/api/v2/admin/products`,
@@ -704,6 +705,7 @@ router.get('/api/:_any/categories/:category_no/products', async (req, res) => {
         icons: null,
         additional_icons: (iconInfos[idx] && iconInfos[idx].additional_icons) || [],
         product_tags: p.product_tags || '',
+        sold_out: p.sold_out === 'T' ? 'T' : 'F',
       };
     });
     });
@@ -883,6 +885,7 @@ router.get('/api/:_any/products/:product_no', async (req, res) => {
       icons: null,
       additional_icons: iconInfo.additional_icons || [],
       product_tags: p.product_tags || '',
+      sold_out: p.sold_out === 'T' ? 'T' : 'F',
     };
     });
     if (result && result.__notFound) return res.status(404).json({ error: '상품을 찾을 수 없습니다.' });

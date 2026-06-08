@@ -521,7 +521,8 @@
       decoration_icon_url: p.decoration_icon_url || null,
       icons: p.icons || null,
       additional_icons: p.additional_icons || [],
-      product_tags: p.product_tags || ''
+      product_tags: p.product_tags || '',
+      sold_out: p.sold_out === 'T' ? 'T' : 'F'
     });
 
     if (directNosAttr) {

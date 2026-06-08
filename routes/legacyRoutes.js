@@ -588,7 +588,8 @@ router.get('/api/:_any/categories/:category_no/products', async (req, res) => {
   const shop_no = 1;
   const coupon_query = req.query.coupon_no || '';
   const coupon_nos = coupon_query.split(',').map(s => s.trim()).filter(Boolean);
-  const cacheKey = `catprod:${MALL_ID}:${category_no}:${limit}:${offset}:${coupon_nos.slice().sort().join('+')}`;
+  // v2: 응답 스키마 변경(sold_out 추가) 으로 옛 엔트리 무효화하기 위해 버전 prefix.
+  const cacheKey = `catprod:v2:${MALL_ID}:${category_no}:${limit}:${offset}:${coupon_nos.slice().sort().join('+')}`;
 
   try {
     const enriched = await cachedProductFetch(cacheKey, async () => {
@@ -738,6 +739,8 @@ router.get('/api/:_any/products', async (req, res) => {
         eng_product_name: p.eng_product_name || '',
         summary_description: p.summary_description || '',
         simple_description: p.simple_description || '',
+        // 품절 표시 — admin 직접등록 모드 저장 시 함께 보존되어 미리보기에서도 SOLD OUT 노출
+        sold_out: p.sold_out === 'T' ? 'T' : 'F',
       })),
       total: data.total_count,
     });
@@ -796,7 +799,8 @@ router.get('/api/:_any/products/:product_no', async (req, res) => {
   const { product_no } = req.params;
   const coupon_query = req.query.coupon_no || '';
   const coupon_nos = coupon_query.split(',').map(s => s.trim()).filter(Boolean);
-  const cacheKey = `prod:${MALL_ID}:${product_no}:${coupon_nos.slice().sort().join('+')}`;
+  // v2: 응답 스키마 변경(sold_out 추가) 으로 옛 엔트리 무효화하기 위해 버전 prefix.
+  const cacheKey = `prod:v2:${MALL_ID}:${product_no}:${coupon_nos.slice().sort().join('+')}`;
   try {
     const result = await cachedProductFetch(cacheKey, async () => {
     const shop_no = 1;

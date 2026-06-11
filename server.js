@@ -226,7 +226,8 @@ const GAME06_COLLECTION = '06gameEvent';
 const GAME06_CREDIT_AMOUNT = 5000; // 지급 적립금
 const GAME06_MIN_GOALS = 5;        // 적립금 자격 최소 골 수
 const GAME06_DEFAULT_DIFFICULTY = { accuracy: 0.35, lateAccuracy: 0.4, reactionMs: 70, noise: 130, lateNoise: 100 };
-const game06NowKST = () => new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+// 표준 UTC instant 저장(표시는 관리자에서 KST로 변환) — 이중 변환 버그 방지
+const game06Now = () => new Date();
 const game06Clamp = (v, min, max, def) => { const n = Number(v); if (!isFinite(n)) return def; return Math.min(max, Math.max(min, n)); };
 const game06IsMember = (m) => !!m && typeof m === 'string' && !m.startsWith('guest_') && m !== 'GUEST' && m !== 'null';
 
@@ -252,7 +253,7 @@ app.post('/api/event/cheer-festa/participate', async (req, res) => {
   try {
     const { getDB } = require("./config/db");
     const col = getDB().collection(GAME06_COLLECTION);
-    const now = game06NowKST();
+    const now = game06Now();
     await col.updateOne(
       { memberId },
       {
@@ -283,7 +284,7 @@ app.post('/api/event/cheer-festa/reward', async (req, res) => {
     const { apiRequest } = require("./config/cafe24Api");
     const CAFE24_MALLID = process.env.CAFE24_MALLID || 'yogibo';
     const col = getDB().collection(GAME06_COLLECTION);
-    const now = game06NowKST();
+    const now = game06Now();
 
     // 자격 확인: 참여 기록상 최고골(또는 이번 결과) 5골 이상
     const p = await col.findOne({ memberId });
@@ -356,7 +357,7 @@ app.post('/api/event/cheer-festa/config', async (req, res) => {
     const { getDB } = require("./config/db");
     await getDB().collection(GAME06_COLLECTION).updateOne(
       { cfgKey: 'difficulty' },
-      { $set: { cfgKey: 'difficulty', difficulty: clean, updatedAt: game06NowKST() } },
+      { $set: { cfgKey: 'difficulty', difficulty: clean, updatedAt: game06Now() } },
       { upsert: true }
     );
     return res.json({ success: true, difficulty: clean });
@@ -414,6 +415,10 @@ app.get('/api/event/cheer-festa/participants', async (req, res) => {
 
     // 3.5 레거시 크론 및 초기화 (블랙프라이데이 로직 등)
     await initializeLegacyCronJobs();
+
+    // 3.6 onlineData 일일 동기화 크론 (격리: 별도 자식 프로세스로 실행, ENABLE_ONLINE_SYNC=1 일 때만)
+    //     실패해도 챗 서버 기동에 영향 없도록 try/catch 로 격리.
+    try { require("./onlinesync/cron"); } catch (e) { console.error("[onlinesync] 로드 실패(무시):", e.message); }
 
     // 4. HTTP 서버 실행
     app.listen(PORT, () => console.log(`🚀 앱 실행 완료 (포트: ${PORT})`));

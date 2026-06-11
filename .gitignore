@@ -1,2 +1,5 @@
 .env
+**/.env
+onlinesync/.env
+onlinesync/**/.env
 node_modules/

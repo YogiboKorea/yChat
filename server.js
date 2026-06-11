@@ -220,6 +220,183 @@ app.post('/api/event/gimpo-reward', async (req, res) => {
   }
 });
 
+// ========== [추가] 06 응원 페스타 슛챌린지 게임 이벤트 (적립금 5,000원·1인1회·중복차단) ==========
+// 데이터: MongoDB '06gameEvent' 컬렉션 — 회원 1인 1문서(중복차단) + 적립금 수령여부 / 난이도(확률) 설정 문서(cfgKey)
+const GAME06_COLLECTION = '06gameEvent';
+const GAME06_CREDIT_AMOUNT = 5000; // 지급 적립금
+const GAME06_MIN_GOALS = 5;        // 적립금 자격 최소 골 수
+const GAME06_DEFAULT_DIFFICULTY = { accuracy: 0.35, lateAccuracy: 0.4, reactionMs: 70, noise: 130, lateNoise: 100 };
+const game06NowKST = () => new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+const game06Clamp = (v, min, max, def) => { const n = Number(v); if (!isFinite(n)) return def; return Math.min(max, Math.max(min, n)); };
+const game06IsMember = (m) => !!m && typeof m === 'string' && !m.startsWith('guest_') && m !== 'GUEST' && m !== 'null';
+
+// 1) 참여여부 / 적립금 수령여부 조회 (게임 로드 시 → 버튼 "지급 완료" 초기표시)
+app.get('/api/event/cheer-festa/status', async (req, res) => {
+  const { memberId } = req.query;
+  if (!game06IsMember(memberId)) return res.json({ success: true, participated: false, creditClaimed: false, bestGoals: 0 });
+  try {
+    const { getDB } = require("./config/db");
+    const doc = await getDB().collection(GAME06_COLLECTION).findOne({ memberId });
+    return res.json({ success: true, participated: !!doc, creditClaimed: !!(doc && doc.creditClaimed), bestGoals: doc ? (doc.bestGoals || 0) : 0 });
+  } catch (err) {
+    console.error('[06게임이벤트] status 오류:', err);
+    return res.status(500).json({ success: false, participated: false, creditClaimed: false, bestGoals: 0 });
+  }
+});
+
+// 2) 참여 기록 (회원 전용) — 1인 1문서 upsert
+app.post('/api/event/cheer-festa/participate', async (req, res) => {
+  const { memberId, goals, tier, hasCredit, hasDraw } = req.body || {};
+  if (!game06IsMember(memberId)) return res.status(400).json({ success: false, message: '회원 전용 이벤트입니다.' });
+  const g = game06Clamp(goals, 0, 10, 0);
+  try {
+    const { getDB } = require("./config/db");
+    const col = getDB().collection(GAME06_COLLECTION);
+    const now = game06NowKST();
+    await col.updateOne(
+      { memberId },
+      {
+        $set: { isMember: true, lastPlayedAt: now, lastGoals: g, lastTier: tier || (hasDraw ? 'draw' : hasCredit ? 'credit' : 'none') },
+        $setOnInsert: { memberId, firstPlayedAt: now, creditClaimed: false, creditAmount: 0 },
+        $max: { bestGoals: g },
+        $inc: { playCount: 1 }
+      },
+      { upsert: true }
+    );
+    const doc = await col.findOne({ memberId });
+    return res.json({ success: true, participated: true, creditClaimed: !!(doc && doc.creditClaimed), bestGoals: doc ? (doc.bestGoals || g) : g });
+  } catch (err) {
+    if (err.code === 11000) {
+      try { const { getDB } = require("./config/db"); const doc = await getDB().collection(GAME06_COLLECTION).findOne({ memberId }); return res.json({ success: true, participated: true, creditClaimed: !!(doc && doc.creditClaimed), bestGoals: doc ? (doc.bestGoals || g) : g }); } catch (e) {}
+    }
+    console.error('[06게임이벤트] participate 오류:', err);
+    return res.status(500).json({ success: false, message: '참여 기록 중 오류가 발생했습니다.' });
+  }
+});
+
+// 3) 적립금 지급 (5골+, 1인 1회) — 원자적 선점 후 지급, 실패 시 롤백
+app.post('/api/event/cheer-festa/reward', async (req, res) => {
+  const { memberId, goals } = req.body || {};
+  if (!game06IsMember(memberId)) return res.status(400).json({ success: false, message: '로그인 후 참여 가능한 이벤트입니다.' });
+  try {
+    const { getDB } = require("./config/db");
+    const { apiRequest } = require("./config/cafe24Api");
+    const CAFE24_MALLID = process.env.CAFE24_MALLID || 'yogibo';
+    const col = getDB().collection(GAME06_COLLECTION);
+    const now = game06NowKST();
+
+    // 자격 확인: 참여 기록상 최고골(또는 이번 결과) 5골 이상
+    const p = await col.findOne({ memberId });
+    const best = Math.max(p ? (p.bestGoals || 0) : 0, game06Clamp(goals, 0, 10, 0));
+    if (best < GAME06_MIN_GOALS) return res.status(400).json({ success: false, message: `${GAME06_MIN_GOALS}골 이상 기록이 필요합니다.` });
+
+    // 원자적 선점: creditClaimed !== true 인 문서만 true 로 전환(없으면 upsert)
+    let upd;
+    try {
+      upd = await col.updateOne(
+        { memberId, creditClaimed: { $ne: true } },
+        { $set: { creditClaimed: true, claimedAt: now, creditAmount: GAME06_CREDIT_AMOUNT, isMember: true }, $setOnInsert: { memberId, firstPlayedAt: now, lastPlayedAt: now, playCount: 0 }, $max: { bestGoals: best } },
+        { upsert: true }
+      );
+    } catch (claimErr) {
+      if (claimErr.code === 11000) {
+        const cur = await col.findOne({ memberId });
+        if (cur && cur.creditClaimed) return res.status(400).json({ success: false, alreadyDone: true, message: '이미 적립금을 받으셨습니다.' });
+        upd = await col.updateOne({ memberId, creditClaimed: { $ne: true } }, { $set: { creditClaimed: true, claimedAt: now, creditAmount: GAME06_CREDIT_AMOUNT, isMember: true }, $max: { bestGoals: best } });
+        if (upd.modifiedCount === 0) return res.status(400).json({ success: false, alreadyDone: true, message: '이미 적립금을 받으셨습니다.' });
+      } else throw claimErr;
+    }
+    if (upd.modifiedCount === 0 && upd.upsertedCount === 0) return res.status(400).json({ success: false, alreadyDone: true, message: '이미 적립금을 받으셨습니다.' });
+
+    // 적립금 지급 (Cafe24 Admin Points API)
+    try {
+      await apiRequest('POST', `https://${CAFE24_MALLID}.cafe24api.com/api/v2/admin/points`, {
+        shop_no: 1,
+        request: { member_id: memberId, order_id: null, amount: GAME06_CREDIT_AMOUNT, type: 'increase', reason: '응원 페스타 슛챌린지 적립금' }
+      });
+    } catch (payErr) {
+      await col.updateOne({ memberId }, { $set: { creditClaimed: false }, $unset: { claimedAt: '', creditAmount: '' } });
+      console.error('[06게임이벤트] 적립금 지급 오류:', payErr.response?.data || payErr.message);
+      return res.status(500).json({ success: false, message: '적립금 지급 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.' });
+    }
+    console.log(`[06게임이벤트] ${memberId} 적립금 ${GAME06_CREDIT_AMOUNT}원 지급 완료 (best=${best})`);
+    return res.json({ success: true, message: `🎉 ${GAME06_CREDIT_AMOUNT.toLocaleString()}원 적립금이 지급되었습니다!` });
+  } catch (err) {
+    if (err.code === 11000) return res.status(400).json({ success: false, alreadyDone: true, message: '이미 적립금을 받으셨습니다.' });
+    console.error('[06게임이벤트] reward 오류:', err);
+    return res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+  }
+});
+
+// 4) 난이도(확률) 설정 조회 — 게임/관리자 공용 (06gameEvent 내 cfgKey 문서)
+app.get('/api/event/cheer-festa/config', async (req, res) => {
+  try {
+    const { getDB } = require("./config/db");
+    const doc = await getDB().collection(GAME06_COLLECTION).findOne({ cfgKey: 'difficulty' });
+    const difficulty = (doc && doc.difficulty) ? { ...GAME06_DEFAULT_DIFFICULTY, ...doc.difficulty } : GAME06_DEFAULT_DIFFICULTY;
+    return res.json({ success: true, difficulty, updatedAt: doc ? doc.updatedAt : null });
+  } catch (err) {
+    console.error('[06게임이벤트] config get 오류:', err);
+    return res.json({ success: true, difficulty: GAME06_DEFAULT_DIFFICULTY });
+  }
+});
+
+// 5) 난이도(확률) 설정 저장 — 관리자
+app.post('/api/event/cheer-festa/config', async (req, res) => {
+  const { difficulty } = req.body || {};
+  if (!difficulty || typeof difficulty !== 'object') return res.status(400).json({ success: false, message: 'difficulty 객체가 필요합니다.' });
+  const clean = {
+    accuracy: game06Clamp(difficulty.accuracy, 0, 1, GAME06_DEFAULT_DIFFICULTY.accuracy),
+    lateAccuracy: game06Clamp(difficulty.lateAccuracy, 0, 1, GAME06_DEFAULT_DIFFICULTY.lateAccuracy),
+    reactionMs: game06Clamp(difficulty.reactionMs, 0, 2000, GAME06_DEFAULT_DIFFICULTY.reactionMs),
+    noise: game06Clamp(difficulty.noise, 0, 1000, GAME06_DEFAULT_DIFFICULTY.noise),
+    lateNoise: game06Clamp(difficulty.lateNoise, 0, 1000, GAME06_DEFAULT_DIFFICULTY.lateNoise),
+  };
+  try {
+    const { getDB } = require("./config/db");
+    await getDB().collection(GAME06_COLLECTION).updateOne(
+      { cfgKey: 'difficulty' },
+      { $set: { cfgKey: 'difficulty', difficulty: clean, updatedAt: game06NowKST() } },
+      { upsert: true }
+    );
+    return res.json({ success: true, difficulty: clean });
+  } catch (err) {
+    console.error('[06게임이벤트] config post 오류:', err);
+    return res.status(500).json({ success: false, message: '설정 저장에 실패했습니다.' });
+  }
+});
+
+// 6) 참여자 목록 + 요약 (관리자) — 설정문서(cfgKey) 제외
+app.get('/api/event/cheer-festa/participants', async (req, res) => {
+  try {
+    const { getDB } = require("./config/db");
+    const col = getDB().collection(GAME06_COLLECTION);
+    const list = await col.find({ memberId: { $exists: true } }).sort({ lastPlayedAt: -1 }).limit(5000).toArray();
+    const summary = {
+      total: list.length,
+      members: list.filter(d => d.isMember !== false).length,
+      qualified: list.filter(d => (d.bestGoals || 0) >= GAME06_MIN_GOALS).length,
+      claimed: list.filter(d => d.creditClaimed).length,
+      creditTotal: list.filter(d => d.creditClaimed).length * GAME06_CREDIT_AMOUNT
+    };
+    const participants = list.map(d => ({
+      memberId: d.memberId || null,
+      guestId: null,
+      isMember: d.isMember !== false,
+      bestGoals: d.bestGoals || 0,
+      playCount: d.playCount || 0,
+      creditClaimed: !!d.creditClaimed,
+      creditAmount: d.creditAmount || 0,
+      claimedAt: d.claimedAt || null,
+      lastPlayedAt: d.lastPlayedAt || null
+    }));
+    return res.json({ success: true, summary, participants });
+  } catch (err) {
+    console.error('[06게임이벤트] participants 오류:', err);
+    return res.status(500).json({ success: false, message: '참여자 조회 실패' });
+  }
+});
+
 // ★ 서버 실행 로직
 (async function initialize() {
   try {
@@ -268,6 +445,13 @@ app.post('/api/event/gimpo-reward', async (req, res) => {
       { unique: true, background: true }
     );
     console.log("✅ 김포 이벤트 중복방지 유니크 인덱스 설정 완료");
+
+    // 06 게임 이벤트 중복 방지 인덱스 (memberId unique, sparse: 난이도 설정문서 제외)
+    await db.collection("06gameEvent").createIndex(
+      { memberId: 1 },
+      { unique: true, sparse: true, background: true }
+    );
+    console.log("✅ 06게임이벤트 중복방지 유니크 인덱스 설정 완료");
 
     // 5. 스케줄러 실행
     // 기존 전체 매출 집계 스케줄러 비활성화 (Cafe24 503 우회 목적 - on-demand로 전환)

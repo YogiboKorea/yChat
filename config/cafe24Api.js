@@ -34,7 +34,8 @@ let refreshPromise = null;
 // ⚠ cafe24 refresh_token 은 1회용(rotation)이라, 다수 요청이 동시에 401 을 받고
 //   동시에 갱신을 시도하면 첫 1개만 성공하고 나머지는 invalid_grant 로 실패한다.
 //   → 진행 중인 갱신이 있으면 같은 Promise 를 공유해 "단 한 번만" 갱신한다.
-async function refreshAccessToken() {
+//   reason: 로그용(기본 '401 감지'). tokenKeepalive 의 선제 갱신은 '선제 갱신…' 을 넘긴다.
+async function refreshAccessToken(reason = '401 감지') {
     if (refreshPromise) return refreshPromise;
 
     refreshPromise = (async () => {
@@ -56,7 +57,7 @@ async function refreshAccessToken() {
             payload.append('grant_type', 'refresh_token');
             payload.append('refresh_token', refreshToken);
 
-            console.log("🔄 토큰 만료(401) 감지. 새로운 Access Token을 발급받습니다...");
+            console.log(`🔄 Cafe24 토큰 갱신 (${reason}). 새로운 Access Token 발급…`);
             const res = await axios.post(url, payload.toString(), {
                 headers: {
                     'Authorization': `Basic ${authHeader}`,
@@ -113,5 +114,6 @@ module.exports = {
     getTokensFromDB,
     saveTokensToDB,
     apiRequest,
+    refreshAccessToken,   // tokenKeepalive(선제 갱신 cron) 에서 같은 모듈 인스턴스로 호출 → refreshPromise 뮤텍스 공유
     CAFE24_MALLID
 };

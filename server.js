@@ -420,6 +420,10 @@ app.get('/api/event/cheer-festa/participants', async (req, res) => {
     //     실패해도 챗 서버 기동에 영향 없도록 try/catch 로 격리.
     try { require("./onlinesync/cron"); } catch (e) { console.error("[onlinesync] 로드 실패(무시):", e.message); }
 
+    // 3.7 Cafe24 토큰 "선제 갱신" 크론 — 본체 프로세스에서 refreshAccessToken 과 같은 인스턴스로 실행.
+    //     매시 정각(KST) 만료 전 회전 → onlineData 라이브 API 호출의 401 을 구조적으로 예방.
+    try { require("./config/tokenKeepalive"); } catch (e) { console.error("[token-keepalive] 로드 실패(무시):", e.message); }
+
     // 4. HTTP 서버 실행
     app.listen(PORT, () => console.log(`🚀 앱 실행 완료 (포트: ${PORT})`));
 

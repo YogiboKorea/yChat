@@ -13,6 +13,7 @@ const ingest = require('./ingest');
 const smartstoreIngest = require('./smartstoreIngest');
 const report = require('./report');
 const promoPeriods = require('./promoPeriods');
+const dailyReport = require('./dailyReport');
 
 function pad(n) { return String(n).padStart(2, '0'); }
 function fmt(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
@@ -74,6 +75,9 @@ async function runDaily({ days = 7, warmPromos = true, log = console.log } = {})
   catch (e) { out.steps.cafe24 = { error: e.message }; log(`  ✗ Cafe24 적재 실패: ${e.message}`); }
   try { out.steps.smartstore = await smartstoreIngest.syncRange(start, end); log('  ✓ SmartStore 적재'); }
   catch (e) { out.steps.smartstore = { error: e.message }; log(`  ✗ SmartStore 적재 실패: ${e.message}`); }
+  // 통합분석 리포트용 traffic_daily(방문/PV/주문/가입) 갱신 — 최근 14일(과거는 이미 캐시)
+  try { const tr = await dailyReport.refreshTrafficDaily(minusDays(14)); out.steps.traffic = tr; log(`  ✓ traffic_daily 적재 ${tr.days}일`); }
+  catch (e) { out.steps.traffic = { error: e.message }; log(`  ✗ traffic_daily 실패: ${e.message}`); }
   let ranges = commonRanges();
   if (warmPromos) ranges = await withPromos(ranges, { recentDays: 40 }); // 최근 40일 내 종료 프로모션만 매일 재워밍
   const warm = await warmRanges(ranges, { forceFunnel: true, log });
